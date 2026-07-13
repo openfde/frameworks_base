@@ -4418,6 +4418,8 @@ public class WindowManagerService extends IWindowManager.Stub
         // Make sure the last requested orientation has been applied.
         updateRotationUnchecked(false, false);
 
+        setWindowingMode(Display.DEFAULT_DISPLAY, WINDOWING_MODE_FREEFORM);
+
         synchronized (mGlobalLock) {
             mAtmService.getTransitionController().mIsWaitingForDisplayEnabled = false;
             ProtoLog.v(WmProtoLogGroups.WM_DEBUG_WINDOW_TRANSITIONS,
