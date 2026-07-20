@@ -308,6 +308,12 @@ public final class BackgroundBlurDrawable extends Drawable {
             return drawable;
         }
 
+        public BackgroundBlurDrawable createBackgroundBlurDrawable(Context context, int radius) {
+            BackgroundBlurDrawable drawable = new BackgroundBlurDrawable(this);
+            drawable.setBlurRadius(radius);
+            return drawable;
+        }
+
         /**
          * Called when a BackgroundBlurDrawable has been updated
          */

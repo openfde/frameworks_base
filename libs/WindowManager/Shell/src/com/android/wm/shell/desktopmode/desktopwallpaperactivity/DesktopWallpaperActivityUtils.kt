@@ -23,8 +23,8 @@ import com.android.wm.shell.desktopmode.ShellDesktopState
 /** Utility methods for the DesktopWallpaperActivity. */
 class DesktopWallpaperActivityUtils(private val desktopState: ShellDesktopState) {
     /** Determines if the display will show the DesktopWallpaperActivity, hiding the home screen. */
-    fun hasDesktopWallpaperActivityEnabled(displayId: Int): Boolean =
-        (displayId == DEFAULT_DISPLAY || Flags.enablePerDisplayDesktopWallpaperActivity()) &&
-            Flags.enableDesktopWindowingWallpaperActivity() &&
-            !desktopState.shouldShowHomeBehindDesktop
+    fun hasDesktopWallpaperActivityEnabled(displayId: Int): Boolean = false
+    //    (displayId == DEFAULT_DISPLAY || Flags.enablePerDisplayDesktopWallpaperActivity()) &&
+    //        Flags.enableDesktopWindowingWallpaperActivity() &&
+    //        !desktopState.shouldShowHomeBehindDesktop
 }

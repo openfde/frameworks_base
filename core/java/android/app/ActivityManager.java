@@ -3317,6 +3317,16 @@ public class ActivityManager {
         }
     }
 
+    @FlaggedApi(Flags.FLAG_REORDER_TASKS)
+    @RequiresPermission(android.Manifest.permission.REORDER_TASKS)
+    public boolean moveTaskToBack(boolean nonRoot, int taskId) {
+        try {
+            return getTaskService().moveActivityTaskToBackByid(taskId, nonRoot);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
     /**
      * Check if the context is allowed to start an activity on specified display. Some launch
      * restrictions may apply to secondary displays that are private, virtual, or owned by the

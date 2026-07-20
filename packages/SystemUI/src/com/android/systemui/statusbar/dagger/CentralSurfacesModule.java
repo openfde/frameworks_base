@@ -17,12 +17,14 @@
 package com.android.systemui.statusbar.dagger;
 
 import com.android.systemui.dagger.SysUISingleton;
+import com.android.systemui.statusbar.core.StatusBarInitializer;
 import com.android.systemui.statusbar.phone.CentralSurfaces;
 import com.android.systemui.statusbar.phone.CentralSurfacesImpl;
 import com.android.systemui.statusbar.phone.StatusBarNotificationPresenterModule;
 
 import dagger.Binds;
 import dagger.Module;
+import dagger.multibindings.IntoSet;
 
 /**
  * Dagger Module providing {@link CentralSurfacesImpl}.
@@ -36,4 +38,9 @@ public interface CentralSurfacesModule {
     @Binds
     @SysUISingleton
     CentralSurfaces bindsCentralSurfaces(CentralSurfacesImpl impl);
+
+    @Binds
+    @IntoSet
+    StatusBarInitializer.StatusBarViewLifecycleListener bindsLifecycleListener(
+            CentralSurfacesImpl impl);
 }

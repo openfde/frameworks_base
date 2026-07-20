@@ -69,7 +69,7 @@ abstract class PluginsModule {
 
         @Provides
         fun providesEnvironment(@TestHarness isTestHarness: Boolean): PluginEnvironment {
-            val isDebugPropSet = SystemProperties.getBoolean("debug.sysui.plugins", false)
+            val isDebugPropSet = true // SystemProperties.getBoolean("debug.sysui.plugins", false)
             return PluginEnvironment(isTestHarness = isTestHarness, isDebugPropSet = isDebugPropSet)
         }
 

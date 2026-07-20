@@ -292,7 +292,8 @@ public class NavigationBarControllerImpl implements
         // Enable for tablets, unfolded state on a foldable device, (non handheld AND flag is set),
         // or handheld when enableTaskbarOnPhones() returns true.
         boolean foldedOrPhone = !mIsPhone || enableTaskbarOnPhones();
-        return mIsLargeScreen || foldedOrPhone;
+      //  return mIsLargeScreen || foldedOrPhone;
+        return false;
     }
 
     // TODO: b/408503553 - Remove system decor callbacks once the flag is cleaned up.

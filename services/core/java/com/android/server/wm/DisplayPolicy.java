@@ -1499,18 +1499,34 @@ public class DisplayPolicy {
 
         final WindowManager.LayoutParams attrs = win.mAttrs.forRotation(displayFrames.mRotation);
         sTmpClientFrames.attachedFrame = attached != null ? attached.getFrame() : null;
+        final int type = attrs.type;
 
         // If this window has different LayoutParams for rotations, we cannot trust its requested
         // size. Because it might have not sent its requested size for the new rotation.
         final boolean trustedSize = attrs == win.mAttrs;
-        final int requestedWidth = trustedSize ? win.mRequestedWidth : UNSPECIFIED_LENGTH;
-        final int requestedHeight = trustedSize ? win.mRequestedHeight : UNSPECIFIED_LENGTH;
+        int requestedWidth = trustedSize ? win.mRequestedWidth : UNSPECIFIED_LENGTH;
+        int requestedHeight = trustedSize ? win.mRequestedHeight : UNSPECIFIED_LENGTH;
+
+        if(type == TYPE_NAVIGATION_BAR && win.mAttrs.width > 0){
+            Rect outDisplayFrame = sTmpClientFrames.displayFrame;
+            Rect outParentFrame = sTmpClientFrames.parentFrame;
+            Rect outFrame = sTmpClientFrames.frame;
+            int fullWidth = outDisplayFrame.right + outDisplayFrame.left;
+            final int sideMargin = (fullWidth - win.mAttrs.width) / 2;
+            outDisplayFrame.left += sideMargin;
+            outDisplayFrame.right -= sideMargin;
+            outParentFrame.left += sideMargin;
+            outParentFrame.right -= sideMargin;
+            outFrame.left = outDisplayFrame.left;
+            outFrame.right = outDisplayFrame.right;
+            requestedWidth = win.mAttrs.width;
+        }
 
         mWindowLayout.computeFrames(attrs, win.getInsetsState(), displayFrames.mDisplayCutoutSafe,
                 win.getBounds(), win.getWindowingMode(), requestedWidth, requestedHeight,
                 win.getRequestedVisibleTypes(), win.mGlobalScale, sTmpClientFrames);
 
-        win.setFrames(sTmpClientFrames, win.mRequestedWidth, win.mRequestedHeight);
+        win.setFrames(sTmpClientFrames, requestedWidth, win.mRequestedHeight);
     }
 
     WindowState getTopFullscreenOpaqueWindow() {
@@ -2867,7 +2883,9 @@ public class DisplayPolicy {
             }
         }
 
-        int appearance = APPEARANCE_OPAQUE_NAVIGATION_BARS | APPEARANCE_OPAQUE_STATUS_BARS;
+        // fde start never set navigation bar dark
+        int appearance = 0;//APPEARANCE_OPAQUE_NAVIGATION_BARS | APPEARANCE_OPAQUE_STATUS_BARS;
+        // fde end
         appearance = configureStatusBarOpacity(appearance);
         appearance = configureNavBarOpacity(appearance, adjacentTasksVisible,
                 freeformRootTaskVisible);

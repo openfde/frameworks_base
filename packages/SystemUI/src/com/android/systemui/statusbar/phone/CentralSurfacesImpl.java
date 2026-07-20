@@ -184,7 +184,9 @@ import com.android.systemui.statusbar.notification.row.NotificationGutsManager;
 import com.android.systemui.statusbar.notification.stack.NotificationListContainer;
 import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout;
 import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayoutController;
+import com.android.systemui.statusbar.core.StatusBarInitializer;
 import com.android.systemui.statusbar.phone.dagger.StatusBarPhoneModule;
+import com.android.systemui.statusbar.phone.fragment.dagger.HomeStatusBarComponent;
 import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.ConfigurationController;
 import com.android.systemui.statusbar.policy.ConfigurationController.ConfigurationListener;
@@ -238,7 +240,8 @@ import javax.inject.Named;
  * {@link ActivityStarterImpl}
  */
 @SysUISingleton
-public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
+public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
+        StatusBarInitializer.StatusBarViewLifecycleListener {
 
     private static final int MSG_LAUNCH_TRANSITION_TIMEOUT = 1003;
     // 1020-1040 reserved for BaseStatusBar
@@ -339,6 +342,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
     @WindowVisibleState private int mStatusBarWindowState = WINDOW_STATE_SHOWING;
     private final NotificationShadeWindowController mNotificationShadeWindowController;
+    @Nullable
+    private PhoneStatusBarView mPhoneStatusBarView;
     private final TopUiController mTopUiController;
     private final KeyguardUpdateMonitor mKeyguardUpdateMonitor;
     @VisibleForTesting
@@ -829,9 +834,10 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
                     @Override
                     public void onPluginConnected(OverlayPlugin plugin, Context pluginContext) {
+                        Log.d(TAG, "onPluginConnected: " + mPhoneStatusBarView);
                         mMainExecutor.execute(
                                 () -> plugin.setup(
-                                        mNotificationShadeWindowController.getWindowRootView(),
+                                        mPhoneStatusBarView,
                                         getNavigationBarView(),
                                         new Callback(plugin), mDozeParameters));
                     }
@@ -2785,5 +2791,17 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     public ActivityTransitionAnimator.Controller getAnimatorControllerFromNotification(
             ExpandableNotificationRow associatedView) {
         return mNotificationAnimationProvider.getAnimatorController(associatedView);
+    }
+
+    @Override
+    public void onStatusBarViewInitialized(HomeStatusBarComponent component) {
+        mPhoneStatusBarView = component.getPhoneStatusBarView();
+        android.util.Log.d(TAG, "onStatusBarViewInitialized: " + mPhoneStatusBarView);
+    }
+
+    @Override
+    public void onStatusBarViewDestroyed(HomeStatusBarComponent component) {
+        android.util.Log.d(TAG, "onStatusBarViewDestroyed: ");
+        mPhoneStatusBarView = null;
     }
 }

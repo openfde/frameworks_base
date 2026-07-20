@@ -433,4 +433,6 @@ interface IActivityTaskManager {
      * {@code originalPackageName} if no redirection is found.
      */
     String getDestinationPackage(in String originalPackageName);
+
+    boolean moveActivityTaskToBackByid(int taskId, boolean nonRoot);
 }

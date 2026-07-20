@@ -110,3 +110,10 @@ flag {
     description: "Enables dynamic icons and badging in the launcher"
     bug: "472296334"
 }
+
+flag {
+    namespace: "system_performance"
+    name: "reorder_tasks"
+    description: "Control reordering tasks API"
+    bug: "0"
+}

@@ -424,10 +424,15 @@ public class InsetsSource implements Parcelable {
      * source.
      */
     @NonNull
-    private Insets calculateArbitraryInsets(@NonNull Rect relativeFrame, @NonNull Rect frame,
+    private Insets calculateArbitraryInsets(@NonNull Rect relativeFrame, @NonNull Rect myframe,
             boolean ignoreVisibility) {
         if (!ignoreVisibility && !mVisible) {
             return Insets.NONE;
+        }
+        Rect frame = new Rect(myframe);
+        if(getType() == WindowInsets.Type.navigationBars()){
+            frame.left = 0;
+            frame.right = myframe.left + myframe.right;
         }
 
         // During drag-move and drag-resizing, the caption insets position may not get updated
@@ -452,6 +457,11 @@ public class InsetsSource implements Parcelable {
         // However, we should let the policy decide from the server.
         if (getType() == WindowInsets.Type.ime()) {
             return Insets.of(0, 0, 0, mTmpFrame.height());
+        }
+
+        if (getType() == WindowInsets.Type.navigationBars()) {
+            Insets result = Insets.of(0, 0, 0, mTmpFrame.height());
+            return result;
         }
 
         if (mTmpFrame.equals(relativeFrame)) {

@@ -18,7 +18,7 @@
 <resources>
 
     <!-- Height of the bottom navigation / system bar. -->
-    <dimen name="navigation_bar_height">56dp</dimen>
+    <dimen name="navigation_bar_height">70dp</dimen>
 
     <!-- Height of the bottom navigation bar in landscape; often
          the same as @dimen/navigation_bar_height -->

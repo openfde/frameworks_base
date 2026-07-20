@@ -1793,7 +1793,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
     }
 
     private WindowManager.LayoutParams getBarLayoutParamsForRotation(int rotation) {
-        int width = WindowManager.LayoutParams.MATCH_PARENT;
+        int width = WindowManager.LayoutParams.WRAP_CONTENT;
         int height = WindowManager.LayoutParams.MATCH_PARENT;
         int insetsHeight = -1;
         int gravity = Gravity.BOTTOM;
@@ -1832,6 +1832,8 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
                     break;
             }
         }
+	Log.d(TAG, "getBarLayoutParamsForRotation height:" + height + " width:" + width + " gravity:" + gravity);
+
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 width,
                 height,

@@ -162,7 +162,9 @@ public class NavigationBarInflaterView extends FrameLayout {
                 : mLauncherProxyService.shouldShowSwipeUpUI()
                         ? R.string.config_navBarLayoutQuickstep
                         : R.string.config_navBarLayout;
-        return getContext().getString(defaultResource);
+    
+        //return getContext().getString(R.string.fde_config_navBarLayout);
+	return getContext().getString(defaultResource);
     }
 
     private void onNavigationModeChanged(int mode) {

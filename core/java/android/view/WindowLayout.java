@@ -42,6 +42,7 @@ import android.graphics.Rect;
 import android.util.Log;
 import android.view.WindowInsets.Type.InsetsType;
 import android.window.ClientWindowFrames;
+import static android.view.WindowManager.LayoutParams.TYPE_NAVIGATION_BAR;
 
 /**
  * Computes window frames.
@@ -269,6 +270,15 @@ public class WindowLayout {
         if (extendedByCutout) {
             extendFrameByCutout(displayCutoutSafe, outDisplayFrame, outFrame,
                     mTempRect);
+        }
+
+        if (type == TYPE_NAVIGATION_BAR && requestedWidth > 0) {
+            int fullWidth = outFrame.right + outFrame.left;
+            final int sideMargin = (fullWidth - requestedWidth) / 2;
+            int navBarWidth = windowBounds.width() - 2 * sideMargin;
+            int navBarHeight = outFrame.height();
+            outFrame.left = sideMargin;
+            outFrame.right = windowBounds.width() - sideMargin;
         }
 
         if (DEBUG) Log.d(TAG, "computeFrames " + attrs.getTitle()

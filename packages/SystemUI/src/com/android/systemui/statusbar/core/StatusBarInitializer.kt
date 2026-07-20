@@ -32,6 +32,8 @@ import com.android.systemui.statusbar.window.StatusBarWindowController
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import android.view.View
+
 
 /**
  * Responsible for creating the status bar window and initializing the root components of that
@@ -108,7 +110,8 @@ constructor(
 
     /** Stand up the [PhoneStatusBarView] in a compose root */
     override fun start() {
-        initialized = true
+        android.util.Log.d("StatusBarInitializer", "start() call stack:", Throwable())
+	initialized = true
         logger.logCreatingStatusBarRootView(displayId)
         val statusBarRoot =
             statusBarRootFactory.create(statusBarWindowController.backgroundView as ViewGroup) { cv
@@ -129,7 +132,8 @@ constructor(
                             listener.onStatusBarViewInitialized(component)
                         }
                     }
-            }
+		//phoneStatusBarView.setVisibility(View.GONE)
+	    }
         logger.logCreatedStatusBarRootView(displayId)
 
         // Add the new compose view to the hierarchy because we don't use fragment transactions
