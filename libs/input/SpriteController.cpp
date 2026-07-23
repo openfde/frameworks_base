@@ -23,6 +23,7 @@
 #include <android/gui/CompositionFilterFlag.h>
 #include <gui/Surface.h>
 #include <utils/String8.h>
+#include <cutils/properties.h>
 
 namespace android {
 
@@ -189,6 +190,7 @@ void SpriteController::doUpdateSprites() {
                 && update.state.wantSurfaceVisible()) {
             sp<Surface> surface = update.state.surfaceControl->getSurface();
             if (update.state.icon.draw(surface)) {
+                property_set("fde.mouse_icon_addr", std::to_string(reinterpret_cast<int64_t>(update.state.icon.bitmap.get())).c_str());
                 update.state.surfaceDrawn = true;
                 update.surfaceChanged = surfaceChanged = true;
             }
@@ -419,6 +421,8 @@ void SpriteController::SpriteImpl::setIcon(const SpriteIcon& icon) {
             mLocked.state.icon.drawNativeDropShadow != icon.drawNativeDropShadow) {
             mLocked.state.icon.hotSpotX = icon.hotSpotX;
             mLocked.state.icon.hotSpotY = icon.hotSpotY;
+            property_set("fde.mouse_icon_hotspot_x", std::to_string(icon.hotSpotX).c_str());
+            property_set("fde.mouse_icon_hotspot_y", std::to_string(icon.hotSpotY).c_str());
             mLocked.state.icon.drawNativeDropShadow = icon.drawNativeDropShadow;
             dirty = DIRTY_BITMAP | DIRTY_HOTSPOT | DIRTY_DRAW_DROP_SHADOW;
         } else {
