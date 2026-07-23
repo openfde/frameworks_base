@@ -335,6 +335,8 @@ public class DisplayPolicy {
 
     private boolean mIsImmersiveMode;
 
+    private boolean mInFreeformMode;
+
     // The windows we were told about in focusChanged.
     private WindowState mFocusedWindow;
     private WindowState mLastFocusedWindow;
@@ -2621,7 +2623,7 @@ public class DisplayPolicy {
         }
     }
 
-    void setSystemBarVisibilityOverride(
+    public void setSystemBarVisibilityOverride(
             @NonNull IBinder caller,
             @InsetsType int forciblyShowingInsetsTypes,
             @InsetsType int forciblyHidingInsetsTypes) {
@@ -2869,6 +2871,7 @@ public class DisplayPolicy {
         final boolean showSystemBarsByLegacyPolicy = adjacentTasksVisible
                 || inNonFullscreenFreeformMode;
 
+        mInFreeformMode = inNonFullscreenFreeformMode;
         getInsetsPolicy().updateSystemBars(
                 win,
                 mShowingPermanentInsetsTypes,
@@ -2925,6 +2928,15 @@ public class DisplayPolicy {
         }
 
         return appearance;
+    }
+
+    public boolean isInFreeformMode() {
+        return mInFreeformMode;
+    }
+
+    public boolean isHomeOnTop() {
+        return mFocusedWindow != null
+                && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_HOME;
     }
 
     private static boolean isLightBarAllowed(WindowState win, @InsetsType int type) {
