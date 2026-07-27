@@ -97,11 +97,6 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
             @NonNull LaunchParamsController.LaunchParams currentParams,
             @NonNull LaunchParamsController.LaunchParams outParams) {
 
-        if (!canEnterDesktopMode(mContext)) {
-            appendLog("desktop mode is not enabled, skipping");
-            return RESULT_SKIP;
-        }
-
         // Determine the suggested display area to launch the activity/task.
         final TaskDisplayArea suggestedDisplayArea = getPreferredLaunchTaskDisplayArea(mSupervisor,
                 task, options, source, currentParams, activity, request, this::appendLog);
@@ -111,9 +106,42 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
                 + " task-display-area-windowing-mode=" + suggestedDisplayArea.getWindowingMode()
                 + " suggested-display-area=" + suggestedDisplayArea);
 
-        if (!isDesktopModeSupportedOnDisplay(display)) {
-            appendLog("desktop mode is not supported on displayId=" + display.getDisplayId());
+        final boolean isDisplayFreeform = isDisplayConfiguredForFreeform(display);
+
+        if (!canEnterDesktopMode(mContext) && !isDisplayFreeform) {
+            appendLog("desktop mode is not enabled and display is not configured for freeform,"
+                    + " skipping");
             return RESULT_SKIP;
+        }
+
+        if (!isDesktopModeSupportedOnDisplay(display) && !isDisplayFreeform) {
+            appendLog("desktop mode is not supported on displayId=" + display.getDisplayId()
+                    + " and display is not configured for freeform, skipping");
+            return RESULT_SKIP;
+        }
+
+        if (isDisplayFreeform && task == null) {
+            if (activity != null) {
+                if (mDesktopModeCompatPolicy.isTopActivityExemptFromDesktopWindowing(
+                        activity.mActivityComponent, activity.isNoDisplay(),
+                        !activity.occludesParent(), /* numActivities */ 1, activity.mUserId,
+                        activity.info, activity.getActivityType())) {
+                    appendLog("activity exempt from desktop, launching in fullscreen");
+                    outParams.mWindowingMode = WINDOWING_MODE_FULLSCREEN;
+                    return RESULT_DONE;
+                }
+                if (mDesktopModeCompatPolicy.isPackageLaunchInFullscreen(
+                        activity.mActivityComponent)) {
+                    appendLog("force-launch-in-fullscreen-by-allowlist");
+                    outParams.mWindowingMode = WINDOWING_MODE_FULLSCREEN;
+                    return RESULT_DONE;
+                }
+            }
+            if (!currentParams.hasWindowingMode()) {
+                outParams.mWindowingMode = WINDOWING_MODE_FREEFORM;
+                appendLog("display-configured-for-freeform");
+                return RESULT_CONTINUE;
+            }
         }
 
         boolean hasLaunchWindowingMode = false;
@@ -378,6 +406,15 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
             return DesktopModeHelper.canInternalDisplayHostDesktops(mContext);
         }
         return display.isEligibleForDesktopMode();
+    }
+
+    /**
+     * Return {@code true} if the given display is configured for freeform windowing mode
+     * via {@link DisplayWindowSettings}, regardless of Desktop Mode state.
+     */
+    private static boolean isDisplayConfiguredForFreeform(@NonNull DisplayContent display) {
+        return display.getDefaultWindowingModeFromSettings()
+                == WindowConfiguration.WINDOWING_MODE_FREEFORM;
     }
 
     private boolean isRequestingFreeformWindowMode(

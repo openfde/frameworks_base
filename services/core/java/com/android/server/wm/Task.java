@@ -2612,7 +2612,15 @@ class Task extends TaskFragment {
         // launched back to its last state in a freeform Task Display Area when it's launched in a
         // freeform Task Display Area next time.
         final TaskDisplayArea tda = getTaskDisplayArea();
-        return tda != null && tda.getWindowingMode() == WINDOWING_MODE_FREEFORM;
+        if (tda == null) {
+            return false;
+        }
+        if (tda.getWindowingMode() == WINDOWING_MODE_FREEFORM) {
+            return true;
+        }
+        final DisplayContent dc = tda.mDisplayContent;
+        return dc != null
+                && dc.getDefaultWindowingModeFromSettings() == WINDOWING_MODE_FREEFORM;
     }
 
     /**

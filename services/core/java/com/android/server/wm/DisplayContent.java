@@ -6160,6 +6160,11 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
         };
     }
 
+    @WindowConfiguration.WindowingMode
+    int getDefaultWindowingModeFromSettings() {
+        return mWmService.mDisplayWindowSettings.getWindowingModeLocked(this);
+    }
+
     /**
      * Checks if this display is configured and allowed to show home activity and wallpaper.
      *
