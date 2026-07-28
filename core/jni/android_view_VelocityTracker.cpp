@@ -70,6 +70,16 @@ float VelocityTrackerState::getVelocity(int32_t axis, int32_t id) {
         id = mVelocityTracker.getActivePointerId();
     }
 
+    if(property_get_bool("fde.axis_converting_touch", false)){
+        if(mComputedVelocity.getVelocity(axis, id).value_or(0) > 0){
+            return 1.0f;
+        }
+        if(mComputedVelocity.getVelocity(axis, id).value_or(0) < 0){
+            return -1.0f;
+        }
+        return 0.0f;
+    }
+
     return mComputedVelocity.getVelocity(axis, id).value_or(0);
 }
 
