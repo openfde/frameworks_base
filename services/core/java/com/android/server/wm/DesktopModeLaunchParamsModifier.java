@@ -108,6 +108,13 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
 
         final boolean isDisplayFreeform = isDisplayConfiguredForFreeform(display);
 
+        Slog.d(TAG, "calculate: isDisplayFreeform=" + isDisplayFreeform
+                + " canEnterDesktopMode=" + canEnterDesktopMode(mContext)
+                + " displayId=" + display.getDisplayId()
+                + " settingsWindowingMode=" + display.getDefaultWindowingModeFromSettings()
+                + " hasWindowingMode=" + currentParams.hasWindowingMode()
+                + " task=" + (task != null ? task.mTaskId : "null"));
+
         if (!canEnterDesktopMode(mContext) && !isDisplayFreeform) {
             appendLog("desktop mode is not enabled and display is not configured for freeform,"
                     + " skipping");
@@ -120,8 +127,8 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
             return RESULT_SKIP;
         }
 
-        if (isDisplayFreeform && task == null) {
-            if (activity != null) {
+        if (isDisplayFreeform) {
+            if (task == null && activity != null) {
                 if (mDesktopModeCompatPolicy.isTopActivityExemptFromDesktopWindowing(
                         activity.mActivityComponent, activity.isNoDisplay(),
                         !activity.occludesParent(), /* numActivities */ 1, activity.mUserId,
@@ -137,11 +144,17 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
                     return RESULT_DONE;
                 }
             }
-            if (!currentParams.hasWindowingMode()) {
+            if (!currentParams.hasWindowingMode()
+                    || currentParams.mWindowingMode == WINDOWING_MODE_FREEFORM) {
                 outParams.mWindowingMode = WINDOWING_MODE_FREEFORM;
                 appendLog("display-configured-for-freeform");
+                Slog.d(TAG, "calculate: isDisplayFreeform=true, setting freeform,"
+                        + " task=" + (task != null ? task.mTaskId : "null")
+                        + " hasWindowingMode=" + currentParams.hasWindowingMode());
                 return RESULT_CONTINUE;
             }
+            Slog.d(TAG, "calculate: isDisplayFreeform=true but hasWindowingMode=true,"
+                    + " falling through, persistedMode=" + currentParams.mWindowingMode);
         }
 
         boolean hasLaunchWindowingMode = false;

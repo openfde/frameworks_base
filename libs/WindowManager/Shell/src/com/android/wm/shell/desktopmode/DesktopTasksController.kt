@@ -3939,6 +3939,13 @@ class DesktopTasksController(
             return null
         }
 
+        Log.d(TAG, "handleRequest: triggerTask=${triggerTask.taskId}" +
+                " pk=${triggerTask.baseActivity?.packageName}" +
+                " isFullscreen=${triggerTask.isFullscreen}" +
+                " isFreeform=${triggerTask.isFreeform}" +
+                " activityType=${triggerTask.activityType}" +
+                " type=${request.type}")
+
         val result =
             when {
                 triggerTask.activityType == ACTIVITY_TYPE_HOME ->
@@ -4333,6 +4340,10 @@ class DesktopTasksController(
         @WindowManager.TransitionType requestType: Int,
     ): WindowContainerTransaction? {
         logV("handleFreeformTaskLaunch taskId=%d displayId=%d", task.taskId, task.displayId)
+        Log.d(TAG, "handleFreeformTaskLaunch: taskId=${task.taskId}" +
+                " pk=${task.baseActivity?.packageName}" +
+                " taskWinMode=${task.windowingMode}" +
+                " displayId=${task.displayId}")
         if (keyguardManager.isKeyguardLocked) {
             // Do NOT handle freeform task launch when locked.
             // It will be launched in fullscreen windowing mode (Details: b/160925539)
@@ -4702,7 +4713,18 @@ class DesktopTasksController(
         logV("handleFullscreenTaskLaunch")
         val userId = task.userId
         val repository = userRepositories.getProfile(userId)
-        if (shouldFullscreenTaskLaunchSwitchToDesktop(task, requestType)) {
+        val shouldSwitch = shouldFullscreenTaskLaunchSwitchToDesktop(task, requestType)
+        val isActive = repository.isActiveTask(task.taskId)
+        val isAnyDeskActive = isAnyDeskActive(task.displayId, userId)
+        val isDesktopFirst = isDesktopFirstLegacy(task.displayId)
+        Log.d(TAG, "handleFullscreenTaskLaunch: taskId=${task.taskId}" +
+                " pk=${task.baseActivity?.packageName}" +
+                " shouldSwitchToDesktop=$shouldSwitch" +
+                " isActiveTask=$isActive isAnyDeskActive=$isAnyDeskActive" +
+                " isDesktopFirst=$isDesktopFirst" +
+                " taskWinMode=${task.windowingMode}" +
+                " displayId=${task.displayId}")
+        if (shouldSwitch) {
             logD("Switch fullscreen task to freeform on transition: taskId=%d", task.taskId)
             return WindowContainerTransaction().also { wct ->
                 val deskId = getOrCreateDefaultDeskId(task.displayId, userId) ?: return@also

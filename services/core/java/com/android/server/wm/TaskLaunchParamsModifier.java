@@ -264,6 +264,13 @@ class TaskLaunchParamsModifier extends DefaultLaunchParamsModifier {
                             == WINDOWING_MODE_FREEFORM)) {
                 launchMode = currentParams.mWindowingMode;
                 fullyResolvedCurrentParam = launchMode != WINDOWING_MODE_FREEFORM;
+                Slog.d(TAG, "STEP_2_2: overriding launchMode from currentParams,"
+                        + " launchMode=" + WindowConfiguration.windowingModeToString(launchMode)
+                        + " tdaMode=" + WindowConfiguration.windowingModeToString(
+                                suggestedDisplayArea.getWindowingMode())
+                        + " settingsMode=" + display.getDefaultWindowingModeFromSettings()
+                        + " displayId=" + display.getDisplayId()
+                        + " fullyResolved=" + fullyResolvedCurrentParam);
                 appendLog("inherit-" + WindowConfiguration.windowingModeToString(launchMode));
             }
 
