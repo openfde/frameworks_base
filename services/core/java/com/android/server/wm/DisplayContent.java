@@ -6162,7 +6162,7 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
 
     @WindowConfiguration.WindowingMode
     int getDefaultWindowingModeFromSettings() {
-        return mWmService.mDisplayWindowSettings.getWindowingModeLocked(this);
+        return mWmService.mDisplayWindowSettings.getRawWindowingModeFromSettingsLocked(this);
     }
 
     /**

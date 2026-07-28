@@ -182,6 +182,13 @@ class DisplayWindowSettings {
         return getWindowingModeLocked(settings, dc);
     }
 
+    @WindowConfiguration.WindowingMode
+    int getRawWindowingModeFromSettingsLocked(@NonNull DisplayContent dc) {
+        final DisplayInfo displayInfo = dc.getDisplayInfo();
+        final SettingsProvider.SettingsEntry settings = mSettingsProvider.getSettings(displayInfo);
+        return settings.mWindowingMode;
+    }
+
     void setWindowingModeLocked(@NonNull DisplayContent dc,
             @WindowConfiguration.WindowingMode int mode) {
         final DisplayInfo displayInfo = dc.getDisplayInfo();
