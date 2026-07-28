@@ -38,7 +38,7 @@ import android.stats.devicepolicy.DevicePolicyEnums;
  */
 @SystemApi
 @FlaggedApi(Flags.FLAG_MULTI_USER_MANAGEMENT_USER_PROVISIONING)
-public final class MultiUserManagedUserProvisioningParams {
+public final class MultiUserManagedUserProvisioningParamsV1 {
     private static final String LEAVE_ALL_SYSTEM_APPS_ENABLED_PARAM =
             "LEAVE_ALL_SYSTEM_APPS_ENABLED";
 
@@ -46,12 +46,12 @@ public final class MultiUserManagedUserProvisioningParams {
     private final MultiuserManagedUserProvisioningParamsTransport mTransport;
 
     /**
-     * Constructs a new {@link MultiUserManagedUserProvisioningParams} object.
+     * Constructs a new {@link MultiUserManagedUserProvisioningParamsV1} object.
      *
      * @param transport The transport representation of the params.
      * @hide
      */
-    public MultiUserManagedUserProvisioningParams(
+    public MultiUserManagedUserProvisioningParamsV1(
             @NonNull MultiuserManagedUserProvisioningParamsTransport transport) {
         this.mTransport = transport;
     }
@@ -95,7 +95,7 @@ public final class MultiUserManagedUserProvisioningParams {
     }
 
     /**
-     * Builder class for {@link MultiUserManagedUserProvisioningParams} objects.
+     * Builder class for {@link MultiUserManagedUserProvisioningParamsV1} objects.
      *
      * <p>This will be removed soon. Please use
      * {@link MultiuserManagedUserProvisioningParams.Builder} instead.
@@ -111,7 +111,7 @@ public final class MultiUserManagedUserProvisioningParams {
 
         /**
          * Initialize a new {@link Builder} to construct a
-         * {@link MultiUserManagedUserProvisioningParams}.
+         * {@link MultiUserManagedUserProvisioningParamsV1}.
          * <p>
          * See {@link DevicePolicyManager#provisionMultiUserManagedUser}
          *
@@ -139,11 +139,11 @@ public final class MultiUserManagedUserProvisioningParams {
         /**
          * Combines all of the attributes that have been set on this {@code Builder}.
          *
-         * @return a new {@link MultiUserManagedUserProvisioningParams} object.
+         * @return a new {@link MultiUserManagedUserProvisioningParamsV1} object.
          */
         @NonNull
-        public MultiUserManagedUserProvisioningParams build() {
-            return new MultiUserManagedUserProvisioningParams(mTransport);
+        public MultiUserManagedUserProvisioningParamsV1 build() {
+            return new MultiUserManagedUserProvisioningParamsV1(mTransport);
         }
     }
 }

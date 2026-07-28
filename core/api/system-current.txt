@@ -1620,7 +1620,7 @@ package android.app.admin {
     method @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS_FULL) public boolean packageHasActiveAdmins(String);
     method @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS, android.Manifest.permission.PROVISION_DEMO_DEVICE}) public void provisionFullyManagedDevice(@NonNull android.app.admin.FullyManagedDeviceProvisioningParams) throws android.app.admin.ProvisioningException;
     method @FlaggedApi("android.app.admin.flags.multi_user_management_device_provisioning") @RequiresPermission(android.Manifest.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS) public void provisionMultiUserDevice(@NonNull android.app.admin.MultiUserDeviceProvisioningParams) throws android.app.admin.ProvisioningException;
-    method @FlaggedApi("android.app.admin.flags.multi_user_management_user_provisioning") @RequiresPermission(android.Manifest.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS) public void provisionMultiUserManagedUser(@NonNull android.app.admin.MultiUserManagedUserProvisioningParams) throws android.app.admin.ProvisioningException;
+    method @FlaggedApi("android.app.admin.flags.multi_user_management_user_provisioning") @RequiresPermission(android.Manifest.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS) public void provisionMultiUserManagedUser(@NonNull android.app.admin.MultiUserManagedUserProvisioningParamsV1) throws android.app.admin.ProvisioningException;
     method @FlaggedApi("android.app.admin.flags.multi_user_management_device_provisioning") @RequiresPermission(android.Manifest.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS) public void provisionMultiuserManagedDevice(@NonNull android.app.admin.MultiuserManagedDeviceProvisioningParams) throws android.app.admin.ProvisioningException;
     method @FlaggedApi("android.app.admin.flags.multi_user_management_user_provisioning") @RequiresPermission(android.Manifest.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS) public void provisionMultiuserManagedUser(@NonNull android.app.admin.MultiuserManagedUserProvisioningParams) throws android.app.admin.ProvisioningException;
     method @FlaggedApi("android.app.admin.flags.remove_managed_profile_enabled") @RequiresPermission(android.Manifest.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS) public boolean removeManagedProfile();
@@ -1876,15 +1876,15 @@ package android.app.admin {
     method @NonNull public android.app.admin.MultiUserDeviceProvisioningParams.Builder setTimeZone(@Nullable String);
   }
 
-  @FlaggedApi("android.app.admin.flags.multi_user_management_user_provisioning") public final class MultiUserManagedUserProvisioningParams {
+  @FlaggedApi("android.app.admin.flags.multi_user_management_user_provisioning") public final class MultiUserManagedUserProvisioningParamsV1 {
     method @NonNull public android.content.ComponentName getProfileAdminComponentName();
     method public boolean isLeaveAllSystemAppsEnabled();
   }
 
-  @FlaggedApi("android.app.admin.flags.multi_user_management_user_provisioning") public static final class MultiUserManagedUserProvisioningParams.Builder {
-    ctor public MultiUserManagedUserProvisioningParams.Builder(@NonNull android.content.ComponentName);
-    method @NonNull public android.app.admin.MultiUserManagedUserProvisioningParams build();
-    method @NonNull public android.app.admin.MultiUserManagedUserProvisioningParams.Builder setLeaveAllSystemAppsEnabled(boolean);
+  @FlaggedApi("android.app.admin.flags.multi_user_management_user_provisioning") public static final class MultiUserManagedUserProvisioningParamsV1.Builder {
+    ctor public MultiUserManagedUserProvisioningParamsV1.Builder(@NonNull android.content.ComponentName);
+    method @NonNull public android.app.admin.MultiUserManagedUserProvisioningParamsV1 build();
+    method @NonNull public android.app.admin.MultiUserManagedUserProvisioningParamsV1.Builder setLeaveAllSystemAppsEnabled(boolean);
   }
 
   @FlaggedApi("android.app.admin.flags.multi_user_management_device_provisioning") public final class MultiuserManagedDeviceProvisioningParams {

@@ -18291,7 +18291,7 @@ public class DevicePolicyManager {
      * <p>This will be removed soon. Please use {@link #provisionMultiuserManagedDevice} instead.
      *
      * @param provisioningParams Params required to provision a managed full user, see
-     *                           {@link MultiUserManagedUserProvisioningParams}.
+     *                           {@link MultiUserManagedUserProvisioningParamsV1}.
      * @throws ProvisioningException if an error occurred during provisioning.
      *
      * @hide
@@ -18300,7 +18300,7 @@ public class DevicePolicyManager {
     @FlaggedApi(FLAG_MULTI_USER_MANAGEMENT_USER_PROVISIONING)
     @RequiresPermission(android.Manifest.permission.MANAGE_PROFILE_AND_DEVICE_OWNERS)
     public void provisionMultiUserManagedUser(
-            @NonNull MultiUserManagedUserProvisioningParams provisioningParams)
+            @NonNull MultiUserManagedUserProvisioningParamsV1 provisioningParams)
             throws ProvisioningException {
         MultiuserManagedUserProvisioningParams newProvisioningParams =
                 new MultiuserManagedUserProvisioningParams.Builder(
