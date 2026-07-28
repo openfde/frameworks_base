@@ -53,6 +53,7 @@ import android.os.RemoteException
 import android.os.Trace
 import android.os.UserHandle
 import android.os.UserManager
+import android.util.Log
 import android.view.Display.DEFAULT_DISPLAY
 import android.view.Display.INVALID_DISPLAY
 import android.view.DragEvent
@@ -1859,6 +1860,8 @@ class DesktopTasksController(
             if (shouldExitDesktop) {
                 val isLastTask =
                     deskId?.let { repository.isOnlyTaskInDesk(taskInfo.taskId, it) } ?: false
+                val visibleTasksBelow = visibleNonDeskTasksOnDisplay(
+                    displayId, deskId, userId, taskId)
                 performDesktopExitCleanUp(
                     wct = wct,
                     deskId = deskId,
@@ -1866,9 +1869,15 @@ class DesktopTasksController(
                     userId = userId,
                     willExitDesktop = true,
                     removingLastTaskId = if (isLastTask) taskInfo.taskId else null,
-                    shouldEndUpAtHome = true,
+                    shouldEndUpAtHome = visibleTasksBelow.isEmpty(),
                     exitReason = ExitReason.TASK_FINISHED,
-                )
+                ).also {
+                    if (visibleTasksBelow.isNotEmpty()) {
+                        Log.e(TAG, "onDesktopWindowClose: blocking home launch,"
+                                + " visible tasks below desk=${visibleTasksBelow.toList()},"
+                                + " deskId=$deskId taskId=$taskId")
+                    }
+                }
             } else {
                 null
             }
@@ -1889,6 +1898,30 @@ class DesktopTasksController(
             immersiveRunnable?.invoke(transitionToken)
             desktopExitRunnable?.invoke(transitionToken)
         }
+    }
+
+    /**
+     * Returns the IDs of running tasks on [displayId] that are visible and NOT part of [deskId],
+     * excluding [excludingTaskId]. These are tasks that sit below the desk in z-order and should
+     * remain visible when the desk is deactivated, instead of bringing Launcher to the front.
+     */
+    private fun visibleNonDeskTasksOnDisplay(
+        displayId: Int,
+        deskId: Int,
+        userId: Int,
+        excludingTaskId: Int,
+    ): IntArray {
+        val repository = userRepositories.getProfile(userId)
+        val deskTaskIds = repository.getActiveTaskIdsInDesk(deskId).toMutableSet()
+        deskTaskIds.addAll(repository.getMinimizedTaskIdsInDesk(deskId))
+        return shellTaskOrganizer.getRunningTasks(displayId)
+            .filter { task ->
+                task.taskId != excludingTaskId
+                        && !deskTaskIds.contains(task.taskId)
+                        && task.isVisible
+            }
+            .map { it.taskId }
+            .toIntArray()
     }
 
     /**

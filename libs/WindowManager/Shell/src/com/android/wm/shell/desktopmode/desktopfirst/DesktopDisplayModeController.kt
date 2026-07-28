@@ -82,6 +82,8 @@ class DesktopDisplayModeController(
             false,
         )
 
+    private var hasExplicitlyChangedDisplayMode = false
+
     private val inputDeviceListener =
         object : InputManager.InputDeviceListener {
             override fun onInputDeviceAdded(deviceId: Int) {
@@ -208,6 +210,10 @@ class DesktopDisplayModeController(
             windowingModeToString(targetDisplayWindowingMode),
         )
 
+        if (displayId == DEFAULT_DISPLAY) {
+            hasExplicitlyChangedDisplayMode = true
+        }
+
         val wct = WindowContainerTransaction()
         wct.setWindowingMode(tdaInfo.token, targetDisplayWindowingMode)
         wct.setIsTaskMoveAllowed(tdaInfo.token, taskMoveAllowed)
@@ -293,6 +299,14 @@ class DesktopDisplayModeController(
     fun getTargetWindowingModeForDefaultDisplay(): Int {
         if (canDesktopFirstModeBeEnabledOnDefaultDisplay()) {
             return DESKTOP_FIRST_DISPLAY_WINDOWING_MODE
+        }
+
+        if (!hasExplicitlyChangedDisplayMode) {
+            val tdaInfo = rootTaskDisplayAreaOrganizer.getDisplayAreaInfo(DEFAULT_DISPLAY)
+            if (tdaInfo != null && tdaInfo.configuration.windowConfiguration.windowingMode
+                    == DESKTOP_FIRST_DISPLAY_WINDOWING_MODE) {
+                return DESKTOP_FIRST_DISPLAY_WINDOWING_MODE
+            }
         }
 
         return TOUCH_FIRST_DISPLAY_WINDOWING_MODE

@@ -48,6 +48,7 @@ import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.util.Size;
+import android.util.Slog;
 import android.view.Gravity;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -61,6 +62,9 @@ import java.util.List;
  * The class that defines the default launch params for tasks.
  */
 class TaskLaunchParamsModifier extends DefaultLaunchParamsModifier {
+
+    private static final String TAG = "TaskLaunchParamsModifier";
+
     // Allowance of size matching.
     private static final int EPSILON = 2;
 
@@ -443,6 +447,16 @@ class TaskLaunchParamsModifier extends DefaultLaunchParamsModifier {
         // on freeform displays. The launching windowing mode is more tied to the content of the new
         // activities.
         if (suggestedDisplayArea.inFreeformWindowingMode()) {
+            return false;
+        }
+
+        if (display.getDefaultWindowingModeFromSettings()
+                == WINDOWING_MODE_FREEFORM) {
+            Slog.e(TAG, "canInheritWindowingModeFromSource: blocking source inheritance,"
+                    + " display#" + display.getDisplayId() + " configured for freeform,"
+                    + " suggestedDisplayArea mode="
+                    + WindowConfiguration.windowingModeToString(
+                            suggestedDisplayArea.getWindowingMode()));
             return false;
         }
 
