@@ -159,7 +159,7 @@ public final class DragResizeWindowGeometry {
         return e.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS
                 || e.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE
                 // Touchpad input
-                || (e.isFromSource(SOURCE_MOUSE)
+                || ((e.isFromSource(SOURCE_MOUSE) || e.isFromSource(SOURCE_TOUCHSCREEN))
                         && e.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER);
     }
 
