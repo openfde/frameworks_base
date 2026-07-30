@@ -17,6 +17,7 @@
 package com.android.systemui.screencapture.domain.interactor
 
 import android.util.Log
+import android.view.Display
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
@@ -29,6 +30,9 @@ import com.android.systemui.screencapture.record.largescreen.domain.interactor.L
 import com.android.systemui.screencapture.record.largescreen.domain.interactor.ScreenshotInteractor
 import com.android.systemui.screencapture.record.largescreen.shared.model.ScreenCaptureRegion as LargeScreenCaptureRegion
 import com.android.systemui.screencapture.record.largescreen.shared.model.ScreenCaptureType as LargeScreenCaptureType
+import com.android.systemui.screenrecord.ScreenRecordingAudioSource
+import com.android.systemui.screenrecord.domain.interactor.ScreenRecordingServiceInteractor
+import com.android.systemui.screenrecord.shared.model.ScreenRecordingParameters
 import com.android.systemui.statusbar.policy.domain.interactor.UserSetupInteractor
 import com.android.systemui.user.data.repository.UserRepository
 import com.android.systemui.user.domain.interactor.HeadlessSystemUserMode
@@ -51,6 +55,7 @@ constructor(
     private val screenCaptureRecordFeaturesInteractor: ScreenCaptureRecordFeaturesInteractor,
     private val screenshotInteractor: ScreenshotInteractor,
     private val userSetupInteractor: UserSetupInteractor,
+    private val screenRecordingServiceInteractor: ScreenRecordingServiceInteractor,
 ) {
     fun attemptPartialRegionScreenshot() {
         backgroundScope.launch {
@@ -70,6 +75,20 @@ constructor(
                 captureType = LargeScreenCaptureType.SCREENSHOT,
                 captureRegion = LargeScreenCaptureRegion.APP_WINDOW,
             )
+        }
+    }
+
+    /** Starts a fullscreen screen recording directly, without opening any UI. */
+    fun attemptRecording() {
+        backgroundScope.launch {
+            val params = ScreenRecordingParameters(
+                captureTarget = null,
+                audioSource = ScreenRecordingAudioSource.NONE,
+                displayId = Display.DEFAULT_DISPLAY,
+                shouldShowTaps = false,
+            )
+            Log.i(TAG, "Starting recording via keyboard shortcut")
+            screenRecordingServiceInteractor.startRecordingDelayed(params)
         }
     }
 

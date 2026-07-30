@@ -2406,6 +2406,7 @@ public class ActivityOptions extends ComponentOptions {
         mLaunchIntoPipParams = otherOptions.mLaunchIntoPipParams;
         mLaunchDisplayId = otherOptions.mLaunchDisplayId;
         mIsEligibleForLegacyPermissionPrompt = otherOptions.mIsEligibleForLegacyPermissionPrompt;
+        mLaunchWindowingMode = otherOptions.mLaunchWindowingMode;
 
         sendResultIgnoreErrors(mAnimationAbortListener, null);
         mAnimationAbortListener = otherOptions.mAnimationAbortListener;

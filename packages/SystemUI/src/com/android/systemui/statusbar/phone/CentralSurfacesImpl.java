@@ -32,6 +32,7 @@ import static com.android.systemui.statusbar.StatusBarState.SHADE;
 
 import android.annotation.Nullable;
 import android.app.ActivityOptions;
+import android.app.Dialog;
 import android.app.IWallpaperManager;
 import android.app.KeyguardManager;
 import android.app.Notification;
@@ -46,11 +47,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
 import android.graphics.Point;
+import android.media.projection.StopReason;
 import android.hardware.devicestate.DeviceStateManager;
 import android.metrics.LogMaker;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.ServiceManager;
@@ -127,6 +131,7 @@ import com.android.systemui.keyguard.KeyguardUiEvent;
 import com.android.systemui.keyguard.KeyguardUnlockAnimationController;
 import com.android.systemui.keyguard.KeyguardViewMediator;
 import com.android.systemui.keyguard.ScreenLifecycle;
+import com.android.systemui.screenrecord.ScreenRecordUxController;
 import com.android.systemui.keyguard.WakefulnessLifecycle;
 import com.android.systemui.log.SessionTracker;
 import com.android.systemui.media.NotificationMediaManager;
@@ -344,6 +349,11 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
     private final NotificationShadeWindowController mNotificationShadeWindowController;
     @Nullable
     private PhoneStatusBarView mPhoneStatusBarView;
+    /** Message code for plugin-triggered screen recording dialog. */
+    private static final int MSG_SHOW_SCREEN_RECORD_DIALOG = 1001;
+    /** Message code for plugin-triggered screen recording stop. */
+    private static final int MSG_STOP_SCREEN_RECORD = 1002;
+    private final Handler mScreenRecordHandler;
     private final TopUiController mTopUiController;
     private final KeyguardUpdateMonitor mKeyguardUpdateMonitor;
     @VisibleForTesting
@@ -617,7 +627,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
             QuickAccessWalletController walletController,
             WindowManager windowManager,
             WindowManagerProvider windowManagerProvider,
-            SessionTracker sessionTracker
+            SessionTracker sessionTracker,
+            ScreenRecordUxController screenRecordUxController
     ) {
         mContext = context;
         mNotificationsController = notificationsController;
@@ -674,6 +685,21 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
         mDozeServiceHost = dozeServiceHost;
         mPowerManager = powerManager;
         mDozeParameters = dozeParameters;
+        mScreenRecordHandler = new Handler(Looper.getMainLooper()) {
+            @Override
+            public void handleMessage(@NonNull Message msg) {
+                if (msg.what == MSG_SHOW_SCREEN_RECORD_DIALOG) {
+                    Dialog d = screenRecordUxController
+                            .createScreenRecordDialog(null);
+                    d.show();
+                } else if (msg.what == MSG_STOP_SCREEN_RECORD) {
+                    if (screenRecordUxController.isRecording()) {
+                        screenRecordUxController.stopRecording(
+                                StopReason.STOP_QS_TILE);
+                    }
+                }
+            }
+        };
         mScrimController = SceneContainerFlag.isEnabled() ? null : scrimController.get();
         mDozeScrimController = dozeScrimController;
         mBiometricUnlockControllerLazy = biometricUnlockControllerLazy;
@@ -834,7 +860,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
 
                     @Override
                     public void onPluginConnected(OverlayPlugin plugin, Context pluginContext) {
-                        Log.d(TAG, "onPluginConnected: " + mPhoneStatusBarView);
+                        Log.d(TAG, "onPluginConnected: " + mPhoneStatusBarView + " " + mScreenRecordHandler);
+                        mPhoneStatusBarView.setTag(mScreenRecordHandler);
                         mMainExecutor.execute(
                                 () -> plugin.setup(
                                         mPhoneStatusBarView,

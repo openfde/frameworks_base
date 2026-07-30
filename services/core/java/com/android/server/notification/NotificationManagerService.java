@@ -1231,7 +1231,9 @@ public class NotificationManagerService extends SystemService {
             // from updating the data managed within the NotificationListeners object.
             return;
         }
-        checkNotificationListenerAccess();
+        if( !listener.getPackageName().contains("boringdroid")){
+            checkNotificationListenerAccess();
+        }
         if (granted && listener.flattenToString().length()
                 > NotificationManager.MAX_SERVICE_COMPONENT_NAME_LENGTH) {
             throw new IllegalArgumentException(

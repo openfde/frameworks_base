@@ -23,6 +23,7 @@ import android.graphics.Point
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.util.DisplayMetrics
+import android.util.Log
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import com.android.app.tracing.coroutines.launchInTraced
@@ -133,6 +134,9 @@ constructor(
 
     private suspend fun initializeCaptureType() {
         val defaultType = recordingParameters.largeScreenParameters?.defaultCaptureType
+        Log.e(TAG, "initializeCaptureType: defaultType=$defaultType" +
+                " largeScreenParams=${recordingParameters.largeScreenParameters}" +
+                " recordingParams=$recordingParameters")
         if (defaultType != null) {
             captureTypeSource.value = defaultType
             largeScreenCaptureParametersInteractor.setSelectedCaptureType(defaultType)
@@ -140,6 +144,7 @@ constructor(
             captureTypeSource.value =
                 largeScreenCaptureParametersInteractor.getSelectedCaptureType()
         }
+        Log.e(TAG, "initializeCaptureType: final captureType=${captureTypeSource.value}")
     }
 
     private suspend fun initializeCaptureRegion() {
@@ -455,6 +460,10 @@ constructor(
             regionBoxSource.value =
                 Rect(bounds).apply { inset(bounds.width() / 4, bounds.height() / 4) }
         }
+    }
+
+    companion object {
+        private const val TAG = "PreCaptureViewModel"
     }
 
     @AssistedFactory

@@ -24,6 +24,7 @@ import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_LAUNCH_CONTEXTUAL
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_LAUNCH_CONTEXTUAL_SEARCH
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_APP_WINDOW_SCREENSHOT
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_PARTIAL_SCREENSHOT
+import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_RECORDING
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_NOTIFICATION_PANEL
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_QUICK_SETTINGS_PANEL
 import android.util.Slog
@@ -77,6 +78,7 @@ constructor(
         if (enablePartialScreenshotKeyboardShortcut()) {
             supportedGestures.add(KEY_GESTURE_TYPE_TAKE_PARTIAL_SCREENSHOT)
             supportedGestures.add(KEY_GESTURE_TYPE_TAKE_APP_WINDOW_SCREENSHOT)
+            supportedGestures.add(KEY_GESTURE_TYPE_TAKE_RECORDING)
         }
         if (enableContextualSearchDesktopEntrypoints()) {
             supportedGestures.add(KEY_GESTURE_TYPE_LAUNCH_CONTEXTUAL_SEARCH)
@@ -94,6 +96,9 @@ constructor(
                 }
                 KEY_GESTURE_TYPE_TAKE_APP_WINDOW_SCREENSHOT -> {
                     screenCaptureKeyboardShortcutInteractor.attemptAppWindowScreenshot()
+                }
+                KEY_GESTURE_TYPE_TAKE_RECORDING -> {
+                    screenCaptureKeyboardShortcutInteractor.attemptRecording()
                 }
                 KEY_GESTURE_TYPE_TOGGLE_NOTIFICATION_PANEL -> {
                     if (desktopState.canEnterDesktopMode) {

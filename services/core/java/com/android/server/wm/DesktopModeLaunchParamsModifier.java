@@ -138,7 +138,8 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
                     return RESULT_DONE;
                 }
                 if (mDesktopModeCompatPolicy.isPackageLaunchInFullscreen(
-                        activity.mActivityComponent)) {
+                        activity.mActivityComponent)
+                        && !isExplicitlyRequestingFreeform(options)) {
                     appendLog("force-launch-in-fullscreen-by-allowlist");
                     outParams.mWindowingMode = WINDOWING_MODE_FULLSCREEN;
                     return RESULT_DONE;
@@ -166,13 +167,15 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
                 if (mDesktopModeCompatPolicy.isTopActivityExemptFromDesktopWindowing(
                         activity.mActivityComponent, activity.isNoDisplay(),
                         !activity.occludesParent(), /* numActivities */ 1, activity.mUserId,
-                        activity.info, activity.getActivityType())) {
+                        activity.info, activity.getActivityType())
+                        && !isExplicitlyRequestingFreeform(options)) {
                     appendLog("activity exempt from desktop, launching in fullscreen");
                     outParams.mWindowingMode = WINDOWING_MODE_FULLSCREEN;
                     return RESULT_DONE;
                 }
                 if (mDesktopModeCompatPolicy.isPackageLaunchInFullscreen(
-                        activity.mActivityComponent)) {
+                        activity.mActivityComponent)
+                        && !isExplicitlyRequestingFreeform(options)) {
                     appendLog("force-launch-in-fullscreen-by-allowlist");
                     outParams.mWindowingMode = WINDOWING_MODE_FULLSCREEN;
                     return RESULT_DONE;
@@ -245,7 +248,8 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
             if (mDesktopModeCompatPolicy.isTopActivityExemptFromDesktopWindowing(
                     targetActivity.mActivityComponent, targetActivity.isNoDisplay(),
                     isActivityStackTransparent, numActivities.get(), task.getUserId(),
-                    targetActivity.info, targetActivity.getActivityType())) {
+                    targetActivity.info, targetActivity.getActivityType())
+                    && !isExplicitlyRequestingFreeform(options)) {
                 appendLog("activity exempt from desktop, launching in fullscreen");
                 outParams.mWindowingMode = WINDOWING_MODE_FULLSCREEN;
                 return RESULT_DONE;
@@ -365,6 +369,11 @@ class DesktopModeLaunchParamsModifier extends DefaultLaunchParamsModifier {
             return RESULT_DONE;
         }
         return RESULT_CONTINUE;
+    }
+
+    private boolean isExplicitlyRequestingFreeform(@Nullable ActivityOptions options) {
+        return options != null
+                && options.getLaunchWindowingMode() == WINDOWING_MODE_FREEFORM;
     }
 
     /**

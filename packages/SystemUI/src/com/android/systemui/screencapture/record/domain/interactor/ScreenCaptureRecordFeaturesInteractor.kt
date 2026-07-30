@@ -31,16 +31,12 @@ constructor(private val screenCaptureDeviceStateRepository: ScreenCaptureDeviceS
             Flags.newScreenRecordToolbar() &&
                 screenCaptureDeviceStateRepository.isLargeScreen.value != true
 
-    val isLargeScreenScreencaptureEnabled: Boolean
-        get() =
-            Flags.largeScreenScreencapture() &&
-                screenCaptureDeviceStateRepository.isLargeScreen.value == true
+    val isLargeScreenScreencaptureEnabled: Boolean = true
 
     val isLargeScreenRecordingEnabled: Boolean
         get() = isLargeScreenScreencaptureEnabled && Flags.largeScreenRecording()
 
-    val shouldShowNewRecordingToolbar: Boolean
-        get() = isSmallScreenRecordingEnabled || isLargeScreenRecordingEnabled
+    val shouldShowNewRecordingToolbar: Boolean = false
 
     val isMarkupAvailable: Boolean
         get() = Flags.newScreenRecordToolbarMarkup()

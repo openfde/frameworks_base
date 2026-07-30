@@ -56,7 +56,9 @@ constructor(
         player =
             createPlayer()?.apply {
                 setSurface(surface)
-                start()
+                // Do NOT auto-play video to diagnose freeze issue.
+                // Call start() manually via controls to play.
+                // start()
             }
     }
 

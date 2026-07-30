@@ -1299,19 +1299,13 @@ final class KeyGestureController {
 
     private void handleScreenshotKey(int keyCode, int deviceId, int displayId,
             @Nullable IBinder focusedToken) {
-        if (enablePartialScreenshotKeyboardShortcut()
-                && hasKeyGestureHandlerRegistered(
-                KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_PARTIAL_SCREENSHOT)) {
-            handleKeyGesture(deviceId, new int[]{keyCode}, /* modifierState = */0,
-                    KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_PARTIAL_SCREENSHOT,
-                    KeyGestureEvent.ACTION_GESTURE_COMPLETE, displayId,
-                    focusedToken, /* flags = */0, /* appLaunchData = */null);
-        } else {
-            handleKeyGesture(deviceId, new int[]{keyCode}, /* modifierState = */0,
-                    KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_SCREENSHOT,
-                    KeyGestureEvent.ACTION_GESTURE_COMPLETE, displayId,
-                    focusedToken, /* flags = */0, /* appLaunchData = */null);
-        }
+        // Always take a fullscreen screenshot on SYSRQ/SCREENSHOT hardware key.
+        // Partial/region screenshots are handled via keyboard shortcut (Meta+Ctrl+S)
+        // in SystemUI's ScreenCaptureKeyboardShortcutInteractor.
+        handleKeyGesture(deviceId, new int[]{keyCode}, /* modifierState = */0,
+                KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_SCREENSHOT,
+                KeyGestureEvent.ACTION_GESTURE_COMPLETE, displayId,
+                focusedToken, /* flags = */0, /* appLaunchData = */null);
     }
 
     private boolean hasKeyGestureHandlerRegistered(

@@ -131,22 +131,32 @@ constructor(
         }
     }
 
+    /**
+     * Switch to control post-recording UI in desktop mode:
+     *   true  = use SmallScreenPostRecordingActivity (original behavior)
+     *   false = use PostRecordingShelf floating overlay
+     */
+    private var usePostRecordingActivity = false
+
     private fun setupSmallScreenPostRecordings() {
         if (!screenCaptureRecordFeaturesInteractor.isSmallScreenRecordingEnabled) return
 
         screenRecordingServiceInteractor.screenRecordings
             .filterIsInstance(ScreenRecording.Saving::class)
             .onEach { recording ->
-                activityStarter.startActivityDismissingKeyguard(
-                    /* intent = */ SmallScreenPostRecordingActivity.waitForRecording(
+                if (usePostRecordingActivity) {
+                    val intent = SmallScreenPostRecordingActivity.waitForRecording(
                         context = context,
                         videoUri = recording.uri,
                         notificationId = recording.notificationId,
-                    ),
-                    /* onlyProvisioned = */ true,
-                    /* dismissShade = */ true,
-                    /* customMessage = */ null,
-                )
+                    )
+                    activityStarter.startActivityDismissingKeyguard(
+                        /* intent = */ intent,
+                        /* onlyProvisioned = */ true,
+                        /* dismissShade = */ true,
+                        /* customMessage = */ null,
+                    )
+                }
             }
             .launchIn(appScope)
     }

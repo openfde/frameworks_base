@@ -105,6 +105,8 @@ public class ScreenshotHelper {
     @VisibleForTesting
     public void takeScreenshotInternal(ScreenshotRequest request, @NonNull Handler handler,
             @Nullable Consumer<Uri> completionConsumer, long timeoutMs) {
+        Log.e(TAG, "takeScreenshotInternal called, source=" + request.getSource(),
+                new Throwable());
         synchronized (mScreenshotLock) {
             mContext.registerReceiver(mBroadcastReceiver,
                 new IntentFilter(ACTION_USER_SWITCHED), Context.RECEIVER_EXPORTED);

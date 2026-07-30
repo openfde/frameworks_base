@@ -45,6 +45,8 @@ import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_SPLIT_SCREEN_NAVI
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_SPLIT_SCREEN_NAVIGATION_RIGHT
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_PARTIAL_SCREENSHOT
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_SCREENSHOT
+import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_APP_WINDOW_SCREENSHOT
+import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_RECORDING
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_BOUNCE_KEYS
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_MAGNIFICATION
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_MAXIMIZE_FREEFORM_WINDOW
@@ -55,6 +57,7 @@ import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_SCREEN_REA
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_SLOW_KEYS
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_STICKY_KEYS
 import android.hardware.input.KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_VOICE_ACCESS
+import com.android.systemui.keyboard.shortcut.shared.model.ShortcutCategoryType
 import com.android.systemui.keyboard.shortcut.shared.model.ShortcutCategoryType.Accessibility
 import com.android.systemui.keyboard.shortcut.shared.model.ShortcutCategoryType.AppCategories
 import com.android.systemui.keyboard.shortcut.shared.model.ShortcutCategoryType.MultiTasking
@@ -64,13 +67,15 @@ import javax.inject.Inject
 
 class InputGestureMaps @Inject constructor(private val context: Context) {
     val gestureToShortcutCategoryTypeMap =
-        mapOf(
+        mapOf<Int, ShortcutCategoryType>(
             // System Category
             KEY_GESTURE_TYPE_HOME to System,
             KEY_GESTURE_TYPE_RECENT_APPS to System,
             KEY_GESTURE_TYPE_BACK to System,
             KEY_GESTURE_TYPE_TAKE_SCREENSHOT to System,
             KEY_GESTURE_TYPE_TAKE_PARTIAL_SCREENSHOT to System,
+            KEY_GESTURE_TYPE_TAKE_APP_WINDOW_SCREENSHOT to System,
+            KEY_GESTURE_TYPE_TAKE_RECORDING to System,
             KEY_GESTURE_TYPE_OPEN_SHORTCUT_HELPER to System,
             KEY_GESTURE_TYPE_TOGGLE_NOTIFICATION_PANEL to System,
             KEY_GESTURE_TYPE_TOGGLE_QUICK_SETTINGS_PANEL to System,
@@ -183,13 +188,15 @@ class InputGestureMaps @Inject constructor(private val context: Context) {
      * [InputGestureDataAdapter.fetchShortcutLabelByAppLaunchData]
      */
     val gestureToInternalKeyboardShortcutInfoLabelResIdMap =
-        mapOf(
+        mapOf<Int, Int>(
             // System Category
             KEY_GESTURE_TYPE_HOME to R.string.group_system_access_home_screen,
             KEY_GESTURE_TYPE_RECENT_APPS to R.string.group_system_overview_open_apps,
             KEY_GESTURE_TYPE_BACK to R.string.group_system_go_back,
             KEY_GESTURE_TYPE_TAKE_SCREENSHOT to R.string.group_system_full_screenshot,
             KEY_GESTURE_TYPE_TAKE_PARTIAL_SCREENSHOT to R.string.group_system_partial_screenshot,
+            KEY_GESTURE_TYPE_TAKE_APP_WINDOW_SCREENSHOT to R.string.group_system_partial_screenshot,
+            KEY_GESTURE_TYPE_TAKE_RECORDING to R.string.group_system_record_screen,
             KEY_GESTURE_TYPE_OPEN_SHORTCUT_HELPER to
                 R.string.group_system_access_system_app_shortcuts,
             KEY_GESTURE_TYPE_TOGGLE_NOTIFICATION_PANEL to

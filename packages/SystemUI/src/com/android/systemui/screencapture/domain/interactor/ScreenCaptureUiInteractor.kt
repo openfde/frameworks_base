@@ -34,6 +34,7 @@ import com.android.systemui.user.data.repository.UserRepository
 import dagger.Lazy
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -50,7 +51,7 @@ constructor(
     private val uiEventLogger: UiEventLogger,
 ) {
 
-    val isLargeScreen: StateFlow<Boolean> = deviceStateRepository.isLargeScreen
+    val isLargeScreen: StateFlow<Boolean> = MutableStateFlow(true)
 
     fun uiState(type: ScreenCaptureType): StateFlow<ScreenCaptureUiState> = repository.uiState(type)
 

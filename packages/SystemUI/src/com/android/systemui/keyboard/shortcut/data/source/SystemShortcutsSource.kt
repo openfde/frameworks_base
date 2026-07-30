@@ -31,6 +31,7 @@ import android.view.KeyEvent.KEYCODE_I
 import android.view.KeyEvent.KEYCODE_L
 import android.view.KeyEvent.KEYCODE_N
 import android.view.KeyEvent.KEYCODE_Q
+import android.view.KeyEvent.KEYCODE_R
 import android.view.KeyEvent.KEYCODE_RECENT_APPS
 import android.view.KeyEvent.KEYCODE_S
 import android.view.KeyEvent.KEYCODE_SLASH
@@ -194,6 +195,13 @@ constructor(
             add(
                 shortcutInfo(resources.getString(R.string.group_system_partial_screenshot)) {
                     command(META_META_ON or META_CTRL_ON, KEYCODE_S)
+                }
+            )
+            // Take a screen recording:
+            //  - Meta + Shift + R
+            add(
+                shortcutInfo(resources.getString(R.string.group_system_record_screen)) {
+                    command(META_META_ON or META_SHIFT_ON, KEYCODE_R)
                 }
             )
         }

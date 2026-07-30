@@ -350,6 +350,13 @@ final class InputGestureManager {
                             KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_PARTIAL_SCREENSHOT,
                             /* allowCaptureByFocusedWindow = */true
                     ));
+            systemShortcuts.add(
+                    createKeyGesture(
+                            KeyEvent.KEYCODE_R,
+                            KeyEvent.META_META_ON | KeyEvent.META_SHIFT_ON,
+                            KeyGestureEvent.KEY_GESTURE_TYPE_TAKE_RECORDING,
+                            /* allowCaptureByFocusedWindow = */true
+                    ));
         }
         if (keyboardBacklightShortcuts()) {
             systemShortcuts.add(

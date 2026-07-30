@@ -288,10 +288,15 @@ class DesktopDisplayEventHandler(
             "DesktopDisplayEventHandler#onDisplayRemoved: $displayId",
         ) {
             rootTaskDisplayAreaOrganizer.unregisterListener(displayId, onDisplayAreaChangeListener)
-            if (displayId != DEFAULT_DISPLAY) {
+            // Skip re-evaluating default display's desktop mode when a screen recording
+            // virtual display is removed. Use the uniqueId captured during onDisplayAdded
+            // since getDisplay() returns null after removal.
+            val uniqueDisplayId = uniqueIdByDisplayId[displayId]
+            val isRecordingDisplay = uniqueDisplayId?.startsWith(
+                "virtual:com.android.systemui") == true
+            if (displayId != DEFAULT_DISPLAY && !isRecordingDisplay) {
                 desktopDisplayModeController.updateDefaultDisplayWindowingMode()
             }
-            val uniqueDisplayId = uniqueIdByDisplayId[displayId]
             uniqueIdByDisplayId.remove(displayId)
         }
 

@@ -301,12 +301,18 @@ class DesktopDisplayModeController(
             return DESKTOP_FIRST_DISPLAY_WINDOWING_MODE
         }
 
+        // If the TDA is already freeform, always keep it freeform regardless of
+        // hasExplicitlyChangedDisplayMode. The flag only gates UPGRADING to freeform,
+        // not DOWNGRADING from it. This prevents transient events (e.g. recording
+        // virtual display removal) from accidentally reverting desktop mode.
+        val tdaInfo = rootTaskDisplayAreaOrganizer.getDisplayAreaInfo(DEFAULT_DISPLAY)
+        if (tdaInfo != null && tdaInfo.configuration.windowConfiguration.windowingMode
+                == DESKTOP_FIRST_DISPLAY_WINDOWING_MODE) {
+            return DESKTOP_FIRST_DISPLAY_WINDOWING_MODE
+        }
+
         if (!hasExplicitlyChangedDisplayMode) {
-            val tdaInfo = rootTaskDisplayAreaOrganizer.getDisplayAreaInfo(DEFAULT_DISPLAY)
-            if (tdaInfo != null && tdaInfo.configuration.windowConfiguration.windowingMode
-                    == DESKTOP_FIRST_DISPLAY_WINDOWING_MODE) {
-                return DESKTOP_FIRST_DISPLAY_WINDOWING_MODE
-            }
+            return DESKTOP_FIRST_DISPLAY_WINDOWING_MODE
         }
 
         return TOUCH_FIRST_DISPLAY_WINDOWING_MODE
