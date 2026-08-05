@@ -34,14 +34,18 @@ abstract class BaseShadeControllerImpl(
     /** Runnables to run after completing a collapse of the shade. */
     private val postCollapseActions = ArrayList<Runnable>()
 
+    companion object {
+        /** Set to true by CentralSurfaces after SystemUI is fully initialized. */
+        @JvmStatic
+        var shadeExpandReady = false
+    }
+
     override fun start() {
         // Do nothing by default
     }
 
     final override fun animateExpandShade() {
-        if (isShadeEnabled) {
-            expandToNotifications()
-        }
+        return  // DEBUG: completely block shade expansion
     }
 
     /** Expand the shade with notifications visible. */

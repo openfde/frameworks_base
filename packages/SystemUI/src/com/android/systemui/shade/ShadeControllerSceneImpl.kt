@@ -183,7 +183,7 @@ constructor(
     }
 
     override fun expandToNotifications() {
-        shadeInteractor.expandNotificationsShade("ShadeController.animateExpandShade")
+        return  // DEBUG: completely block
     }
 
     override fun expandToQs() {

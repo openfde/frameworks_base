@@ -73,6 +73,9 @@ constructor(
     }
 
     override fun transitionToExpandedShade(delay: Long) {
+        if (!android.os.SystemProperties.getBoolean("sys.boot_completed", false)) {
+            return
+        }
         backgroundScope.launch {
             delay(delay)
             withContext(mainDispatcher) {

@@ -377,10 +377,11 @@ public class PhoneStatusBarView extends FrameLayout {
         }
 
         Insets insets = mInsetsFetcher.fetchInsets();
+        Log.d(TAG, "updateSafeInsets  : " + insets);
         setPadding(
                 insets.left,
                 insets.top,
-                insets.right,
+                0,
                 getPaddingBottom());
     }
 

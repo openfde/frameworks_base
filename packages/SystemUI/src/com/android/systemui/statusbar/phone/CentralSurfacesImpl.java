@@ -153,6 +153,7 @@ import com.android.systemui.scene.domain.interactor.WindowRootViewVisibilityInte
 import com.android.systemui.scene.shared.flag.SceneContainerFlag;
 import com.android.systemui.scrim.ScrimView;
 import com.android.systemui.settings.UserTracker;
+import com.android.systemui.shade.BaseShadeControllerImpl;
 import com.android.systemui.shade.CameraLauncher;
 import com.android.systemui.shade.GlanceableHubContainerController;
 import com.android.systemui.shade.NotificationShadeWindowView;
@@ -1111,6 +1112,11 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
 
         // Private API call to make the shadows look better for Recents
         ThreadedRenderer.overrideProperty("ambientRatio", String.valueOf(1.5f));
+
+        // Allow shade expansion after SystemUI is fully initialized.
+        // Allow shade expansion after a delay to let boot-time CommandQueue messages drain.
+        new Handler(Looper.getMainLooper()).postDelayed(
+                () -> BaseShadeControllerImpl.setShadeExpandReady(true), 3000);
     }
 
     private void setBrightnessMirrorShowing(boolean showing) {
@@ -1763,6 +1769,11 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
     }
 
     private void updatePanelExpansionForKeyguard() {
+        // Do not expand the shade while the device is still booting, otherwise the
+        // notification shade will be shown expanded right after boot.
+        if (!SystemProperties.getBoolean("sys.boot_completed", false)) {
+            return;
+        }
         if (mState == StatusBarState.KEYGUARD && mBiometricUnlockController.getMode()
                 != BiometricUnlockController.MODE_WAKE_AND_DISMISS && !mBouncerShowing) {
             mShadeController.instantExpandShade();

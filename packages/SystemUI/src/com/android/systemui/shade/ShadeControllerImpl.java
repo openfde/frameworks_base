@@ -117,10 +117,7 @@ public final class ShadeControllerImpl extends BaseShadeControllerImpl {
 
     @Override
     public void instantExpandShade() {
-        // Make our window larger and the panel expanded.
-        makeExpandedVisible(true /* force */);
-        getNpvc().expand(false /* animate */);
-        getCommandQueue().recomputeDisableFlags(getDisplayId(), false /* animate */);
+        return;  // DEBUG: completely block
     }
 
     @Override
@@ -150,7 +147,7 @@ public final class ShadeControllerImpl extends BaseShadeControllerImpl {
 
     @Override
     protected void expandToNotifications() {
-        getNpvc().expandToNotifications();
+        return;  // DEBUG: completely block
     }
 
     @Override
@@ -280,6 +277,7 @@ public final class ShadeControllerImpl extends BaseShadeControllerImpl {
 
     @Override
     public void makeExpandedVisible(boolean force) {
+        android.util.Log.e("SHADE_EXPAND", "makeExpandedVisible force=" + force, new Throwable());
         if (SPEW) Log.d(TAG, "Make expanded visible: expanded visible=" + mExpandedVisible);
         if (!force && (mExpandedVisible || !getCommandQueue().panelsEnabled())) {
             return;
