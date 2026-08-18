@@ -151,6 +151,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.Size;
 import android.annotation.UiContext;
+import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityThread;
 import android.app.AppOpsManager;
@@ -2547,6 +2548,9 @@ public final class ViewRootImpl implements ViewParent,
         onInsetsStateChanged(insetsState);
         final float compatScale = frames.compatScale;
         final boolean frameChanged = !mWinFrame.equals(frame);
+        if(frameChanged && getActivity() != null){
+            getActivity().onConfigurationChanged(mLastConfigurationFromResources);
+        }
         final boolean shouldReportActivityWindowInfoChanged =
                 // Can be null if callbacks is not set
                 mLastReportedActivityWindowInfo != null
@@ -2614,6 +2618,18 @@ public final class ViewRootImpl implements ViewParent,
             forceLayout(mView);
         }
         requestLayout();
+    }
+
+    private Activity getActivity() {
+        if (!(mView instanceof ViewGroup)) {
+            return null;
+        }
+        ViewGroup viewGroup = (ViewGroup) mView;
+        if (viewGroup.getChildCount() == 0) {
+            return null;
+        }
+        Context context = viewGroup.getChildAt(0).getContext();
+        return context instanceof Activity ? (Activity) context : null;
     }
 
     /** Handles messages {@link #MSG_INSETS_CONTROL_CHANGED}. */
