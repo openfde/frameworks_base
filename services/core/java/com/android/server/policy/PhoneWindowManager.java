@@ -212,7 +212,6 @@ import android.view.KeyEvent;
 import android.view.KeyboardShortcutGroup;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
-import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowManagerGlobal;
 import android.view.WindowManagerPolicyConstants;
@@ -647,8 +646,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     Display mDefaultDisplay;
     DisplayRotation mDefaultDisplayRotation;
     DisplayPolicy mDefaultDisplayPolicy;
-    private final IBinder mSystemBarOverrideToken = new Binder();
-    private boolean mSystemBarsHidden;
 
     // What we do when the user long presses on home
     int mLongPressOnHomeBehavior;
@@ -6867,20 +6864,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (mDefaultDisplayPolicy == null) {
             return;
         }
-        boolean freeform = mDefaultDisplayPolicy.isInFreeformMode();
-        boolean homeOnTop = mDefaultDisplayPolicy.isHomeOnTop();
-        if (freeform || homeOnTop) return;
-        mSystemBarsHidden = !mSystemBarsHidden;
-        if (mSystemBarsHidden) {
-            mDefaultDisplayPolicy.setSystemBarVisibilityOverride(
-                    mSystemBarOverrideToken,
-                    0 /* forciblyShowingInsetsTypes */,
-                    WindowInsets.Type.statusBars()
-                            | WindowInsets.Type.navigationBars() /* forciblyHiding */);
-        } else {
-            mDefaultDisplayPolicy.setSystemBarVisibilityOverride(
-                    mSystemBarOverrideToken, 0, 0);
-        }
+        mDefaultDisplayPolicy.toggleSystemBars();
     }
 
     /**

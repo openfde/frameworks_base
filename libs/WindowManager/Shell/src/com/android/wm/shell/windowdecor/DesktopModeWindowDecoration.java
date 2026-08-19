@@ -142,6 +142,7 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import android.util.Log;
 
 /**
  * Defines visuals and behaviors of a window decoration of a caption bar and shadows. It works with

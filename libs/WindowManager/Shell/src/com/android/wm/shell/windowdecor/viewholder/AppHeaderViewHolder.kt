@@ -25,6 +25,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -440,6 +441,14 @@ class AppHeaderViewHolder(
     }
 
     override fun bindData(data: HeaderData) {
+        Log.d(
+            TAG,
+            "bindData taskId=" + data.taskInfo.taskId
+                    + " topActivity=" + data.taskInfo.topActivity
+                    + " isTaskMaximized=" + data.isTaskMaximized
+                    + " isCaptionVisible=" + data.isCaptionVisible,
+            Throwable(),
+        )
         bindData(
             data.taskInfo,
             data.isTaskMaximized,
@@ -695,6 +704,22 @@ class AppHeaderViewHolder(
                 // Disable long-click to open layout menu when in immersive.
                 null
             }
+
+
+        var x11HideCaptionButton = false
+        Log.d(TAG, "updateRelayoutParams:" + taskInfo)
+        val topActivity = taskInfo.topActivity
+        if (topActivity != null) {
+            Log.d(TAG, "updateRelayoutParams: topActivity:" + topActivity.getClassName())
+            x11HideCaptionButton = topActivity.getClassName().contains("fde") &&
+                    topActivity.getClassName().contains("MainActivity11")
+        }
+        if(x11HideCaptionButton){
+            maximizeButtonView.visibility = View.GONE
+            closeWindowButton.visibility = View.GONE
+            minimizeWindowButton.visibility = View.GONE
+//            openMenuButton.visibility = View.GONE
+        }
     }
 
     private fun shouldAddAppName(headerType: Header.Type): Boolean {
@@ -999,6 +1024,7 @@ class AppHeaderViewHolder(
     }
 
     companion object {
+        private const val TAG = "AppHeaderViewHolder"
         private const val DARK_THEME_UNFOCUSED_OPACITY = 140 // 55%
         private const val LIGHT_THEME_UNFOCUSED_OPACITY = 166 // 65%
         private const val FOCUSED_OPACITY = 255

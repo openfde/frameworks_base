@@ -79,6 +79,8 @@ import android.window.WindowContainerTransaction;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
+import static com.android.wm.shell.desktopmode.DesktopModeEventLogger.getInputMethodType;
+import static android.os.statsd.desktopmode.DesktopModeEnums.UNKNOWN_INPUT_METHOD;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.jank.Cuj;
@@ -157,6 +159,9 @@ import com.android.wm.shell.windowdecor.tiling.DesktopTilingDecorViewModel;
 import com.android.wm.shell.windowdecor.tiling.SnapEventHandler;
 import com.android.wm.shell.windowdecor.viewholder.AppHandleViewHolder;
 import com.android.wm.shell.windowdecor.viewholder.AppHeaderViewHolder;
+import com.android.internal.policy.ITaskCaptionOperationService;
+import android.util.Log;
+import android.os.ServiceManager;
 
 import kotlin.Pair;
 import kotlin.Unit;
@@ -286,6 +291,7 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
     private CaptionTouchStatusListener mCaptionTouchStatusListener;
 
     private final LockTaskChangeListener mLockTaskChangeListener;
+    private ITaskCaptionOperationService.Stub mTaskCaptionOperationService;
 
     public DesktopModeWindowDecorViewModel(
             Context context,
@@ -568,6 +574,43 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         mMultiDisplayTaskMover = multiDisplayTaskMover;
         mRecentsTransitionStateListener = perDisplayRecentsTransitionStateListener;
         shellInit.addInitCallback(this::onInit, this);
+        mTaskCaptionOperationService = new ITaskCaptionOperationService.Stub() {
+            @Override
+            public void executeTaskOperation(int taskId, int operationType) {
+                mMainExecutor.execute(() -> {
+                    if (operationType == 2) {
+                        onEnterOrExitImmersive(taskId);
+                    } else if (operationType == 4) {
+                        onToggleMaximizeOrRestore(taskId);
+                    }
+                });
+                Log.d(TAG, "executeTaskOperation() called with: taskId = [" + taskId + "], operationType = [" + operationType + "]");
+            }
+
+            @Override
+            public int getTaskState(int taskId){
+                Log.d(TAG, "getTaskState() called with: taskId = [" + taskId + "]");
+                RunningTaskInfo taskInfo = mTaskOrganizer.getRunningTaskInfo(taskId);
+                final DesktopRepository desktopRepository = mDesktopUserRepositories.getProfile(
+                        taskInfo.userId);
+                if (desktopRepository.isTaskInFullImmersiveState(taskInfo.taskId)) {
+                    return 2;
+                }
+                final int displayId = taskInfo.displayId;
+                final DisplayLayout displayLayout = mDisplayController.getDisplayLayout(displayId);
+                if (displayLayout == null) {
+                    Log.w(TAG, "onToggleMaximizeOrRestore: displayLayout is null for displayId=" + displayId);
+                    return 0;
+                }
+                boolean isMaximized = DesktopModeUtils.isTaskMaximized(taskInfo, displayLayout);
+                if(isMaximized){
+                    return 1;
+                }
+                return 0;
+            }
+
+        };
+        ServiceManager.addService("TASK_CAPTION_OPERATION", mTaskCaptionOperationService);
     }
 
     @OptIn(markerClass = ExperimentalCoroutinesApi.class)
@@ -863,9 +906,22 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
 
     private void onEnterOrExitImmersive(RunningTaskInfo taskInfo) {
         final WindowDecorationWrapper decoration = mWindowDecorByTaskId.get(taskInfo.taskId);
-        if (decoration == null) {
+        if (decoration == null || taskInfo == null) {
             return;
         }
+        onEnterOrExitImmersive(taskInfo, decoration);
+    }
+
+    private void onEnterOrExitImmersive(int taskId) {
+        final WindowDecorationWrapper decoration = mWindowDecorByTaskId.get(taskId);
+        RunningTaskInfo taskInfo = mTaskOrganizer.getRunningTaskInfo(taskId);
+        if (decoration == null || taskInfo == null) {
+            return;
+        }
+        onEnterOrExitImmersive(taskInfo, decoration);
+    }
+
+    private void onEnterOrExitImmersive(RunningTaskInfo taskInfo, WindowDecorationWrapper decoration) {
         final DesktopRepository desktopRepository = mDesktopUserRepositories.getProfile(
                 taskInfo.userId);
         if (desktopRepository.isTaskInFullImmersiveState(taskInfo.taskId)) {
@@ -879,6 +935,36 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
             removeTaskIfTiled(decoration.getTaskInfo().displayId, decoration.getTaskInfo().taskId);
             mDesktopImmersiveController.moveTaskToImmersive(decoration.getTaskInfo());
         }
+    }
+
+    private void onToggleMaximizeOrRestore(int taskId) {
+        final WindowDecorationWrapper decoration = mWindowDecorByTaskId.get(taskId);
+        if (decoration == null) {
+            Log.w(TAG, "onToggleMaximizeOrRestore: decoration not found for taskId=" + taskId);
+            return;
+        }
+
+        final RunningTaskInfo taskInfo = decoration.getTaskInfo();
+        final int displayId = taskInfo.displayId;
+        final DisplayLayout displayLayout = mDisplayController.getDisplayLayout(displayId);
+
+        if (displayLayout == null) {
+            Log.w(TAG, "onToggleMaximizeOrRestore: displayLayout is null for displayId=" + displayId);
+            return;
+        }
+
+        boolean isMaximized = DesktopModeUtils.isTaskMaximized(taskInfo, displayLayout);
+        ToggleTaskSizeInteraction.AmbiguousSource source = ToggleTaskSizeInteraction.AmbiguousSource.DOUBLE_TAP;
+        if (isMaximized) {
+            mDesktopModeUiEventLogger.log(taskInfo,
+                    DesktopUiEventEnum.DESKTOP_WINDOW_MAXIMIZE_BUTTON_MENU_TAP_TO_RESTORE);
+        } else {
+            mDesktopModeUiEventLogger.log(taskInfo,
+                    DesktopUiEventEnum.DESKTOP_WINDOW_MAXIMIZE_BUTTON_MENU_TAP_TO_MAXIMIZE);
+        }
+        InputMethod inputMethod =
+                getInputMethodType(UNKNOWN_INPUT_METHOD);
+        onToggleSizeInteraction(taskId, source, inputMethod);
     }
 
     /** Snap-resize a task to the left or right side of the desktop. */

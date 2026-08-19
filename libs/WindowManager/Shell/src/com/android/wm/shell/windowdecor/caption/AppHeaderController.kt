@@ -87,7 +87,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainCoroutineDispatcher
 import kotlinx.coroutines.launch
-
+import android.util.Log
 /**
  * Controller for the app header. Creates, updates, and removes the views of the caption and its
  * menus.
@@ -596,6 +596,7 @@ class AppHeaderController(
         traceSection("AppHeaderController#updateViewHolder") {
             val displayId = taskInfo.displayId
             val displayLayout = displayController.getDisplayLayout(displayId) ?: return@traceSection
+
             viewHolder.bindData(
                 HeaderData(
                     taskInfo,

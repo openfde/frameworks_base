@@ -117,6 +117,7 @@ import android.graphics.Rect;
 import android.graphics.Region;
 import android.gui.DropInputMode;
 import android.hardware.power.Boost;
+import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -132,10 +133,12 @@ import android.util.Slog;
 import android.util.SparseArray;
 import android.util.proto.ProtoOutputStream;
 import android.view.DisplayInfo;
+import android.view.InputDevice;
 import android.view.InsetsFlags;
 import android.view.InsetsFrameProvider;
 import android.view.InsetsSource;
 import android.view.InsetsState;
+import android.view.MotionEvent;
 import android.view.PrivacyIndicatorBounds;
 import android.view.Surface;
 import android.view.View;
@@ -147,6 +150,7 @@ import android.view.WindowLayout;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.view.WindowManagerGlobal;
+import android.view.WindowManagerPolicyConstants.PointerEventListener;
 import android.view.accessibility.AccessibilityManager;
 import android.window.ClientWindowFrames;
 import android.window.DesktopExperienceFlags;
@@ -336,6 +340,27 @@ public class DisplayPolicy {
     private boolean mIsImmersiveMode;
 
     private boolean mInFreeformMode;
+
+    // fde start: desktop auto-hide system bars
+    private static final long AUTO_HIDE_TIMEOUT_MS = 3000;
+    private static final long RE_HIDE_TIMEOUT_MS = 2000;
+    private static final float TOP_EDGE_HOVER_REVEAL_DP = 15f;
+    private static final float TOP_EDGE_HOVER_KEEP_DP = 30f;
+
+    private final IBinder mAutoHideToken = new Binder();
+    private boolean mFullscreenOnTop;
+    private boolean mSystemBarsAutoHidden;
+    private boolean mHoverReveal;
+    private volatile boolean mMouseInTopRegion;
+    private final Runnable mAutoHideRunnable = this::autoHideSystemBars;
+    private final Runnable mReHideRunnable = this::reHideSystemBars;
+    private final PointerEventListener mAutoHidePointerListener = new PointerEventListener() {
+        @Override
+        public void onPointerEvent(MotionEvent event) {
+            handleAutoHidePointerEvent(event);
+        }
+    };
+    // fde end
 
     // The windows we were told about in focusChanged.
     private WindowState mFocusedWindow;
@@ -644,6 +669,9 @@ public class DisplayPolicy {
                     gesturesPointerEventCallbacks);
             displayContent.registerPointerEventListener(mSystemGestures);
         }
+        // fde start: register listener for desktop auto-hide system bars
+        displayContent.registerPointerEventListener(mAutoHidePointerListener);
+        // fde end
         mAppTransitionListener = new WindowManagerInternal.AppTransitionListener(displayId) {
 
             private Runnable mAppTransitionPending = () -> {
@@ -2872,6 +2900,9 @@ public class DisplayPolicy {
                 || inNonFullscreenFreeformMode;
 
         mInFreeformMode = inNonFullscreenFreeformMode;
+        // fde start: update desktop auto-hide state when fullscreen state changes
+        updateAutoHideState();
+        // fde end
         getInsetsPolicy().updateSystemBars(
                 win,
                 mShowingPermanentInsetsTypes,
@@ -2938,6 +2969,119 @@ public class DisplayPolicy {
         return mFocusedWindow != null
                 && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_HOME;
     }
+
+    // fde start: desktop auto-hide system bars state machine
+
+    /**
+     * Toggles system bars visibility (used by the F11 shortcut). Only works when a fullscreen
+     * app is on top, matching the previous PhoneWindowManager behavior.
+     */
+    public void toggleSystemBars() {
+        if (mInFreeformMode || isHomeOnTop()) {
+            return;
+        }
+        synchronized (mLock) {
+            mHandler.removeCallbacks(mAutoHideRunnable);
+            mHandler.removeCallbacks(mReHideRunnable);
+            if (mSystemBarsAutoHidden) {
+                mSystemBarsAutoHidden = false;
+                mHoverReveal = false;
+                setSystemBarVisibilityOverride(mAutoHideToken, 0, 0);
+                if (mFullscreenOnTop) {
+                    mHandler.postDelayed(mAutoHideRunnable, AUTO_HIDE_TIMEOUT_MS);
+                }
+            } else {
+                mSystemBarsAutoHidden = true;
+                setSystemBarVisibilityOverride(mAutoHideToken, 0,
+                        Type.statusBars() | Type.navigationBars());
+            }
+        }
+    }
+
+    private void updateAutoHideState() {
+        final boolean fullscreenOnTop = !mInFreeformMode
+                && mFocusedWindow != null
+                && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_STANDARD;
+        if (fullscreenOnTop == mFullscreenOnTop) {
+            return;
+        }
+        mFullscreenOnTop = fullscreenOnTop;
+        mHandler.removeCallbacks(mAutoHideRunnable);
+        mHandler.removeCallbacks(mReHideRunnable);
+        mMouseInTopRegion = false;
+        if (mFullscreenOnTop) {
+            mHandler.postDelayed(mAutoHideRunnable, AUTO_HIDE_TIMEOUT_MS);
+        } else {
+            mHandler.post(this::showSystemBarsAfterAutoHide);
+        }
+    }
+
+    private void autoHideSystemBars() {
+        synchronized (mLock) {
+            if (!mFullscreenOnTop) {
+                return;
+            }
+            mSystemBarsAutoHidden = true;
+            setSystemBarVisibilityOverride(mAutoHideToken, 0 /* forciblyShowingInsetsTypes */,
+                    Type.statusBars() | Type.navigationBars() /* forciblyHiding */);
+        }
+    }
+
+    private void showSystemBarsAfterAutoHide() {
+        synchronized (mLock) {
+            mSystemBarsAutoHidden = false;
+            mHoverReveal = false;
+            setSystemBarVisibilityOverride(mAutoHideToken, 0, 0);
+        }
+    }
+
+    private void handleAutoHidePointerEvent(MotionEvent event) {
+        if (event.getActionMasked() != MotionEvent.ACTION_HOVER_MOVE
+                || !event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            return;
+        }
+        final float density = mContext.getResources().getDisplayMetrics().density;
+        // Hysteresis: a smaller threshold triggers the reveal while hidden, a larger one keeps
+        // the bars shown while the mouse stays in the top region.
+        final float thresholdPx = (mHoverReveal ? TOP_EDGE_HOVER_KEEP_DP
+                : TOP_EDGE_HOVER_REVEAL_DP) * density;
+        final boolean inTopRegion = event.getY() <= thresholdPx;
+        if (inTopRegion == mMouseInTopRegion) {
+            return;
+        }
+        mMouseInTopRegion = inTopRegion;
+        mHandler.removeCallbacks(mReHideRunnable);
+        if (inTopRegion) {
+            mHandler.post(this::revealSystemBarsForHover);
+        } else {
+            mHandler.postDelayed(mReHideRunnable, RE_HIDE_TIMEOUT_MS);
+        }
+    }
+
+    private void revealSystemBarsForHover() {
+        synchronized (mLock) {
+            if (!mSystemBarsAutoHidden || mHoverReveal || !mFullscreenOnTop) {
+                return;
+            }
+            // Reveal the status bar permanently while the mouse hovers the top region so that
+            // the insets update and the app content is pushed down.
+            mHoverReveal = true;
+            setSystemBarVisibilityOverride(mAutoHideToken, 0, 0);
+        }
+    }
+
+    private void reHideSystemBars() {
+        synchronized (mLock) {
+            if (!mHoverReveal || !mSystemBarsAutoHidden) {
+                return;
+            }
+            mHoverReveal = false;
+            setSystemBarVisibilityOverride(mAutoHideToken, 0,
+                    Type.statusBars() | Type.navigationBars());
+        }
+    }
+
+    // fde end
 
     private static boolean isLightBarAllowed(WindowState win, @InsetsType int type) {
         if (win == null) {
