@@ -11357,4 +11357,74 @@ public class AudioManager {
             return mHandler;
         }
     }
+
+    private  int rescaleFloatToIndex(float value, int indexMin, int indexMax) {
+        float floatMin = 0.0f;
+        float floatMax = 1.0f;
+        if (value < floatMin){
+            value = floatMin;
+        }
+        if (value > floatMax){
+            value = floatMax;
+        }
+        float ratio = (value - floatMin) / (floatMax - floatMin);
+        int result = indexMin + Math.round(ratio * (indexMax - indexMin));
+        if (result < indexMin){
+            result = indexMin;
+        }
+        if (result > indexMax){
+            result = indexMax;
+        }
+        return result;
+    }
+
+    /** @hide */
+    public String getDevs(boolean input) {
+        return AudioSystem.getDevs(input);
+    }
+
+    /** @hide */
+    public int setDevVolume(boolean input, String devNmae, float volume) {
+        int ret;
+        if (input) {
+            ret = AudioSystem.setDevVolume(input, devNmae, volume);
+        } else {
+            int index = rescaleFloatToIndex(volume, getStreamMinVolume(STREAM_MUSIC), getStreamMaxVolume(STREAM_MUSIC));
+            setStreamVolume(STREAM_MUSIC, index, 0);
+            ret = 0;
+        }
+        return ret;
+    }
+
+    /** @hide */
+    public int setDevMute(boolean input, String devName, boolean mute) {
+        int ret;
+        if (input) {
+            ret = AudioSystem.setDevMute(input, devName, mute);
+        } else {
+            setStreamMute(STREAM_MUSIC, mute);
+            ret = 0;
+        }
+        return ret;
+    }
+
+    /** @hide */
+    public String setDefaultDev(boolean input, String devNmae, boolean needInfo) {
+        needInfo = true;
+        String ret = AudioSystem.setDefaultDev(input, devNmae, needInfo);
+        if (!input) {
+            try {
+                String[] tokens = null;
+                tokens = ret.split("=");
+                float volume = Float.parseFloat(tokens[0]);
+                boolean muted = tokens[1].equals("1");
+                int index = rescaleFloatToIndex(volume, getStreamMinVolume(STREAM_MUSIC), getStreamMaxVolume(STREAM_MUSIC));
+                setStreamVolume(STREAM_MUSIC, index, 0);
+                setStreamMute(STREAM_MUSIC, muted);
+            } catch(Exception e) {
+                // nothing
+            }
+        }
+        return ret;
+    }
 }

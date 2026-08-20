@@ -704,7 +704,7 @@ public class AudioService extends IAudioService.Stub
         5,  // STREAM_VOICE_CALL
         7,  // STREAM_SYSTEM
         7,  // STREAM_RING            // configured by config_audio_ring_vol_steps
-        15, // STREAM_MUSIC
+        100, // STREAM_MUSIC
         7,  // STREAM_ALARM
         7,  // STREAM_NOTIFICATION    // configured by config_audio_notif_vol_steps
         15, // STREAM_BLUETOOTH_SCO
@@ -3706,6 +3706,41 @@ public class AudioService extends IAudioService.Stub
         return (step * dstRange + srcRange / 2) / srcRange;
     }
 
+    private float rescaleIndexToFloat(int index, int indexMin, int indexMax) {
+        float floatMin = 0.0f;
+        float floatMax = 1.0f;
+        if (indexMax == indexMin) {
+            return floatMin;
+        }
+        if (index < indexMin) {
+            index = indexMin;
+        }
+        if (index > indexMax){
+            index = indexMax;
+        }
+        return Math.round((floatMin + ((float) (index - indexMin) / (float) (indexMax - indexMin)) * (floatMax - floatMin)) * 100) / 100.0f;
+    }
+
+    private  int rescaleFloatToIndex(float value, int indexMin, int indexMax) {
+        float floatMin = 0.0f;
+        float floatMax = 1.0f;
+        if (value < floatMin){
+            value = floatMin;
+        }
+        if (value > floatMax){
+            value = floatMax;
+        }
+        float ratio = (value - floatMin) / (floatMax - floatMin);
+        int result = indexMin + Math.round(ratio * (indexMax - indexMin));
+        if (result < indexMin){
+            result = indexMin;
+        }
+        if (result > indexMax){
+            result = indexMax;
+        }
+        return result;
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     // IPC methods
     ///////////////////////////////////////////////////////////////////////////
@@ -4433,7 +4468,7 @@ public class AudioService extends IAudioService.Stub
             }
         } else {
             // convert one UI step (+/-1) into a number of internal units on the stream alias
-            float volumeStep = 10.0f * streamState.getIndexStepFactor()
+            float volumeStep = 67.0f * streamState.getIndexStepFactor()
                     * volumeAdjustmentModifiers.getScaleFactor();
             step = rescaleStep((int) volumeStep, streamType, streamTypeAlias);
         }
@@ -4511,15 +4546,16 @@ public class AudioService extends IAudioService.Stub
             } else if (!isFullVolumeDevice(deviceType)
                     && (streamState.adjustIndex(direction * step, deviceType,
                             caller, hasModifyAudioSettings)
-                            || streamState.mIsMuted)) {
+                            || streamState.mIsMuted || streamState.mIsOpenfdeMuted)) {
                 // Post message to set system volume (it in turn will post a
                 // message to persist).
-                if (streamState.mIsMuted) {
+                if (streamState.mIsMuted || streamState.mIsOpenfdeMuted) {
                     // Unmute the stream if it was previously muted
                     if (direction == AudioManager.ADJUST_RAISE) {
                         // unmute immediately for volume up
                         muteAliasStreams(streamTypeAlias, false);
-                    } else if (direction == AudioManager.ADJUST_LOWER) {
+                    } else if ((aliasIndex != streamState.getMinIndex())
+                               && (direction == AudioManager.ADJUST_LOWER)) {
                         if (mIsSingleVolume && !isPlatformPc()) {
                             sendMsg(mAudioHandler, MSG_UNMUTE_STREAM_ON_SINGLE_VOL_DEVICE,
                                     SENDMSG_QUEUE, streamTypeAlias, flags, null,
@@ -4984,7 +5020,7 @@ public class AudioService extends IAudioService.Stub
             VolumeGroupState vgs = sVolumeGroupStates.get(groupId);
             // Return 0 when muted, not min index since for e.g. Voice Call, it has a non zero
             // min but it mutable on permission condition.
-            return vgs.isMuted() ? 0 : vgs.getVolumeIndex();
+            return (vgs.isMuted() || mStreamStates.get(AudioSystem.STREAM_MUSIC).mIsOpenfdeMuted) ? 0 : vgs.getVolumeIndex();
         }
     }
 
@@ -5376,7 +5412,7 @@ public class AudioService extends IAudioService.Stub
                 return false;
             }
             VolumeGroupState vgs = sVolumeGroupStates.get(groupId);
-            return vgs.isMuted();
+            return vgs.isMuted() || mStreamStates.get(AudioSystem.STREAM_MUSIC).mIsOpenfdeMuted;
         }
     }
 
@@ -6328,7 +6364,7 @@ public class AudioService extends IAudioService.Stub
 
         synchronized (mVolumeStateLock) {
             ensureValidStreamType(streamType);
-            return getVssForStreamOrDefault(streamType).mIsMuted;
+            return getVssForStreamOrDefault(streamType).mIsMuted || getVssForStreamOrDefault(streamType).mIsOpenfdeMuted;
         }
     }
 
@@ -6514,7 +6550,7 @@ public class AudioService extends IAudioService.Stub
             int index = vss.getIndex(device);
 
             // by convention getStreamVolume() returns 0 when a stream is muted.
-            if (vss.mIsMuted) {
+            if (vss.mIsMuted || mStreamStates.get(streamType).mIsOpenfdeMuted) {
                 index = 0;
             }
             if (index != 0 && (sStreamVolumeAlias.get(streamType) == AudioSystem.STREAM_MUSIC)
@@ -10683,6 +10719,8 @@ public class AudioService extends IAudioService.Stub
         private boolean mIsMutedInternally = false;
         private String mVolumeIndexSettingName;
         @NonNull private Set<AudioDeviceAttributes> mObservedDeviceSet = Set.of();
+        private boolean mIsOpenfdeMuted = false;
+        private int mOpenfdeVolumeIndex = -1;
 
         private final SparseIntArray mIndexMap = new SparseIntArray(8) {
             @Override
@@ -10733,6 +10771,7 @@ public class AudioService extends IAudioService.Stub
             updateIndexFactors();
             mIndexMinNoPerm = mIndexMin; // may be overwritten later in updateNoPermMinIndex()
 
+            openfdeVolumeInit();
             readSettings();
             mVolumeChanged = new Intent(AudioManager.VOLUME_CHANGED_ACTION);
             mVolumeChanged.putExtra(AudioManager.EXTRA_VOLUME_STREAM_TYPE, mStreamType);
@@ -10993,6 +11032,11 @@ public class AudioService extends IAudioService.Stub
                         index = mSettings.getSystemIntForUser(
                                 mContentResolver, getSettingNameForDevice(device), defaultIndex,
                                 getVolumePersistenceUserId());
+                        if ((mStreamType == AudioSystem.STREAM_MUSIC) && ((index * 10) != mOpenfdeVolumeIndex)) {
+                            index = (mOpenfdeVolumeIndex + 5) / 10;
+                            mSettings.putSystemIntForUser(mContentResolver, getSettingNameForDevice(device), index,
+                                getVolumePersistenceUserId());
+                        }
                         if (isPlatformPc()) {
                             // TODO(b/475861305): apply mute only for PC until bug is fixed
                             isMuted = mSettings.getSystemIntForUser(
@@ -11129,6 +11173,7 @@ public class AudioService extends IAudioService.Stub
                     mIndexMap.put(device, index);
 
                     changed = oldIndex != index;
+                    openfdeAdjustVolume(index, false, false);
                     // Apply change to all streams using this one as alias if:
                     // - the index actually changed OR
                     // - there is no volume index stored for this device on alias stream.
@@ -11463,7 +11508,7 @@ public class AudioService extends IAudioService.Stub
         public boolean mute(boolean state, boolean apply, String src) {
             boolean changed;
             synchronized (mVolumeStateLock) {
-                changed = state != mIsMuted;
+                changed = state != mIsMuted || state != mIsOpenfdeMuted;
                 if (changed) {
                     sMuteLogger.enqueue(
                             new AudioServiceEvents.StreamMuteEvent(mStreamType, state, src));
@@ -11502,6 +11547,7 @@ public class AudioService extends IAudioService.Stub
                 }
             }
 
+            openfdeAdjustVolume(-1, true, state);
             return changed;
         }
 
@@ -11552,6 +11598,64 @@ public class AudioService extends IAudioService.Stub
             }
 
             return index;
+        }
+
+        private void openfdeVolumeInit() {
+            if (mStreamType != AudioSystem.STREAM_MUSIC) {
+                return;
+            }
+            mOpenfdeVolumeIndex = mIndexMax;
+            try {
+                String[] tokens = null;
+                String[] tokens2 = null;
+                String ss = AudioSystem.getDevs(false);
+                tokens = ss.split(";");
+                //name1 port1=desc1=volume1=mute1;name2 port2=desc2=volume2=mute2
+                tokens2 = tokens.length > 0 ? tokens[0].split("=") : null;
+                if (tokens2.length == 4) {
+                    int index = rescaleFloatToIndex(Float.parseFloat(tokens2[2]), mIndexMin, mIndexMax);
+                    mIsOpenfdeMuted = tokens2[3].equals("1");
+                    mOpenfdeVolumeIndex = index;
+                }
+            } catch(Exception e) {
+                // nothing
+            }
+        }
+
+        private void openfdeAdjustVolume(int index, boolean isMuteAdjust, boolean muteState) {
+            if (mStreamType != AudioSystem.STREAM_MUSIC) {
+                return;
+            }
+            try {
+                String[] tokens = null;
+                String[] tokens2 = null;
+                String devName;
+                String ss = AudioSystem.getDevs(false);
+                tokens = ss.split(";");
+                //name1 port1=desc1=volume1=mute1;name2 port2=desc2=volume2=mute2
+                tokens2 = tokens.length > 0 ? tokens[0].split("=") : null;
+                if (tokens2.length == 4) {
+                    devName = tokens2[0];
+                    float volume = Float.parseFloat(tokens2[2]);
+                    boolean muted = tokens2[3].equals("1");
+                    if (isMuteAdjust) {
+                        if (muteState != muted) {
+                            muted = muteState;
+                            AudioSystem.setDevMute(false, devName, muted);
+                        }
+                    } else {
+                        int indexToSet = index > mIndexMax ? mIndexMax : index < mIndexMin ? mIndexMin : index;
+                        mOpenfdeVolumeIndex = indexToSet;
+                        float volumeToSet = rescaleIndexToFloat(indexToSet, mIndexMin, mIndexMax);
+                        if (volume != volumeToSet) {
+                            AudioSystem.setDevVolume(false, devName, volumeToSet);
+                        }
+                    }
+                    mIsOpenfdeMuted = muted;
+                }
+            } catch(Exception e) {
+                // nothing
+            }
         }
 
         private void dump(PrintWriter pw) {
