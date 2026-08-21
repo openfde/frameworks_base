@@ -32,6 +32,8 @@ interface IDesktopMode {
     /** If possible, creates a new desk on the display whose ID is `displayId`. */
     oneway void createDesk(int displayId);
 
+    oneway void moveTaskToDesk(int taskId , int deskId);
+
     /**
      * Activates the desk whose ID is [deskId] on whatever display it currently exists on.
      * If [taskIdToReorderToFront] is a valid id (not [INVALID_TASK_ID]) and is already on the given
