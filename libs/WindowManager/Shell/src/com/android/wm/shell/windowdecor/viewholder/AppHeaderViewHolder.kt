@@ -179,14 +179,14 @@ class AppHeaderViewHolder(
             closeWindowButton.setOnTouchListener(onTouch)
             maximizeWindowButton.setOnTouchListener(onTouch)
             minimizeWindowButton.setOnTouchListener(onTouch)
-            openMenuButton.setOnTouchListener(onTouch)
+//            openMenuButton.setOnTouchListener(onTouch)
         } else {
             captionView.setOnTouchListener(gestureInterceptor)
             captionHandle.setOnTouchListener(gestureInterceptor)
             closeWindowButton.setOnTouchListener(gestureInterceptor)
             maximizeWindowButton.setOnTouchListener(gestureInterceptor)
             minimizeWindowButton.setOnTouchListener(gestureInterceptor)
-            openMenuButton.setOnTouchListener(gestureInterceptor)
+//            openMenuButton.setOnTouchListener(gestureInterceptor)
         }
 
         closeWindowButton.throttleFirstClicks(CLICK_DELAY) { v ->
@@ -208,9 +208,9 @@ class AppHeaderViewHolder(
         minimizeWindowButton.throttleFirstClicks(CLICK_DELAY) { v ->
             windowDecorationActions.onMinimize(currentTaskInfo)
         }
-        openMenuButton.throttleFirstClicks(CLICK_DELAY) { v ->
-            windowDecorationActions.onOpenHandleMenu(currentTaskInfo.taskId)
-        }
+//        openMenuButton.throttleFirstClicks(CLICK_DELAY) { v ->
+//            windowDecorationActions.onOpenHandleMenu(currentTaskInfo.taskId)
+//        }
 
         maximizeWindowButton.setOnGenericMotionListener(onCaptionGenericMotionListener)
         maximizeWindowButton.onLongClickListener = onLongClickListener
