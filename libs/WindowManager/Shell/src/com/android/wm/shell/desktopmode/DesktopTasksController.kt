@@ -209,7 +209,7 @@ import kotlin.jvm.optionals.getOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-
+import com.android.wm.shell.shared.desktopmode.DesktopModeTransitionSource.ADB_COMMAND
 /**
  * A callback to be invoked when a transition is started via |Transitions.startTransition| with the
  * transition binder token that it produces.
@@ -1540,10 +1540,8 @@ class DesktopTasksController(
         targetTransition: IBinder? = null,
     ): Boolean {
         if (lockTaskChangeListener.isTaskLocked) {
-            logV("moveTaskToDesk device in lock task mode, not moving")
             return false
         }
-        logV("moveTaskToDesk taskId=%d deskId=%d source=%s", taskId, deskId, transitionSource)
         val runningTask = shellTaskOrganizer.getRunningTaskInfo(taskId)
         if (runningTask != null) {
             return moveRunningTaskToDesk(
@@ -6946,6 +6944,12 @@ class DesktopTasksController(
         override fun createDesk(displayId: Int) {
             executeRemoteCallWithTaskPermission(controller, "createDesk") { c ->
                 c.createDesk(displayId)
+            }
+        }
+
+        override fun moveTaskToDesk(taskId: Int, deskId: Int) {
+            executeRemoteCallWithTaskPermission(controller, "moveTaskToDesk") { c ->
+                c.moveTaskToDesk(taskId,deskId,transitionSource = ADB_COMMAND)
             }
         }
 
