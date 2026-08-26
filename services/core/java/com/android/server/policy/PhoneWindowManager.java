@@ -211,6 +211,7 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.KeyboardShortcutGroup;
 import android.view.MotionEvent;
+import android.view.KeyCharacterMap;
 import android.view.ViewConfiguration;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -1961,11 +1962,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             }
             startActivityAsUser(intent, UserHandle.CURRENT);
         } else {
-            AccessibilityManagerInternal accessibilityManager = getAccessibilityManagerInternal();
-            if (accessibilityManager != null) {
-                accessibilityManager.performSystemAction(
-                        AccessibilityService.GLOBAL_ACTION_ACCESSIBILITY_ALL_APPS);
-            }
+//            AccessibilityManagerInternal accessibilityManager = getAccessibilityManagerInternal();
+//            if (accessibilityManager != null) {
+//                accessibilityManager.performSystemAction(
+//                        AccessibilityService.GLOBAL_ACTION_ACCESSIBILITY_ALL_APPS);
+//            }
         }
         dismissKeyboardShortcutsMenu();
     }
@@ -2147,6 +2148,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         private void handleLongPressOnHome(KeyEvent event) {
+            int keyCode = event.getKeyCode();
+            Log.d(TAG,"handleLongPressOnHome keyCode  "+keyCode);
             if (mHomeConsumed) {
                 return;
             }
@@ -3402,7 +3405,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     // {@link handleKeyGesture()}
     private boolean interceptSystemKeysAndShortcuts(IBinder focusedToken, KeyEvent event) {
         final int keyCode = event.getKeyCode();
-
+        Log.d(TAG,"interceptSystemKeysAndShortcuts  keyCode "+keyCode);
         switch (keyCode) {
             case KeyEvent.KEYCODE_HOME:
                 return handleHomeShortcuts(focusedToken, event);
@@ -3502,6 +3505,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         if (complete && isPowerKeyPressed) {
             mPowerKeyHandled = true;
         }
+        Log.d(TAG,"handleKeyGestureEvent gestureType  "+gestureType +",deviceId "+deviceId);
         switch (gestureType) {
             case KeyGestureEvent.KEY_GESTURE_TYPE_RECENT_APPS:
                 if (complete) {
@@ -4390,11 +4394,26 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         mDefaultDisplayPolicy.setHdmiPlugged(plugged, true /* force */);
     }
 
+    private void sendBackEvent(int action, int displayId) {
+        final long when = SystemClock.uptimeMillis();
+        final KeyEvent ev = new KeyEvent(when, when, action, KeyEvent.KEYCODE_BACK,
+                0 /* repeat */, 0 /* metaState */, KeyCharacterMap.VIRTUAL_KEYBOARD,
+                0 /* scancode */, KeyEvent.FLAG_FROM_SYSTEM | KeyEvent.FLAG_VIRTUAL_HARD_KEY,
+                InputDevice.SOURCE_KEYBOARD);
+
+        ev.setDisplayId(displayId);
+        if (!mContext.getSystemService(InputManager.class)
+                .injectInputEvent(ev, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC)) {
+            Log.e(TAG, "Inject input event fail");
+        }
+    }
+
     // TODO(b/117479243): handle it in InputPolicy
     /** {@inheritDoc} */
     @Override
     public int interceptKeyBeforeQueueing(KeyEvent event, int policyFlags) {
         final int keyCode = event.getKeyCode();
+        Log.d(TAG,"interceptKeyBeforeQueueing  keyCode "+keyCode  + " ,getAction: "+ event.getAction());
         final boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
         boolean isWakeKey = (policyFlags & WindowManagerPolicy.FLAG_WAKE) != 0
                 || event.isWakeKey();
@@ -4543,6 +4562,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         // Handle special keys.
         switch (keyCode) {
+            case KeyEvent.KEYCODE_ESCAPE:
+            {
+                sendBackEvent(event.getAction(), event.getDisplayId());
+                break;
+            }
             case KeyEvent.KEYCODE_BACK: {
                 notifyKeyGestureCompletedOnActionUp(event,
                         KeyGestureEvent.KEY_GESTURE_TYPE_BACK);
@@ -4562,7 +4586,19 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 }
                 break;
             }
-
+            case KeyEvent.KEYCODE_F10:
+                if (event.isCtrlPressed() && down){
+                    showRecentApps();
+                }
+                break;
+            case KeyEvent.KEYCODE_D:
+                if (event.isCtrlPressed() && down){
+                    goHome();
+                }
+                break;
+//            case KeyEvent.KEYCODE_MOVE_HOME:
+//
+//                break;
             case KeyEvent.KEYCODE_VOLUME_DOWN:
             case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_VOLUME_MUTE: {
