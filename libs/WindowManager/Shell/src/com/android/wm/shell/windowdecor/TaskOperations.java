@@ -54,17 +54,17 @@ public class TaskOperations {
     }
 
     private void sendBackEvent(int action, int displayId) {
-        final long when = SystemClock.uptimeMillis();
-        final KeyEvent ev = new KeyEvent(when, when, action, KeyEvent.KEYCODE_BACK,
-                0 /* repeat */, 0 /* metaState */, KeyCharacterMap.VIRTUAL_KEYBOARD,
-                0 /* scancode */, KeyEvent.FLAG_FROM_SYSTEM | KeyEvent.FLAG_VIRTUAL_HARD_KEY,
-                InputDevice.SOURCE_KEYBOARD);
-
-        ev.setDisplayId(displayId);
-        if (!mContext.getSystemService(InputManager.class)
-                .injectInputEvent(ev, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC)) {
-            Log.e(TAG, "Inject input event fail");
-        }
+//        final long when = SystemClock.uptimeMillis();
+//        final KeyEvent ev = new KeyEvent(when, when, action, KeyEvent.KEYCODE_BACK,
+//                0 /* repeat */, 0 /* metaState */, KeyCharacterMap.VIRTUAL_KEYBOARD,
+//                0 /* scancode */, KeyEvent.FLAG_FROM_SYSTEM | KeyEvent.FLAG_VIRTUAL_HARD_KEY,
+//                InputDevice.SOURCE_KEYBOARD);
+//
+//        ev.setDisplayId(displayId);
+//        if (!mContext.getSystemService(InputManager.class)
+//                .injectInputEvent(ev, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC)) {
+//            Log.e(TAG, "Inject input event fail");
+//        }
     }
 
     void closeTask(WindowContainerToken taskToken) {

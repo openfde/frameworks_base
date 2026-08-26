@@ -140,7 +140,8 @@
     <string name="collapse_menu_text" msgid="7515008122450342029">"关闭菜单"</string>
     <string name="desktop_mode_header_chip_text" msgid="7171700244998923330">"<xliff:g id="APP_NAME">%1$s</xliff:g>（窗口化模式）"</string>
     <string name="desktop_mode_layout_menu_maximize_text" msgid="7086608727256054454">"最大化屏幕"</string>
-    <string name="desktop_mode_layout_menu_snap_text" msgid="7558194147987254333">"调整大小"</string>
+    <string name="desktop_mode_layout_menu_snap_text" msgid="7558194147987254333">"左右调整"</string>
+    <string name="desktop_mode_layout_menu_up_down_snap_text" msgid="7558194147987254333">"上下调整"</string>
     <string name="desktop_mode_non_resizable_snap_text" msgid="3771776422751387878">"无法将应用移至此处"</string>
     <string name="desktop_mode_talkback_state_closing" msgid="6791583518636526904">"正在关闭应用窗口"</string>
     <string name="desktop_mode_talkback_state_minimizing" msgid="7406911785134757827">"正在最小化应用窗口"</string>

@@ -1,0 +1,27 @@
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Hover -->
+    <item android:state_hovered="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#8F8D98" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+
+    <!-- Pressed -->
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#77757F" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+
+    <!-- 默认 -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#B2B0BB" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+
+</selector>

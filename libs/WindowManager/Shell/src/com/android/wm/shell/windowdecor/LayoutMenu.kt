@@ -91,7 +91,8 @@ import com.android.wm.shell.windowdecor.common.OPACITY_40
 import com.android.wm.shell.windowdecor.common.OPACITY_60
 import com.android.wm.shell.windowdecor.common.withAlpha
 import java.util.function.Supplier
-
+import android.graphics.Path
+import android.graphics.drawable.shapes.PathShape
 /**
  * Menu that appears when user long clicks the layout button. Gives the user the option to maximize
  * the task or restore previous task bounds from the maximized state and to snap the task to the
@@ -306,6 +307,8 @@ class LayoutMenu(
             requireViewById(R.id.layout_menu_immersive_toggle_button_text) as TextView
         private val immersiveToggleButton =
             requireViewById(R.id.layout_menu_immersive_toggle_button) as Button
+        private val fullscreenToggleButton =
+            requireViewById(R.id.layout_menu_fullscreen_toggle_button) as Button
         private val sizeToggleContainer =
             requireViewById(R.id.layout_menu_size_toggle_container) as View
         private val sizeToggleButtonText =
@@ -338,7 +341,7 @@ class LayoutMenu(
             }
 
         private val menuButtons =
-            listOf(snapLeftButton, snapRightButton, immersiveToggleButton, sizeToggleButton)
+            listOf(snapLeftButton, snapRightButton, immersiveToggleButton,fullscreenToggleButton, sizeToggleButton)
 
         private val decorThemeUtil = DecorThemeUtil(context)
 
@@ -628,6 +631,7 @@ class LayoutMenu(
             sizeToggleButtonText.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             immersiveToggleButton.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             immersiveToggleButtonText.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            fullscreenToggleButton.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
             if (Flags.enableConsolidatedWindowOptions()) {
                 requireWindowingPillView()
@@ -644,6 +648,9 @@ class LayoutMenu(
             when (v.id) {
                 R.id.layout_menu_immersive_toggle_button -> {
                     windowDecorationActions.onImmersiveOrRestore(taskInfo)
+                }
+                R.id.layout_menu_fullscreen_toggle_button ->{
+                    windowDecorationActions.onToFullscreen(taskInfo.taskId)
                 }
                 R.id.layout_menu_size_toggle_button -> {
                     windowDecorationActions.onMaximizeOrRestore(
@@ -686,6 +693,9 @@ class LayoutMenu(
             immersiveToggleButton.background = style.immersiveOption.drawable
             immersiveToggleButtonText.setTextColor(style.textColor)
 
+//            fullscreenToggleButton.background = style.fullscreenOption.drawable
+
+
             // Snap options.
             snapWindowText.setTextColor(style.textColor)
             updateSplitSnapSelection(SnapToHalfSelection.NONE)
@@ -705,6 +715,7 @@ class LayoutMenu(
                     sizeToggleButtonText,
                     immersiveToggleButton,
                     immersiveToggleButtonText,
+                    fullscreenToggleButton,
                     snapButtonsLayout,
                     snapWindowText,
                 )
@@ -810,6 +821,7 @@ class LayoutMenu(
                     sizeToggleButtonText,
                     immersiveToggleButton,
                     immersiveToggleButtonText,
+                    fullscreenToggleButton,
                     snapButtonsLayout,
                     snapWindowText,
                 )
@@ -962,6 +974,15 @@ class LayoutMenu(
                                 fillPadding = immersiveFillPaddingRect,
                             )
                     ),
+                fullscreenOption =
+                    MenuStyle.FullscreenOption(
+                        drawable =
+                            createMaximizeOrImmersiveDrawable(
+                                menuBackgroundColor,
+                                colorScheme,
+                                fillPadding = immersiveFillPaddingRect,
+                            )
+                    ),
                 snapOptions =
                     MenuStyle.SnapOptions(
                         inactiveSnapSideColor = colorScheme.outlineVariant.toArgb(),
@@ -1048,6 +1069,44 @@ class LayoutMenu(
             }
         }
 
+        private fun createFullscreenDrawable(
+            @ColorInt menuBackgroundColor: Int,
+            colorScheme: ColorScheme,
+            fillPadding: Rect,
+        ): StateListDrawable {
+            val activeStrokeAndFill = colorScheme.primary.toArgb()
+            val activeBackground = colorScheme.primary.toArgb().withAlpha(OPACITY_12)
+            val activeDrawable =
+                createFullscreenButtonDrawable(
+                    strokeColor = activeStrokeAndFill,
+                    fillColor = activeStrokeAndFill,
+                    backgroundColor = activeBackground,
+                    backgroundMask = menuBackgroundColor,
+                    fillPadding = fillPadding,
+                )
+            return StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_pressed), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_focused), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_selected), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_hovered), activeDrawable)
+                // Inactive drawable.
+                addState(
+                    StateSet.WILD_CARD,
+                    createFullscreenButtonDrawable(
+                        strokeColor =
+                            colorScheme.outlineVariant
+                                .toArgb()
+                                .withAlpha(OPACITY_60),
+                        fillColor = colorScheme.outlineVariant.toArgb(),
+                        backgroundColor =
+                            colorScheme.surfaceContainerLow.toArgb(),
+                        backgroundMask = null,
+                        fillPadding = fillPadding,
+                    ),
+                )
+            }
+        }
+
         private fun createMaximizeOrImmersiveDrawable(
             @ColorInt menuBackgroundColor: Int,
             colorScheme: ColorScheme,
@@ -1084,6 +1143,103 @@ class LayoutMenu(
                         fillPadding = fillPadding,
                     ),
                 )
+            }
+        }
+
+        private fun createFullscreenButtonDrawable(
+            @ColorInt strokeColor: Int,
+            @ColorInt fillColor: Int,
+            @ColorInt backgroundColor: Int,
+            @ColorInt backgroundMask: Int?,
+            fillPadding: Rect,
+        ): LayerDrawable {
+
+            val layers = mutableListOf<Drawable>()
+
+            // 1. 最底层：按钮背景
+            backgroundMask?.let { color ->
+                layers.add(
+                    ShapeDrawable().apply {
+                        shape =
+                            RoundRectShape(
+                                FloatArray(8) { outlineRadius.toFloat() },
+                                null,
+                                null,
+                            )
+                        paint.color = color
+                        paint.style = Paint.Style.FILL
+                    }
+                )
+            }
+
+            // 2. 实际背景
+            layers.add(
+                ShapeDrawable().apply {
+                    shape =
+                        RoundRectShape(
+                            FloatArray(8) { outlineRadius.toFloat() },
+                            null,
+                            null,
+                        )
+                    paint.color = backgroundColor
+                    paint.style = Paint.Style.FILL
+                }
+            )
+
+            // 3. 全屏图标
+            layers.add(
+                createFullscreenIconDrawable(fillColor)
+            )
+
+            return LayerDrawable(layers.toTypedArray()).apply {
+                // 给全屏图标增加 padding
+                setLayerInset(
+                    numberOfLayers - 1,
+                    fillPadding.left,
+                    fillPadding.top,
+                    fillPadding.right,
+                    fillPadding.bottom,
+                )
+            }
+        }
+
+        private fun createFullscreenIconDrawable(
+            @ColorInt color: Int,
+        ): Drawable {
+            return ShapeDrawable().apply {
+                paint.color = color
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth =  (outlineStroke * 10f).toFloat()
+
+                shape =
+                    PathShape(
+                        Path().apply {
+                            val size = 100f
+                            val length = 35f
+
+                            // 左上角
+                            moveTo(0f, length)
+                            lineTo(0f, 0f)
+                            lineTo(length, 0f)
+
+                            // 右上角
+                            moveTo(size - length, 0f)
+                            lineTo(size, 0f)
+                            lineTo(size, length)
+
+                            // 右下角
+                            moveTo(size, size - length)
+                            lineTo(size, size)
+                            lineTo(size - length, size)
+
+                            // 左下角
+                            moveTo(length, size)
+                            lineTo(0f, size)
+                            lineTo(0f, size - length)
+                        },
+                        100f,
+                        100f,
+                    )
             }
         }
 
@@ -1202,11 +1358,14 @@ class LayoutMenu(
             @ColorInt val textColor: Int,
             val maximizeOption: MaximizeOption,
             val immersiveOption: ImmersiveOption,
+            val fullscreenOption: FullscreenOption,
             val snapOptions: SnapOptions,
         ) {
             data class MaximizeOption(val drawable: StateListDrawable)
 
             data class ImmersiveOption(val drawable: StateListDrawable)
+
+            data class FullscreenOption(val drawable: StateListDrawable)
 
             data class SnapOptions(
                 @ColorInt val inactiveSnapSideColor: Int,

@@ -20,6 +20,7 @@
     android:id="@+id/layout_menu"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
+    android:orientation="vertical"
     android:background="@drawable/desktop_mode_layout_menu_background"
     android:elevation="1dp">
 
@@ -27,11 +28,40 @@
         android:id="@+id/container"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:paddingHorizontal="12dp"
         android:paddingVertical="16dp"
         android:measureWithLargestChild="true"
+        android:background="@drawable/desktop_mode_layout_menu_background"
         android:gravity="center">
-        <include layout="@layout/desktop_mode_window_decor_resize_controls"/>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="2dp"
+            android:paddingVertical="2dp"
+            android:measureWithLargestChild="true"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:elevation="1dp"
+           >
+            <include layout="@layout/desktop_mode_window_decor_resize_controls"/>
+        </LinearLayout>
+
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="2dp"
+            android:paddingVertical="2dp"
+            android:measureWithLargestChild="true"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:elevation="1dp">
+            <include layout="@layout/desktop_mode_window_decor_full_controls"/>
+        </LinearLayout>
+
     </LinearLayout>
 </com.android.wm.shell.windowdecor.CaptionMenuLayout>

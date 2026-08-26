@@ -1,0 +1,40 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 外层 -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#D9D8DE" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+
+    <!-- 第二层 -->
+    <item
+        android:left="1dp"
+        android:top="1dp"
+        android:right="1dp"
+        android:bottom="1dp">
+
+        <shape android:shape="rectangle">
+            <solid android:color="#F4F1FC" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+
+    <!-- 第三层：支持鼠标 Hover -->
+    <item
+        android:left="3dp"
+        android:top="3dp"
+        android:right="3dp"
+        android:bottom="3dp"
+        android:drawable="@drawable/bg_fullscreen_inner" />
+
+    <!-- 图标 -->
+    <item
+        android:left="10dp"
+        android:top="10dp"
+        android:right="10dp"
+        android:bottom="10dp"
+        android:drawable="@drawable/ic_fullscreen" />
+
+</layer-list>
