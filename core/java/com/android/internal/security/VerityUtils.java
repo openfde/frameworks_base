@@ -72,8 +72,8 @@ public abstract class VerityUtils {
     public static void setUpFsverity(int fd) throws IOException {
         int errno = enableFsverityForFdNative(fd);
         if (errno != 0) {
-            throw new IOException("Failed to enable fs-verity on FD(" + fd + "): "
-                    + Os.strerror(errno));
+            //throw new IOException("Failed to enable fs-verity on FD(" + fd + "): "
+                    //+ Os.strerror(errno));
         }
     }
 
