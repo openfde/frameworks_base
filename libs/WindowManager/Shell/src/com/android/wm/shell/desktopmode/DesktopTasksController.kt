@@ -2307,7 +2307,7 @@ class DesktopTasksController(
 
         // We are moving a freeform task to fullscreen, put the home task under the fullscreen task.
         if (!isDesktopFirstLegacy(displayId)) {
-//            moveHomeTaskToTop(displayId, wct)
+            moveHomeTaskToTop(displayId, wct)
             wct.reorder(task.token, /* onTop= */ true)
         }
 
@@ -3545,7 +3545,7 @@ class DesktopTasksController(
             desktopState.shouldShowHomeBehindDesktop,
         )
         // Move home to front, ensures that we go back home when all desktop windows are closed
-//        moveHomeTaskToTop(displayId = displayId, wct = wct)
+        moveHomeTaskToTop(displayId = displayId, wct = wct)
         // Currently, we only handle the desktop on the default display really.
         if (desktopWallpaperActivityUtils.hasDesktopWallpaperActivityEnabled(displayId)) {
             // Add translucent wallpaper activity to show the wallpaper underneath.
