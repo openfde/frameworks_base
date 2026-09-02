@@ -599,6 +599,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
+import com.android.internal.util.CompatibleDatabaseHelper;
+import com.android.internal.util.CompatibleConfig;
+
 public class ActivityManagerService extends IActivityManager.Stub
         implements Watchdog.Monitor, BatteryStatsImpl.BatteryCallback, ActivityManagerGlobalLock,
         OomAdjuster.HostingTypeProvider {
@@ -5962,6 +5965,22 @@ public class ActivityManagerService extends IActivityManager.Stub
                      mInjector.getContext().getSystemService(Context.POWER_SERVICE);
             pm.reboot("Checkpoint commit failed");
         }
+
+        String version = SystemProperties.get("persist.compatible_version","");
+        String fdeVersion = SystemProperties.get("ro.openfde.version","");
+        Slog.w(TAG, "version: " + version + " , fdeVersion: "+fdeVersion);
+
+        if(!version.equals(fdeVersion)){
+            //if verison update parseXML
+            int res = CompatibleConfig.parseValueXML(mContext,"");
+            if(res != -1){
+                SystemProperties.set("persist.compatible_version", fdeVersion);
+            }
+        }
+
+        CompatibleDatabaseHelper db = new CompatibleDatabaseHelper(mContext);
+        db.readCompatibles();
+        SystemProperties.set("fde.boot_completed", "1");
 
         // Let system services know.
         mSystemServiceManager.startBootPhase(t, SystemService.PHASE_BOOT_COMPLETED);

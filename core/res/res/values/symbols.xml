@@ -1780,6 +1780,7 @@
   <java-symbol type="raw" name="color_fade_frag" />
   <java-symbol type="raw" name="loaderror" />
   <java-symbol type="raw" name="nodomain" />
+  <java-symbol type="raw" name="comp_config_value" />
 
   <java-symbol type="style" name="Animation.DropDownUp" />
   <java-symbol type="style" name="Animation.DropDownDown" />
