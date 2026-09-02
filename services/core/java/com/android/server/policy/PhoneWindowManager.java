@@ -233,6 +233,7 @@ import com.android.internal.os.RoSystemProperties;
 import com.android.internal.policy.IKeyguardDismissCallback;
 import com.android.internal.policy.IKeyguardService;
 import com.android.internal.policy.IShortcutService;
+import com.android.internal.policy.ITaskCaptionOperationService;
 import com.android.internal.policy.KeyInterceptionInfo;
 import com.android.internal.policy.PhoneWindow;
 import com.android.internal.statusbar.IStatusBarService;
@@ -3438,7 +3439,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             case KeyEvent.KEYCODE_F11:
                 if (event.getAction() == KeyEvent.ACTION_DOWN
                         && event.getRepeatCount() == 0) {
-                    mHandler.post(this::toggleSystemBars);
+                    mHandler.post(this::toggleFullscreenFreeform);
                 }
                 return true;
         }
@@ -6901,6 +6902,27 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             return;
         }
         mDefaultDisplayPolicy.toggleSystemBars();
+    }
+
+    private void toggleFullscreenFreeform() {
+        if (mDefaultDisplayPolicy == null) {
+            return;
+        }
+        final int taskId = mDefaultDisplayPolicy.getFocusedTaskId();
+        if (taskId < 0) {
+            return;
+        }
+        final IBinder binder = ServiceManager.getService("TASK_CAPTION_OPERATION");
+        if (binder == null) {
+            return;
+        }
+        final ITaskCaptionOperationService service =
+                ITaskCaptionOperationService.Stub.asInterface(binder);
+        try {
+            service.executeTaskOperation(taskId, 2 /* fullscreen */);
+        } catch (RemoteException e) {
+            Log.e(TAG, "toggleFullscreenFreeform: failed to execute task operation", e);
+        }
     }
 
     /**

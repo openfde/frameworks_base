@@ -922,18 +922,10 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
     }
 
     private void onEnterOrExitImmersive(RunningTaskInfo taskInfo, WindowDecorationWrapper decoration) {
-        final DesktopRepository desktopRepository = mDesktopUserRepositories.getProfile(
-                taskInfo.userId);
-        if (desktopRepository.isTaskInFullImmersiveState(taskInfo.taskId)) {
-            mDesktopModeUiEventLogger.log(decoration.getTaskInfo(),
-                    DesktopUiEventEnum.DESKTOP_WINDOW_MAXIMIZE_BUTTON_MENU_TAP_TO_RESTORE);
-            mDesktopImmersiveController.moveTaskToNonImmersive(decoration.getTaskInfo(),
-                    DesktopImmersiveController.ExitReason.USER_INTERACTION);
+        if (taskInfo.getWindowingMode() == WINDOWING_MODE_FULLSCREEN) {
+            moveToDesktop(taskInfo.taskId, DesktopModeTransitionSource.KEYBOARD_SHORTCUT);
         } else {
-            mDesktopModeUiEventLogger.log(decoration.getTaskInfo(),
-                    DesktopUiEventEnum.DESKTOP_WINDOW_MAXIMIZE_BUTTON_MENU_TAP_TO_IMMERSIVE);
-            removeTaskIfTiled(decoration.getTaskInfo().displayId, decoration.getTaskInfo().taskId);
-            mDesktopImmersiveController.moveTaskToImmersive(decoration.getTaskInfo());
+            moveToFullscreen(taskInfo.taskId);
         }
     }
 

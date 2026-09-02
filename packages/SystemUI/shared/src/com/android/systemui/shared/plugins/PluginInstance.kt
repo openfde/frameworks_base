@@ -37,6 +37,7 @@ import com.android.systemui.shared.plugins.PluginManagerImpl.Companion.DEFAULT_L
 import com.android.systemui.shared.plugins.PluginManagerImpl.Companion.PLUGIN_CLASSLOADER
 import dalvik.system.PathClassLoader
 import java.io.File
+import java.util.concurrent.CountDownLatch
 import javax.inject.Inject
 import javax.inject.Named
 
@@ -200,28 +201,55 @@ class PluginInstance<T : Plugin>(
             return
         }
 
-        // Both of these calls take about 1 - 1.5 seconds in test runs
-        val plugin = pluginFactory.createPlugin(this)
-        val pluginContext = pluginFactory.createPluginContext()
-        if (plugin == null || pluginContext == null) {
-            logger.e("Requested load, but failed")
+        val latch = CountDownLatch(2)
+        var plugin: T? = null
+        var pluginContext: Context? = null
+
+        Thread(
+            {
+                try {
+                    plugin = pluginFactory.createPlugin(this)
+                } finally {
+                    latch.countDown()
+                }
+            },
+            "plugin-load-class",
+        ).start()
+        Thread(
+            {
+                try {
+                    pluginContext = pluginFactory.createPluginContext()
+                } finally {
+                    latch.countDown()
+                }
+            },
+            "plugin-load-context",
+        ).start()
+
+        try {
+            latch.await()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            logger.e("Interrupted while loading plugin")
             return
         }
 
-        if (!checkVersion(plugin)) {
+        // 使用 !! 操作符（确定非空时使用）
+        val p = plugin ?: return logger.e("Requested load, but failed")
+        val ctx = pluginContext ?: return logger.e("Requested load, but failed")
+
+        if (!checkVersion(p)) {
             logger.e("loadPlugin: version check failed")
             return
         }
 
-        pluginData = PluginData(plugin, pluginContext)
+        pluginData = PluginData(p, ctx)
 
         logger.e("Loaded plugin; running callbacks")
-        if (plugin !is PluginFragment) {
-            // Only call onCreate for plugins that aren't fragments, as fragments
-            // will get the onCreate as part of the fragment lifecycle.
-            plugin.onCreate(hostContext, pluginContext)
+        if (p !is PluginFragment) {
+            p.onCreate(hostContext, ctx)
         }
-        listener.onPluginLoaded(plugin, pluginContext, this)
+        listener.onPluginLoaded(p, ctx, this)
     }
 
     /** Checks the plugin version, and permanently destroys the plugin instance on a failure */
@@ -377,6 +405,9 @@ class PluginInstance<T : Plugin>(
     ) {
         private val logger = Logger(DEFAULT_LOGBUFFER, TAG)
 
+        @Volatile
+        private var classLoader: ClassLoader? = null
+
         /** Creates the related plugin object from the factory */
         @Suppress("UNCHECKED_CAST")
         fun createPlugin(listener: ProtectedPluginListener?): T? {
@@ -406,8 +437,12 @@ class PluginInstance<T : Plugin>(
             return null
         }
 
-        /** Returns class loader specific for the given plugin. */
+        /** Returns class loader specific for the given plugin, cached so it's built only once. */
         private fun createClassLoader(): ClassLoader {
+            return classLoader ?: buildClassLoader().also { classLoader = it }
+        }
+
+        private fun buildClassLoader(): ClassLoader {
             val zipPaths = mutableListOf<String>()
             val libPaths = mutableListOf<String>()
             LoadedApk.makePaths(null, true, pluginAppInfo, zipPaths, libPaths)

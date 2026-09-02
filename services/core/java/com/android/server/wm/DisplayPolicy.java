@@ -133,12 +133,10 @@ import android.util.Slog;
 import android.util.SparseArray;
 import android.util.proto.ProtoOutputStream;
 import android.view.DisplayInfo;
-import android.view.InputDevice;
 import android.view.InsetsFlags;
 import android.view.InsetsFrameProvider;
 import android.view.InsetsSource;
 import android.view.InsetsState;
-import android.view.MotionEvent;
 import android.view.PrivacyIndicatorBounds;
 import android.view.Surface;
 import android.view.View;
@@ -150,7 +148,6 @@ import android.view.WindowLayout;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.view.WindowManagerGlobal;
-import android.view.WindowManagerPolicyConstants.PointerEventListener;
 import android.view.accessibility.AccessibilityManager;
 import android.window.ClientWindowFrames;
 import android.window.DesktopExperienceFlags;
@@ -343,23 +340,11 @@ public class DisplayPolicy {
 
     // fde start: desktop auto-hide system bars
     private static final long AUTO_HIDE_TIMEOUT_MS = 3000;
-    private static final long RE_HIDE_TIMEOUT_MS = 2000;
-    private static final float TOP_EDGE_HOVER_REVEAL_DP = 15f;
-    private static final float TOP_EDGE_HOVER_KEEP_DP = 30f;
 
     private final IBinder mAutoHideToken = new Binder();
     private boolean mFullscreenOnTop;
     private boolean mSystemBarsAutoHidden;
-    private boolean mHoverReveal;
-    private volatile boolean mMouseInTopRegion;
     private final Runnable mAutoHideRunnable = this::autoHideSystemBars;
-    private final Runnable mReHideRunnable = this::reHideSystemBars;
-    private final PointerEventListener mAutoHidePointerListener = new PointerEventListener() {
-        @Override
-        public void onPointerEvent(MotionEvent event) {
-            handleAutoHidePointerEvent(event);
-        }
-    };
     // fde end
 
     // The windows we were told about in focusChanged.
@@ -518,10 +503,8 @@ public class DisplayPolicy {
 
                 private static final long MOUSE_GESTURE_DELAY_MS = 500;
 
-                private Runnable mOnSwipeFromLeft = this::onSwipeFromLeft;
-                private Runnable mOnSwipeFromTop = this::onSwipeFromTop;
-                private Runnable mOnSwipeFromRight = this::onSwipeFromRight;
                 private Runnable mOnSwipeFromBottom = this::onSwipeFromBottom;
+                private Runnable mOnMouseHoverRevealTop = this::onMouseHoverRevealTop;
 
                 private Insets getControllableInsets(WindowState win) {
                     if (win == null) {
@@ -538,6 +521,10 @@ public class DisplayPolicy {
 
                 @Override
                 public void onSwipeFromTop() {
+                    // Swipe-to-reveal disabled. Top reveal is handled by mouse hover instead.
+                }
+
+                private void onMouseHoverRevealTop() {
                     synchronized (mLock) {
                         requestTransientBars(mTopGestureHost,
                                 getControllableInsets(mTopGestureHost).top > 0);
@@ -623,20 +610,18 @@ public class DisplayPolicy {
 
                 @Override
                 public void onMouseHoverAtLeft() {
-                    mHandler.removeCallbacks(mOnSwipeFromLeft);
-                    mHandler.postDelayed(mOnSwipeFromLeft, MOUSE_GESTURE_DELAY_MS);
+                    // Hover-to-reveal disabled on the left edge.
                 }
 
                 @Override
                 public void onMouseHoverAtTop() {
-                    mHandler.removeCallbacks(mOnSwipeFromTop);
-                    mHandler.postDelayed(mOnSwipeFromTop, MOUSE_GESTURE_DELAY_MS);
+                    mHandler.removeCallbacks(mOnMouseHoverRevealTop);
+                    mHandler.postDelayed(mOnMouseHoverRevealTop, MOUSE_GESTURE_DELAY_MS);
                 }
 
                 @Override
                 public void onMouseHoverAtRight() {
-                    mHandler.removeCallbacks(mOnSwipeFromRight);
-                    mHandler.postDelayed(mOnSwipeFromRight, MOUSE_GESTURE_DELAY_MS);
+                    // Hover-to-reveal disabled on the right edge.
                 }
 
                 @Override
@@ -647,17 +632,17 @@ public class DisplayPolicy {
 
                 @Override
                 public void onMouseLeaveFromLeft() {
-                    mHandler.removeCallbacks(mOnSwipeFromLeft);
+                    // Hover-to-reveal disabled on the left edge.
                 }
 
                 @Override
                 public void onMouseLeaveFromTop() {
-                    mHandler.removeCallbacks(mOnSwipeFromTop);
+                    mHandler.removeCallbacks(mOnMouseHoverRevealTop);
                 }
 
                 @Override
                 public void onMouseLeaveFromRight() {
-                    mHandler.removeCallbacks(mOnSwipeFromRight);
+                    // Hover-to-reveal disabled on the right edge.
                 }
 
                 @Override
@@ -669,9 +654,6 @@ public class DisplayPolicy {
                     gesturesPointerEventCallbacks);
             displayContent.registerPointerEventListener(mSystemGestures);
         }
-        // fde start: register listener for desktop auto-hide system bars
-        displayContent.registerPointerEventListener(mAutoHidePointerListener);
-        // fde end
         mAppTransitionListener = new WindowManagerInternal.AppTransitionListener(displayId) {
 
             private Runnable mAppTransitionPending = () -> {
@@ -2970,6 +2952,14 @@ public class DisplayPolicy {
                 && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_HOME;
     }
 
+    public int getFocusedTaskId() {
+        if (mFocusedWindow == null) {
+            return -1;
+        }
+        final Task task = mFocusedWindow.getTask();
+        return task != null ? task.mTaskId : -1;
+    }
+
     // fde start: desktop auto-hide system bars state machine
 
     /**
@@ -2982,10 +2972,8 @@ public class DisplayPolicy {
         }
         synchronized (mLock) {
             mHandler.removeCallbacks(mAutoHideRunnable);
-            mHandler.removeCallbacks(mReHideRunnable);
             if (mSystemBarsAutoHidden) {
                 mSystemBarsAutoHidden = false;
-                mHoverReveal = false;
                 setSystemBarVisibilityOverride(mAutoHideToken, 0, 0);
                 if (mFullscreenOnTop) {
                     mHandler.postDelayed(mAutoHideRunnable, AUTO_HIDE_TIMEOUT_MS);
@@ -3007,8 +2995,6 @@ public class DisplayPolicy {
         }
         mFullscreenOnTop = fullscreenOnTop;
         mHandler.removeCallbacks(mAutoHideRunnable);
-        mHandler.removeCallbacks(mReHideRunnable);
-        mMouseInTopRegion = false;
         if (mFullscreenOnTop) {
             mHandler.postDelayed(mAutoHideRunnable, AUTO_HIDE_TIMEOUT_MS);
         } else {
@@ -3030,54 +3016,7 @@ public class DisplayPolicy {
     private void showSystemBarsAfterAutoHide() {
         synchronized (mLock) {
             mSystemBarsAutoHidden = false;
-            mHoverReveal = false;
             setSystemBarVisibilityOverride(mAutoHideToken, 0, 0);
-        }
-    }
-
-    private void handleAutoHidePointerEvent(MotionEvent event) {
-        if (event.getActionMasked() != MotionEvent.ACTION_HOVER_MOVE
-                || !event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-            return;
-        }
-        final float density = mContext.getResources().getDisplayMetrics().density;
-        // Hysteresis: a smaller threshold triggers the reveal while hidden, a larger one keeps
-        // the bars shown while the mouse stays in the top region.
-        final float thresholdPx = (mHoverReveal ? TOP_EDGE_HOVER_KEEP_DP
-                : TOP_EDGE_HOVER_REVEAL_DP) * density;
-        final boolean inTopRegion = event.getY() <= thresholdPx;
-        if (inTopRegion == mMouseInTopRegion) {
-            return;
-        }
-        mMouseInTopRegion = inTopRegion;
-        mHandler.removeCallbacks(mReHideRunnable);
-        if (inTopRegion) {
-            mHandler.post(this::revealSystemBarsForHover);
-        } else {
-            mHandler.postDelayed(mReHideRunnable, RE_HIDE_TIMEOUT_MS);
-        }
-    }
-
-    private void revealSystemBarsForHover() {
-        synchronized (mLock) {
-            if (!mSystemBarsAutoHidden || mHoverReveal || !mFullscreenOnTop) {
-                return;
-            }
-            // Reveal the status bar permanently while the mouse hovers the top region so that
-            // the insets update and the app content is pushed down.
-            mHoverReveal = true;
-            setSystemBarVisibilityOverride(mAutoHideToken, 0, 0);
-        }
-    }
-
-    private void reHideSystemBars() {
-        synchronized (mLock) {
-            if (!mHoverReveal || !mSystemBarsAutoHidden) {
-                return;
-            }
-            mHoverReveal = false;
-            setSystemBarVisibilityOverride(mAutoHideToken, 0,
-                    Type.statusBars() | Type.navigationBars());
         }
     }
 
