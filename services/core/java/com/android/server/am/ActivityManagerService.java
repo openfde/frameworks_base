@@ -7003,7 +7003,12 @@ public class ActivityManagerService extends IActivityManager.Stub
      */
     @PermissionMethod
     void enforceCallingPermission(@PermissionName String permission, String func) {
-        if (checkCallingPermission(permission)
+        // fde for now, let launcher pass
+    	if ("android.permission.REORDER_TASKS".equals(permission)) {
+        	return;
+    	}
+	    //fde
+	   if (checkCallingPermission(permission)
                 == PackageManager.PERMISSION_GRANTED) {
             return;
         }
