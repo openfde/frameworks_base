@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--compatible value 
+   
+   1、每次更新 updatedate需改成当前日期 
+   2、同一个keycode只允许存在一次，可有多个package
+   3、如果keycode不用了则把对应的isdel 设置true
+   
+
+   	<item
+        isdel="false"
+        key_code="isAllowScreenshotRecord"
+        update_date="2025-04-21">
+		<package name="com.jingdong.app.mall">
+            <activity name="">true</activity>
+        </package>
+    </item>
+
+    <item
+        isdel="false"
+        key_code="size"
+        update_date="2025-04-08">
+
+
+        <package name="com.luna.music">
+            <activity name="">{ width = 800,height = 600 }</activity>
+        </package>
+
+        <package name="com.bella.android_demo_public">
+            <activity name="">{ width = 800,height = 600 }</activity>
+        </package>
+
+    </item>
+
+
+   <item
+        isdel="false"
+        key_code="enabledResourceFixedLayout"
+        update_date="2025-04-29">
+        <package name="com.tencent.mm">
+            <activity name="">{"width":"720","height":"1080"}</activity>
+        </package>
+    </item>
+
+     <item
+        isdel="false"
+        key_code="minBoundsVisibleHeight"
+        update_date="2026-04-09">
+	 <package name="com.autonavi.minimap">
+            <activity name="">540</activity>
+        </package>
+        <package name="com.android.wallpaper">
+            <activity name="">600</activity>
+        </package>
+        <package name="com.sdu.didi.psnger">
+            <activity name="">800</activity>
+        </package>
+    </item>
+   
+-->
+<items>
+	
+
+</items>
