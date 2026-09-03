@@ -302,8 +302,8 @@ public class MediaSessionService extends SystemService implements Monitor {
                 }, null /* handler */);
         mHasFeatureLeanback = mContext.getPackageManager().hasSystemFeature(
                 PackageManager.FEATURE_LEANBACK);
-        mHasFeatureDesktop = mContext.getPackageManager().hasSystemFeature(
-                PackageManager.FEATURE_PC);
+        mHasFeatureDesktop = false;//mContext.getPackageManager().hasSystemFeature(
+                //PackageManager.FEATURE_PC);
 
         updateUser();
 
