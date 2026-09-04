@@ -23,7 +23,11 @@ import androidx.core.content.edit
  * hard coded.
  */
 class PluginPrefs(context: Context) {
-    private val sharedPrefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    // Use device-protected storage so plugin prefs are available before the user is unlocked.
+    // Credential-protected storage throws IllegalStateException when accessed from a
+    // direct-boot-aware component (e.g. Launcher's TouchInteractionService) before unlock.
+    private val sharedPrefs = context.createDeviceProtectedStorageContext()
+        .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val pluginActions = sharedPrefs.getStringSet(PLUGIN_ACTIONS, null) ?: mutableSetOf()
 
     @get:Synchronized
