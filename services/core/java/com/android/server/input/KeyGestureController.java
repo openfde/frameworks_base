@@ -991,10 +991,10 @@ final class KeyGestureController {
                         final int shiftlessModifiers =
                                 event.getModifiers() & ~KeyEvent.META_SHIFT_MASK;
                         if (KeyEvent.metaStateHasModifiers(
-                                shiftlessModifiers, KeyEvent.META_ALT_ON)) {
+                                shiftlessModifiers, KeyEvent.META_CTRL_ON)) {
                             mPendingHideRecentSwitcher = true;
                             handleKeyGesture(deviceId, new int[]{keyCode},
-                                    KeyEvent.META_ALT_ON,
+                                    KeyEvent.META_CTRL_ON,
                                     KeyGestureEvent.KEY_GESTURE_TYPE_RECENT_APPS_SWITCHER,
                                     KeyGestureEvent.ACTION_GESTURE_START, displayId,
                                     focusedToken, /* flags = */0, /* appLaunchData = */null);
@@ -1003,8 +1003,8 @@ final class KeyGestureController {
                     }
                 }
                 break;
-            case KeyEvent.KEYCODE_ALT_LEFT:
-            case KeyEvent.KEYCODE_ALT_RIGHT:
+            case KeyEvent.KEYCODE_CTRL_LEFT:
+            case KeyEvent.KEYCODE_CTRL_RIGHT:
                 if (down) {
                     if (event.isMetaPressed()) {
                         mPendingCapsLockToggle = true;
@@ -1016,7 +1016,7 @@ final class KeyGestureController {
                     if (mPendingHideRecentSwitcher) {
                         mPendingHideRecentSwitcher = false;
                         handleKeyGesture(deviceId, new int[]{KeyEvent.KEYCODE_TAB},
-                                KeyEvent.META_ALT_ON,
+                                KeyEvent.META_CTRL_ON,
                                 KeyGestureEvent.KEY_GESTURE_TYPE_RECENT_APPS_SWITCHER,
                                 KeyGestureEvent.ACTION_GESTURE_COMPLETE, displayId,
                                 focusedToken, /* flags = */0, /* appLaunchData = */null);
