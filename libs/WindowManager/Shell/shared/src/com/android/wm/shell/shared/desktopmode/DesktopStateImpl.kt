@@ -135,12 +135,12 @@ class DesktopStateImpl(context: Context) : DesktopState {
         ) != 0
     override val isFreeformEnabled: Boolean = hasFreeformFeature || hasFreeformDevOption
 
-    override val shouldShowHomeBehindDesktop: Boolean =
-        Flags.showHomeBehindDesktop() &&
-            SystemProperties.getBoolean(
-                SHOW_HOME_BEHIND_DESKTOP_SYS_PROP,
-                context.resources.getBoolean(R.bool.config_showHomeBehindDesktop),
-            )
+    override val shouldShowHomeBehindDesktop: Boolean = true
+//        Flags.showHomeBehindDesktop() &&
+//            SystemProperties.getBoolean(
+//                SHOW_HOME_BEHIND_DESKTOP_SYS_PROP,
+//                context.resources.getBoolean(R.bool.config_showHomeBehindDesktop),
+//            )
 
     /** Clean's up any registered listeners */
     override fun destroy() {
