@@ -21,6 +21,7 @@ import android.app.ActivityManager
 import android.app.ActivityManager.RecentTaskInfo
 import android.app.ActivityManager.RunningTaskInfo
 import android.app.ActivityOptions
+import android.app.ActivityTaskManager
 import android.app.ActivityTaskManager.INVALID_TASK_ID
 import android.app.AppOpsManager
 import android.app.KeyguardManager
@@ -50,6 +51,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.RemoteException
+import android.os.ServiceManager
 import android.os.Trace
 import android.os.UserHandle
 import android.os.UserManager
@@ -63,6 +65,7 @@ import android.view.SurfaceControl.Transaction
 import android.view.WindowManager
 import android.view.WindowManager.TRANSIT_CHANGE
 import android.view.WindowManager.TRANSIT_CLOSE
+import android.view.WindowManager.TRANSIT_NONE
 import android.view.WindowManager.TRANSIT_OPEN
 import android.view.WindowManager.TRANSIT_PIP
 import android.view.WindowManager.TRANSIT_START_LOCK_TASK_MODE
@@ -95,6 +98,7 @@ import com.android.internal.jank.Cuj.CUJ_DESKTOP_MODE_MOVE_FROM_SPLIT_SCREEN
 import com.android.internal.jank.Cuj.CUJ_DESKTOP_MODE_SNAP_RESIZE
 import com.android.internal.jank.InteractionJankMonitor
 import com.android.internal.policy.DesktopModeCompatPolicy
+import com.android.internal.policy.ITaskSwitchService
 import com.android.internal.policy.SystemBarUtils.getDesktopViewAppHeaderHeightPx
 import com.android.internal.protolog.ProtoLog
 import com.android.internal.util.LatencyTracker
@@ -395,6 +399,29 @@ class DesktopTasksController(
     private val deskDeactivationFromOverviewScheduler =
         DeskDeactivationFromOverviewScheduler(shellController, this, displayController)
 
+    // OpenFDE: Ctrl+Left/Right switches between desks and fullscreen tasks. Registered in
+    // ServiceManager during onInit() so PhoneWindowManager can reach it.
+    private val taskSwitchStub =
+        object : ITaskSwitchService.Stub() {
+            override fun performTaskSwitch(displayId: Int, direction: Int) {
+                mainExecutor.execute { performKeyboardTaskSwitch(displayId, direction) }
+            }
+        }
+
+    // Stable ring session for Ctrl+Left/Right cycling: keeps a fixed item order while the user
+    // walks the ring, so the recents/MRU reorder triggered by each switch does not change the
+    // cycle order underneath. Rebuilt when display/user changes or the anchor item disappears.
+    private var ringSessionDisplayId: Int = INVALID_DISPLAY
+    private var ringSessionUserId: Int = UserHandle.USER_NULL
+    private var ringSessionIds: List<Int>? = null
+
+    // When the home screen gets focused for the first time of a ring session (e.g. right after a
+    // reboot or a ring rebuild), Ctrl+Right/Left shortcuts to the most/least recently used
+    // fullscreen task. Once the user is navigating inside the ring and lands back on home (e.g.
+    // after switching to an empty desk), this is disabled so the ring walk continues and no item
+    // is skipped.
+    private var pendingHomeShortcut: Boolean = true
+
     init {
         if (desktopState.canEnterDesktopMode) {
             shellInit.addInitCallback({ onInit() }, this)
@@ -421,6 +448,8 @@ class DesktopTasksController(
         }
         // Update the current user id again because it might be updated between init and onInit().
         updateCurrentUser(ActivityManager.getCurrentUser())
+        ServiceManager.addService(TASK_SWITCH_SERVICE, taskSwitchStub)
+        Log.d(TAG, "taskSwitchStub registered=$TASK_SWITCH_SERVICE")
         desktopFullscreenRequestHandler.desktopTasksController = this
         dragToDesktopTransitionHandler.dragToDesktopStateListener = dragToDesktopStateListener
         recentsTransitionHandler.addTransitionStateListener(
@@ -2189,12 +2218,14 @@ class DesktopTasksController(
         taskId: Int,
         transitionSource: DesktopModeTransitionSource,
         remoteTransition: RemoteTransition? = null,
+        forceDefaultTransition: Boolean = false,
     ) {
         logV(
-            "moveToFullscreen taskId=%d transitionSource=%s remoteTransition=%s",
+            "moveToFullscreen taskId=%d transitionSource=%s remoteTransition=%s forceDefault=%s",
             taskId,
             transitionSource,
             remoteTransition,
+            forceDefaultTransition,
         )
         val taskInfo: TaskInfo? =
             shellTaskOrganizer.getRunningTaskInfo(taskId)
@@ -2210,6 +2241,7 @@ class DesktopTasksController(
                 task.positionInParent,
                 transitionSource,
                 remoteTransition,
+                forceDefaultTransition,
             )
         }
     }
@@ -2255,6 +2287,7 @@ class DesktopTasksController(
         position: Point,
         transitionSource: DesktopModeTransitionSource,
         remoteTransition: RemoteTransition? = null,
+        forceDefaultTransition: Boolean = false,
     ) {
         val displayId =
             when {
@@ -2265,11 +2298,13 @@ class DesktopTasksController(
                 else -> DEFAULT_DISPLAY
             }
         logV(
-            "moveToFullscreenWithAnimation taskId=%d displayId=%d source=%s remoteTransition=%s",
+            "moveToFullscreenWithAnimation taskId=%d displayId=%d source=%s remoteTransition=%s" +
+                " forceDefault=%s",
             task.taskId,
             displayId,
             transitionSource,
             remoteTransition,
+            forceDefaultTransition,
         )
         val wct = WindowContainerTransaction()
 
@@ -2312,20 +2347,28 @@ class DesktopTasksController(
         }
 
         val transition =
-            if (remoteTransition != null) {
-                val transitionType = getToFrontTransitionTypeOrNone(remoteTransition)
-                val remoteTransitionHandler =
-                    OneShotRemoteHandler(mainExecutor, transitions.leashManager, remoteTransition)
-                transitions.startTransition(transitionType, wct, remoteTransitionHandler).also {
-                    remoteTransitionHandler.setTransition(it)
+            when {
+                remoteTransition != null -> {
+                    val transitionType = getToFrontTransitionTypeOrNone(remoteTransition)
+                    val remoteTransitionHandler =
+                        OneShotRemoteHandler(mainExecutor, transitions.leashManager, remoteTransition)
+                    transitions.startTransition(transitionType, wct, remoteTransitionHandler).also {
+                        remoteTransitionHandler.setTransition(it)
+                    }
                 }
-            } else {
-                exitDesktopTaskTransitionHandler.startTransition(
-                    transitionSource,
-                    wct,
-                    position,
-                    mOnAnimationFinishedCallback,
-                )
+                forceDefaultTransition -> {
+                    // Play the switch with the default (native) transition engine instead of the
+                    // exit-desktop scale animation, so the surfaces animate like a task switch.
+                    transitions.startTransition(TRANSIT_TO_FRONT, wct, /* handler= */ null)
+                }
+                else -> {
+                    exitDesktopTaskTransitionHandler.startTransition(
+                        transitionSource,
+                        wct,
+                        position,
+                        mOnAnimationFinishedCallback,
+                    )
+                }
             }
         deactivationRunnable?.invoke(transition)
     }
@@ -5703,8 +5746,394 @@ class DesktopTasksController(
     }
 
     /**
+     * Activates the desk [deskId] while the desk [activeDeskId] is active, animating the switch
+     * with the lateral desk-to-desk transition. Caller must make sure [deskId] != [activeDeskId].
+     */
+    fun switchDeskWithAnimation(
+        displayId: Int,
+        userId: Int,
+        activeDeskId: Int,
+        deskId: Int,
+        enterReason: EnterReason,
+    ) {
+        val repository = userRepositories.getProfile(userId)
+        if (deskId !in repository.getAllDeskIds()) {
+            logW("switchDeskWithAnimation deskId=%d not found for user=%d", deskId, userId)
+            return
+        }
+        logV("switchDeskWithAnimation from deskId=%d to deskId=%d", activeDeskId, deskId)
+        val wct = WindowContainerTransaction()
+        val runOnTransitStart =
+            addDeskActivationChanges(
+                deskId = deskId,
+                wct = wct,
+                userId = userId,
+                enterReason = enterReason,
+            )
+        val transition =
+            deskSwitchTransitionHandler.startTransition(
+                wct = wct,
+                userId = userId,
+                displayId = displayId,
+                fromDeskId = activeDeskId,
+                toDeskId = deskId,
+            )
+        runOnTransitStart(transition)
+    }
+
+    /**
+     * OpenFDE: Ctrl+Left/Right handling. Cycles through the "recency ring" of running fullscreen
+     * tasks and desks (oldest..newest, matching the visual order of the taskbar strip) and
+     * switches to the neighboring item.
+     *
+     * @param displayId display id of the key event.
+     * @param direction -1 previous (left) item, +1 next (right) item.
+     */
+    fun performKeyboardTaskSwitch(displayId: Int, direction: Int) {
+        if (direction != -1 && direction != 1) {
+            Log.w(TAG, "performKeyboardTaskSwitch: unexpected direction=$direction")
+            return
+        }
+        if (displayId < 0) {
+            Log.w(TAG, "performKeyboardTaskSwitch: invalid displayId=$displayId")
+            return
+        }
+        val userId = shellController.currentUserId
+        val repository = userRepositories.getProfile(userId)
+        Log.d(TAG, "performKeyboardTaskSwitch: start displayId=$displayId direction=$direction" +
+            " userId=$userId")
+
+        val runningTasks =
+            try {
+                ActivityTaskManager.getService()
+                    .getTasks(/* maxNum= */ Integer.MAX_VALUE, /* filterOnlyVisibleRecents= */ false,
+                        /* keepIntentExtra= */ false, displayId)
+            } catch (e: RemoteException) {
+                Log.e(TAG, "performKeyboardTaskSwitch: failed to get running tasks", e)
+                return
+            }
+        Log.d(
+            TAG,
+            "performKeyboardTaskSwitch: ${runningTasks.size} running tasks: " +
+                runningTasks.joinToString(prefix = "[", postfix = "]", limit = 30) { task ->
+                    "taskId=${task.taskId} focused=${task.isFocused} " +
+                        "type=${task.getActivityType()} mode=${task.getWindowingMode()} " +
+                        "parentTaskId=${task.parentTaskId} visible=${task.isVisible}"
+                },
+        )
+
+        // Fullscreen (not freeform-on-a-desk) standard tasks, in taskbar strip order: the taskbar
+        // shows older tasks to the left and the most recent one to the right, which is the reverse
+        // of the getTasks() recency order.
+        val fullscreenTaskIds =
+            runningTasks
+                .filter { task ->
+                    task.getActivityType() == ACTIVITY_TYPE_STANDARD &&
+                        task.getWindowingMode() == WINDOWING_MODE_FULLSCREEN &&
+                        task.parentTaskId == INVALID_TASK_ID
+                }
+                .map { it.taskId }
+                .reversed()
+        Log.d(TAG, "performKeyboardTaskSwitch: fullscreenTaskIds=$fullscreenTaskIds")
+
+        // All desks of this display, ordered left to right by desk position.
+        val deskIds = repository.getDeskIds(displayId)
+        val orderedDeskIds =
+            deskIds.sortedBy { repository.getDeskPosition(it) ?: Int.MAX_VALUE }
+        Log.d(TAG, "performKeyboardTaskSwitch: deskIds=$deskIds orderedDeskIds=$orderedDeskIds")
+
+        // Figure out the current item: a focused fullscreen task wins over the active desk.
+        val focused = runningTasks.firstOrNull { it.isFocused }
+        // Only switch when a regular app or the home screen is focused. Overview/recents,
+        // keyguard, IME, assistant etc. are excluded.
+        val focusedActivityType = focused?.getActivityType()
+        if (
+            focusedActivityType != ACTIVITY_TYPE_STANDARD &&
+                focusedActivityType != ACTIVITY_TYPE_HOME
+        ) {
+            Log.w(
+                TAG,
+                "performKeyboardTaskSwitch: no switchable focused task type=$focusedActivityType " +
+                    "focusedTaskId=${focused?.taskId}",
+            )
+            return
+        }
+        // From the home screen (only the first time a ring session reaches home), treat Ctrl+Right
+        // as "switch to the most recently used fullscreen task" (like Alt+Tab) and Ctrl+Left as
+        // switching to the least recently used one. Once navigation is already walking the ring,
+        // returning to home must continue the ring instead (anchored on the active/visible desk),
+        // otherwise items would be skipped.
+        if (
+            focusedActivityType == ACTIVITY_TYPE_HOME &&
+                pendingHomeShortcut &&
+                fullscreenTaskIds.isNotEmpty()
+        ) {
+            val homeTarget =
+                if (direction == DIRECTION_NEXT) {
+                    fullscreenTaskIds.last()
+                } else {
+                    fullscreenTaskIds.first()
+                }
+            pendingHomeShortcut = false
+            // Reset the stable ring session so the next press re-orders around the new state.
+            ringSessionIds = null
+            ringSessionDisplayId = INVALID_DISPLAY
+            ringSessionUserId = UserHandle.USER_NULL
+            Log.i(
+                TAG,
+                "performKeyboardTaskSwitch: home shortcut direction=$direction -> " +
+                    "fullscreen taskId=$homeTarget",
+            )
+            moveToFullscreen(
+                taskId = homeTarget,
+                transitionSource = DesktopModeTransitionSource.KEYBOARD_SHORTCUT,
+                remoteTransition = null,
+            )
+            return
+        }
+        val anchorFullscreenTaskId: Int? =
+            if (
+                focused != null &&
+                    focused.getActivityType() == ACTIVITY_TYPE_STANDARD &&
+                    focused.getWindowingMode() == WINDOWING_MODE_FULLSCREEN &&
+                    focused.parentTaskId == INVALID_TASK_ID
+            ) {
+                focused.taskId
+            } else {
+                null
+            }
+        val activeDeskId = repository.getActiveDeskId(displayId)
+        val deskAnchorId: Int? =
+            if (activeDeskId != null && activeDeskId in orderedDeskIds) {
+                activeDeskId
+            } else {
+                resolveDeskAnchor(runningTasks, orderedDeskIds)
+            }
+        val anchorItem: Int? = anchorFullscreenTaskId ?: deskAnchorId
+        Log.d(
+            TAG,
+            "performKeyboardTaskSwitch: anchorFullscreenTaskId=$anchorFullscreenTaskId " +
+                "activeDeskId=$activeDeskId deskAnchorId=$deskAnchorId anchorItem=$anchorItem",
+        )
+        if (anchorItem == null) {
+            Log.w(
+                TAG,
+                "performKeyboardTaskSwitch: no anchored item, candidates=" +
+                    "fullscreen=$fullscreenTaskIds desks=$orderedDeskIds",
+            )
+            return
+        }
+
+        // Keep a stable ring order across consecutive key presses: the recents/MRU order changes
+        // every time a task is brought to the front, which would otherwise make the cycle order
+        // jump around. Only (re)build the order when the display/user changes or the current
+        // anchor is no longer one of the candidates.
+        val candidates: List<Int> = fullscreenTaskIds + orderedDeskIds
+        val ring: List<Int> =
+            if (
+                ringSessionDisplayId == displayId &&
+                    ringSessionUserId == userId &&
+                    anchorItem in candidates
+            ) {
+                // Keep the previous relative order, drop vanished items, append newly appeared ones.
+                val previous = ringSessionIds ?: emptyList()
+                val merged = previous.filter { it in candidates } +
+                    candidates.filter { it !in previous }
+                ringSessionIds = merged
+                merged
+            } else {
+                Log.d(TAG, "performKeyboardTaskSwitch: rebuild ring, candidates=$candidates")
+                ringSessionDisplayId = displayId
+                ringSessionUserId = userId
+                ringSessionIds = candidates
+                // Re-enable the home shortcut only when the ring is rebuilt while the home screen
+                // is focused (e.g. first press after boot). Mid-walk rebuilds must not re-enable it,
+                // otherwise items would be skipped when navigation lands back on home.
+                if (focusedActivityType == ACTIVITY_TYPE_HOME) {
+                    pendingHomeShortcut = true
+                }
+                candidates
+            }
+        if (ring.size <= 1) {
+            Log.w(TAG, "performKeyboardTaskSwitch: ring too small (size=${ring.size}), skip")
+            return
+        }
+        Log.d(TAG, "performKeyboardTaskSwitch: ring=$ring")
+
+        val anchorIndex = ring.indexOf(anchorItem)
+        if (anchorIndex < 0) {
+            Log.w(TAG, "performKeyboardTaskSwitch: anchor not in ring anchor=$anchorItem ring=$ring")
+            return
+        }
+        val target = ring[Math.floorMod(anchorIndex + direction, ring.size)]
+        if (target == anchorItem) {
+            Log.w(TAG, "performKeyboardTaskSwitch: target == anchor=$anchorItem, skip")
+            return
+        }
+        Log.i(
+            TAG,
+            "performKeyboardTaskSwitch: switch anchor=$anchorItem -> target=$target" +
+                " direction=$direction",
+        )
+
+        try {
+            if (target in deskIds) {
+                if (anchorFullscreenTaskId == null) {
+                    // Desk -> desk, use the lateral desk-switch animation.
+                    if (activeDeskId != null && activeDeskId != target) {
+                        Log.i(
+                            TAG,
+                            "performKeyboardTaskSwitch: switchDeskWithAnimation" +
+                                " desk=$activeDeskId -> $target",
+                        )
+                        switchDeskWithAnimation(
+                            displayId = displayId,
+                            userId = userId,
+                            activeDeskId = activeDeskId,
+                            deskId = target,
+                            enterReason = EnterReason.KEYBOARD_SHORTCUT_ENTER,
+                        )
+                    }
+                } else {
+                    // Fullscreen task -> desk. Play the activation with the default transition
+                    // engine (instead of applying it instantly) to get native window animations.
+                    Log.i(
+                        TAG,
+                        "performKeyboardTaskSwitch: activateDesk desk=$target" +
+                            " forceDefaultTransition=true",
+                    )
+                    activateDesk(
+                        deskId = target,
+                        userId = userId,
+                        remoteTransition = null,
+                        taskIdToReorderToFront = null,
+                        enterReason = EnterReason.KEYBOARD_SHORTCUT_ENTER,
+                        forceDefaultTransition = true,
+                    )
+                }
+            } else {
+                if (anchorFullscreenTaskId == null) {
+                    // Desk -> fullscreen task. Experiment: use the exact same native recents-open
+                    // path as fullscreen -> fullscreen (known to produce the horizontal slide),
+                    // instead of the exit-desktop / default engine animations.
+                    Log.i(
+                        TAG,
+                        "performKeyboardTaskSwitch: startActivityFromRecents taskId=$target" +
+                            " direction=$direction (desk -> fullscreen)",
+                    )
+                    startRunningTaskFromRecentsNative(taskId = target, direction = direction)
+                } else {
+                    // Fullscreen task -> fullscreen task, using the same native task-open
+                    // transition that plays when tapping a running task icon (no intermediate
+                    // frame artifacts). Ctrl+Right uses the default slide (in from the right);
+                    // Ctrl+Left uses the mirrored framework animation (in from the left).
+                    Log.i(
+                        TAG,
+                        "performKeyboardTaskSwitch: startActivityFromRecents taskId=$target" +
+                            " direction=$direction",
+                    )
+                    startRunningTaskFromRecentsNative(taskId = target, direction = direction)
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "performKeyboardTaskSwitch: failed to switch to target=$target", t)
+        }
+    }
+
+    /**
+     * Starts a running fullscreen task from recents and forces the task-open window animations:
+     * with [direction] == [DIRECTION_NEXT] the target slides in from the right (the framework
+     * default `task_open_enter` resources), with [direction] == [DIRECTION_PREVIOUS] the mirrored
+     * framework animation is used (target slides in from the left). Explicitly attaching the
+     * custom task animation is required because the wm default for some states (e.g. when a desk
+     * is active underneath) resolves to a zoom-in instead of the horizontal slide.
+     */
+    private fun startRunningTaskFromRecentsNative(taskId: Int, direction: Int) {
+        val resources = context.resources
+        val enterResId =
+            resources.getIdentifier(
+                if (direction == DIRECTION_NEXT) ANIM_TASK_OPEN_ENTER else ANIM_TASK_OPEN_ENTER_FROM_LEFT,
+                "anim",
+                "android",
+            )
+        val exitResId =
+            resources.getIdentifier(
+                if (direction == DIRECTION_NEXT) ANIM_TASK_OPEN_EXIT else ANIM_TASK_OPEN_EXIT_TO_RIGHT,
+                "anim",
+                "android",
+            )
+        val options: Bundle? =
+            if (enterResId == 0 || exitResId == 0) {
+                Log.w(
+                    TAG,
+                    "startRunningTaskFromRecentsNative: task-open anims not found enter=$enterResId" +
+                        " exit=$exitResId",
+                )
+                null
+            } else {
+                ActivityOptions.makeCustomTaskAnimation(
+                    context,
+                    enterResId,
+                    exitResId,
+                    /* handler= */ null,
+                    /* startedListener= */ null,
+                    /* finishedListener= */ null,
+                ).toBundle()
+            }
+        try {
+            ActivityTaskManager.getService().startActivityFromRecents(taskId, options)
+        } catch (e: RemoteException) {
+            Log.e(TAG, "startRunningTaskFromRecentsNative taskId=$taskId failed", e)
+        }
+    }
+
+
+    /**
+     * Resolves which desk should be treated as "current" when no fullscreen task has focus and the
+     * repository does not report an active desk (e.g. the home screen is focused). Prefers the desk
+     * owning the focused window, then a desk with visible windows, and finally falls back to the
+     * first (left-most) desk so that cycling still works from the desktop.
+     */
+    private fun resolveDeskAnchor(
+        runningTasks: List<RunningTaskInfo>,
+        orderedDeskIds: List<Int>,
+    ): Int? {
+        if (orderedDeskIds.isEmpty()) {
+            return null
+        }
+        val focused = runningTasks.firstOrNull { it.isFocused }
+        if (
+            focused != null &&
+                focused.parentTaskId != INVALID_TASK_ID &&
+                focused.parentTaskId in orderedDeskIds
+        ) {
+            return focused.parentTaskId
+        }
+        val visibleDeskId =
+            runningTasks
+                .firstOrNull { task ->
+                    task.parentTaskId != INVALID_TASK_ID &&
+                        task.parentTaskId in orderedDeskIds &&
+                        task.isVisible
+                }
+                ?.parentTaskId
+        if (visibleDeskId != null) {
+            return visibleDeskId
+        }
+        Log.d(
+            TAG,
+            "resolveDeskAnchor: fall back to first desk, orderedDeskIds=$orderedDeskIds",
+        )
+        return orderedDeskIds.first()
+    }
+
+    /**
      * Activates the given desk and brings [taskIdToReorderToFront] to front if provided and is
      * already on the given desk.
+     *
+     * When [forceDefaultTransition] is set (and no [remoteTransition] is given), the activation is
+     * played by the default transition engine instead of being applied without a dedicated
+     * animation.
      */
     fun activateDesk(
         deskId: Int,
@@ -5712,17 +6141,20 @@ class DesktopTasksController(
         remoteTransition: RemoteTransition? = null,
         taskIdToReorderToFront: Int? = null,
         enterReason: EnterReason,
+        forceDefaultTransition: Boolean = false,
     ) =
         traceSection(
             Trace.TRACE_TAG_WINDOW_MANAGER,
             "DesktopTasksController#activateDesk: $deskId",
         ) {
             logD(
-                "activateDesk deskId=%d userId=%d taskIdToReorderToFront=%d remoteTransition=%s",
+                "activateDesk deskId=%d userId=%d taskIdToReorderToFront=%d remoteTransition=%s" +
+                    " forceDefault=%s",
                 deskId,
                 userId,
                 taskIdToReorderToFront,
                 remoteTransition,
+                forceDefaultTransition,
             )
             val repository = userRepositories.getProfile(userId)
             if (!repository.getAllDeskIds().contains(deskId)) {
@@ -5780,7 +6212,12 @@ class DesktopTasksController(
             if (taskIdToReorderToFront != INVALID_TASK_ID && taskIdToReorderToFront != null) {
                 snapController.notifyTilingOfExplodedViewReorder(deskId, taskIdToReorderToFront)
             }
-            val transitionType = getToFrontTransitionTypeOrNone(remoteTransition)
+            val transitionType =
+                if (remoteTransition != null || forceDefaultTransition) {
+                    TRANSIT_TO_FRONT
+                } else {
+                    TRANSIT_NONE
+                }
             val handler =
                 remoteTransition?.let {
                     OneShotRemoteHandler(
@@ -7172,6 +7609,14 @@ class DesktopTasksController(
         private val APP_HANDLE_DRAG_CUJ_TIMEOUT_MS: Long = TimeUnit.SECONDS.toMillis(10L)
 
         private const val TAG = "DesktopTasksController"
+
+        const val TASK_SWITCH_SERVICE = "TASK_SWITCH"
+        const val DIRECTION_PREVIOUS = -1
+        const val DIRECTION_NEXT = 1
+        private const val ANIM_TASK_OPEN_ENTER = "task_open_enter"
+        private const val ANIM_TASK_OPEN_EXIT = "task_open_exit"
+        private const val ANIM_TASK_OPEN_ENTER_FROM_LEFT = "task_open_enter_from_left"
+        private const val ANIM_TASK_OPEN_EXIT_TO_RIGHT = "task_open_exit_to_right"
 
         private fun DesktopTaskToFrontReason.toUnminimizeReason(): UnminimizeReason =
             when (this) {

@@ -234,6 +234,7 @@ import com.android.internal.policy.IKeyguardDismissCallback;
 import com.android.internal.policy.IKeyguardService;
 import com.android.internal.policy.IShortcutService;
 import com.android.internal.policy.ITaskCaptionOperationService;
+import com.android.internal.policy.ITaskSwitchService;
 import com.android.internal.policy.KeyInterceptionInfo;
 import com.android.internal.policy.PhoneWindow;
 import com.android.internal.statusbar.IStatusBarService;
@@ -4594,6 +4595,21 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     goHome();
                 }
                 break;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                // Ctrl+Left/Right switches between desks and fullscreen tasks, using the same
+                // sliding animation as switching between two fullscreen apps.
+                if (event.isCtrlPressed() && isBareCtrlShortcut(event)) {
+                    Slog.d(TAG, "performTaskSwitch: keyCode=" + keyCode + " down=" + down
+                            + " repeat=" + event.getRepeatCount() + " displayId="
+                            + event.getDisplayId());
+                    if (down && event.getRepeatCount() == 0) {
+                        performTaskSwitch(event.getDisplayId(),
+                                keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
+                    }
+                    result &= ~ACTION_PASS_TO_USER;
+                }
+                break;
 //            case KeyEvent.KEYCODE_MOVE_HOME:
 //
 //                break;
@@ -6923,6 +6939,42 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         } catch (RemoteException e) {
             Log.e(TAG, "toggleFullscreenFreeform: failed to execute task operation", e);
         }
+    }
+
+    /**
+     * OpenFDE: switches to the previous/next fullscreen task or desk when Ctrl+Left/Right is
+     * pressed. The actual switching logic and animations live in the wm-shell "TASK_SWITCH"
+     * service (SystemUI process).
+     *
+     * @param displayId display id of the key event.
+     * @param direction -1 previous item, +1 next item.
+     */
+    private void performTaskSwitch(int displayId, int direction) {
+        final IBinder binder = ServiceManager.getService("TASK_SWITCH");
+        if (binder == null) {
+            Slog.w(TAG, "performTaskSwitch: TASK_SWITCH service not available");
+            return;
+        }
+        Slog.d(TAG, "performTaskSwitch: service found, calling displayId=" + displayId
+                + " direction=" + direction);
+        final ITaskSwitchService service = ITaskSwitchService.Stub.asInterface(binder);
+        try {
+            service.performTaskSwitch(displayId, direction);
+        } catch (RemoteException e) {
+            Slog.e(TAG, "performTaskSwitch: failed to execute task switch", e);
+        }
+    }
+
+    /** Returns true when the event carries Ctrl but no Alt/Shift/Meta/Sym/Function modifier. */
+    private boolean isBareCtrlShortcut(KeyEvent event) {
+        final int nonCtrlModifiers =
+                KeyEvent.META_ALT_MASK
+                        | KeyEvent.META_SHIFT_ON
+                        | KeyEvent.META_SYM_ON
+                        | KeyEvent.META_META_MASK
+                        | KeyEvent.META_FUNCTION_ON;
+        return (event.getMetaState() & KeyEvent.META_CTRL_MASK) != 0
+                && (event.getMetaState() & nonCtrlModifiers) == 0;
     }
 
     /**
