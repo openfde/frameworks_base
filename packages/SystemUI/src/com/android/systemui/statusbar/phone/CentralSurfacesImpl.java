@@ -350,6 +350,10 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
     private final NotificationShadeWindowController mNotificationShadeWindowController;
     @Nullable
     private PhoneStatusBarView mPhoneStatusBarView;
+    /** Overlay plugins connected before the status bar view was initialized. */
+    private final ArraySet<OverlayPlugin> mPendingOverlayPlugins = new ArraySet<>();
+    /** Overlay plugins currently holding the status bar open. */
+    private final ArraySet<OverlayPlugin> mOverlayPlugins = new ArraySet<>();
     /** Message code for plugin-triggered screen recording dialog. */
     private static final int MSG_SHOW_SCREEN_RECORD_DIALOG = 1001;
     /** Message code for plugin-triggered screen recording stop. */
@@ -857,50 +861,29 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
 
         mPluginManager.addPluginListener(
                 new PluginListener<OverlayPlugin>() {
-                    private final ArraySet<OverlayPlugin> mOverlays = new ArraySet<>();
-
                     @Override
                     public void onPluginConnected(OverlayPlugin plugin, Context pluginContext) {
                         Log.d(TAG, "onPluginConnected: " + mPhoneStatusBarView + " " + mScreenRecordHandler);
-                        mPhoneStatusBarView.setTag(mScreenRecordHandler);
-                        mMainExecutor.execute(
-                                () -> plugin.setup(
-                                        mPhoneStatusBarView,
-                                        getNavigationBarView(),
-                                        new Callback(plugin), mDozeParameters));
+                        if (mPhoneStatusBarView == null) {
+                            Log.d(TAG, "onPluginConnected: status bar view not ready, deferring setup");
+                            synchronized (mPendingOverlayPlugins) {
+                                mPendingOverlayPlugins.add(plugin);
+                            }
+                            return;
+                        }
+                        setupOverlayPlugin(plugin);
                     }
 
                     @Override
                     public void onPluginDisconnected(OverlayPlugin plugin) {
+                        synchronized (mPendingOverlayPlugins) {
+                            mPendingOverlayPlugins.remove(plugin);
+                        }
                         mMainExecutor.execute(() -> {
-                            mOverlays.remove(plugin);
+                            mOverlayPlugins.remove(plugin);
                             mNotificationShadeWindowController
-                                    .setForcePluginOpen(mOverlays.size() != 0, this);
+                                    .setForcePluginOpen(mOverlayPlugins.size() != 0, this);
                         });
-                    }
-
-                    class Callback implements OverlayPlugin.Callback {
-                        private final OverlayPlugin mPlugin;
-
-                        Callback(OverlayPlugin plugin) {
-                            mPlugin = plugin;
-                        }
-
-                        @Override
-                        public void onHoldStatusBarOpenChange() {
-                            if (mPlugin.holdStatusBarOpen()) {
-                                mOverlays.add(mPlugin);
-                            } else {
-                                mOverlays.remove(mPlugin);
-                            }
-                            mMainExecutor.execute(() -> {
-                                mNotificationShadeWindowController
-                                        .setStateListener(b -> mOverlays.forEach(
-                                                o -> o.setCollapseDesired(b)));
-                                mNotificationShadeWindowController
-                                        .setForcePluginOpen(mOverlays.size() != 0, this);
-                            });
-                        }
                     }
                 }, OverlayPlugin.class, true /* Allow multiple plugins */);
 
@@ -2835,11 +2818,59 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
     public void onStatusBarViewInitialized(HomeStatusBarComponent component) {
         mPhoneStatusBarView = component.getPhoneStatusBarView();
         android.util.Log.d(TAG, "onStatusBarViewInitialized: " + mPhoneStatusBarView);
+
+        OverlayPlugin[] pending;
+        synchronized (mPendingOverlayPlugins) {
+            pending = mPendingOverlayPlugins.toArray(new OverlayPlugin[0]);
+            mPendingOverlayPlugins.clear();
+        }
+        for (OverlayPlugin plugin : pending) {
+            setupOverlayPlugin(plugin);
+        }
     }
 
     @Override
     public void onStatusBarViewDestroyed(HomeStatusBarComponent component) {
         android.util.Log.d(TAG, "onStatusBarViewDestroyed: ");
         mPhoneStatusBarView = null;
+    }
+
+    private void setupOverlayPlugin(OverlayPlugin plugin) {
+        if (mPhoneStatusBarView == null) {
+            synchronized (mPendingOverlayPlugins) {
+                mPendingOverlayPlugins.add(plugin);
+            }
+            return;
+        }
+        mPhoneStatusBarView.setTag(mScreenRecordHandler);
+        mMainExecutor.execute(
+                () -> plugin.setup(
+                        mPhoneStatusBarView,
+                        getNavigationBarView(),
+                        new OverlayPluginCallback(plugin), mDozeParameters));
+    }
+
+    private class OverlayPluginCallback implements OverlayPlugin.Callback {
+        private final OverlayPlugin mPlugin;
+
+        OverlayPluginCallback(OverlayPlugin plugin) {
+            mPlugin = plugin;
+        }
+
+        @Override
+        public void onHoldStatusBarOpenChange() {
+            if (mPlugin.holdStatusBarOpen()) {
+                mOverlayPlugins.add(mPlugin);
+            } else {
+                mOverlayPlugins.remove(mPlugin);
+            }
+            mMainExecutor.execute(() -> {
+                mNotificationShadeWindowController
+                        .setStateListener(b -> mOverlayPlugins.forEach(
+                                o -> o.setCollapseDesired(b)));
+                mNotificationShadeWindowController
+                        .setForcePluginOpen(mOverlayPlugins.size() != 0, this);
+            });
+        }
     }
 }
