@@ -462,6 +462,23 @@ public class TaskInfo {
      */
     public int magicWindowType = 0;
 
+    /** @hide */
+    public static final int MAGIC_WINDOW_TYPE_NONE = 0;
+    /** @hide */
+    public static final int MAGIC_WINDOW_TYPE_MAIN = 1;
+    /** @hide */
+    public static final int MAGIC_WINDOW_TYPE_ADDITIONAL = 2;
+    /** @hide */
+    public static final int MAGIC_WINDOW_TYPE_IN_PARALLEL = 3;
+
+    /**
+     * The FDE parallel world pane ratio of this task: the fraction of the task width that belongs
+     * to the additional (right) window. {@code 0} when the task is not split.
+     *
+     * @hide
+     */
+    public float magicWindowRatio = 0f;
+
     TaskInfo() {
         // Do nothing
     }
@@ -547,6 +564,7 @@ public class TaskInfo {
         isAppBubble = other.isAppBubble;
         isInteractive = other.isInteractive;
         magicWindowType = other.magicWindowType;
+        magicWindowRatio = other.magicWindowRatio;
     }
 
     /** @hide */
@@ -697,6 +715,7 @@ public class TaskInfo {
                 && Objects.equals(topActivityMainWindowFrame, that.topActivityMainWindowFrame)
                 && isAppBubble == that.isAppBubble
                 && magicWindowType == that.magicWindowType
+                && magicWindowRatio == that.magicWindowRatio
                 && minWidth == that.minWidth && minHeight == that.minHeight;
     }
 
@@ -780,6 +799,7 @@ public class TaskInfo {
         isAppBubble = source.readBoolean();
         isInteractive = source.readBoolean();
         magicWindowType = source.readInt();
+        magicWindowRatio = source.readFloat();
     }
 
     /**
@@ -843,6 +863,7 @@ public class TaskInfo {
         dest.writeBoolean(isAppBubble);
         dest.writeBoolean(isInteractive);
         dest.writeInt(magicWindowType);
+        dest.writeFloat(magicWindowRatio);
     }
 
     @Override
@@ -898,6 +919,7 @@ public class TaskInfo {
                 + " topActivityMainWindowFrame=" + topActivityMainWindowFrame
                 + " isAppBubble=" + isAppBubble
                 + " magicWindowType=" + magicWindowType
+                + " magicWindowRatio=" + magicWindowRatio
                 + "}";
     }
 }

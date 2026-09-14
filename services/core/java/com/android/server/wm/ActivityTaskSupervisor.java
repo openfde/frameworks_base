@@ -57,9 +57,6 @@ import static android.view.WindowManager.TRANSIT_TO_FRONT;
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_STATES;
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_TASKS;
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_WINDOW_TRANSITIONS;
-import static com.android.server.wm.Task.MAGIC_ADDITIONAL_WINDOW;
-import static com.android.server.wm.Task.MAGIC_MAIN_WINDOW;
-import static com.android.server.wm.Task.NOT_MAGIC_WINDOW;
 import static com.android.server.wm.ActivityRecord.State.PAUSED;
 import static com.android.server.wm.ActivityRecord.State.PAUSING;
 import static com.android.server.wm.ActivityRecord.State.RESTARTING_PROCESS;
@@ -148,13 +145,10 @@ import android.os.UserManager;
 import android.os.WorkSource;
 import android.permission.PermissionManager;
 import android.provider.MediaStore;
-import android.text.TextUtils;
 import android.util.ArrayMap;
-import android.util.ArraySet;
 import android.util.Slog;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
-import android.util.Xml;
 import android.view.Display;
 import android.webkit.URLUtil;
 import android.window.ActivityWindowInfo;
@@ -176,17 +170,12 @@ import com.android.server.pm.SaferIntentUtils;
 import com.android.server.utils.Slogf;
 import com.android.server.wm.ActivityMetricsLogger.LaunchingState;
 
-import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileDescriptor;
-import java.io.FileReader;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.function.Consumer;
 
-import org.xmlpull.v1.XmlPullParser;
 
 // TODO: This class has become a dumping ground. Let's
 // - Move things relating to the hierarchy to RootWindowContainer
@@ -201,22 +190,6 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
     private static final String TAG_ROOT_TASK = TAG + POSTFIX_ROOT_TASK;
     private static final String TAG_SWITCH = TAG + POSTFIX_SWITCH;
     static final String TAG_TASKS = TAG + POSTFIX_TASKS;
-
-    // fde start MAGIC WINDOW -> parallel world
-    /**
-     * Parallel world config: package name -> main activity simple class names.
-     * Any activity of a configured package that is not a main activity opens in the
-     * parallel (right) window.
-     */
-    private final HashMap<String, ArraySet<String>> mMagicWindowConfig = new HashMap<>();
-    private static final String MAGIC_WINDOW_DIRNAME = "magicwindow_config";
-    private static final String MAGIC_WINDOW_FILE_SUFFIX = ".xml";
-    private static final String MAGIC_WINDOW_CONFIG_FILENAME = "magic_config";
-    private static final String MAGIC_WINDOW_TAG = "package";
-    private static final String MAGIC_WINDOW_KEY = "packagename";
-    private static final String MAGIC_WINDOW_VALUE = "main";
-    private static final String MAGIC_WINDOW_CONFIG_DIRNAME_SYSTEM = "/system/magicwindow_config/";
-    // fde end
 
     /** How long we wait until giving up on the last activity telling us it is idle. */
     private static final int IDLE_TIMEOUT = 10 * 1000 * Build.HW_TIMEOUT_MULTIPLIER;
@@ -519,116 +492,10 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         mLaunchParamsController.registerDefaultModifiers(this);
 
         mBalController = new BackgroundActivityStartController(mService, this);
-        loadMagicWindowConfig();
+        // fde start MAGIC WINDOW -> parallel world
+        ParallelWorldConfig.get().load(mService.mContext);
+        // fde end
     }
-
-    // fde start MAGIC WINDOW -> parallel world
-    /**
-     * Loads the parallel world (magic window) config from
-     * {@code /system/magicwindow_config/magic_config.xml}.
-     *
-     * <p>Each {@code <package packagename="..." main="..."/>} entry declares the package and its
-     * main activity simple class names, separated by {@code '/'} when an app has more than one
-     * main activity (e.g. Weibo uses a different main activity before/after login).
-     */
-    public void loadMagicWindowConfig() {
-        File configDir = new File("/system/", MAGIC_WINDOW_DIRNAME);
-        if (!configDir.isDirectory()) {
-            configDir = new File(MAGIC_WINDOW_CONFIG_DIRNAME_SYSTEM);
-        }
-        if (!configDir.isDirectory()) {
-            Slog.i(TAG, "Didn't find magic window config folder in system");
-            return;
-        }
-        final File configFile = new File(configDir,
-                MAGIC_WINDOW_CONFIG_FILENAME + MAGIC_WINDOW_FILE_SUFFIX);
-        if (!configFile.exists()) {
-            Slog.i(TAG, "Didn't find magic window config file: " + configFile);
-            return;
-        }
-        mMagicWindowConfig.clear();
-        try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
-            final XmlPullParser parser = Xml.newPullParser();
-            parser.setInput(reader);
-            int event;
-            while ((event = parser.next()) != XmlPullParser.END_DOCUMENT) {
-                if (event != XmlPullParser.START_TAG) {
-                    continue;
-                }
-                if (!MAGIC_WINDOW_TAG.equals(parser.getName())) {
-                    continue;
-                }
-                String packageName = null;
-                String main = null;
-                for (int i = 0; i < parser.getAttributeCount(); ++i) {
-                    final String attrName = parser.getAttributeName(i);
-                    if (MAGIC_WINDOW_KEY.equals(attrName)) {
-                        packageName = parser.getAttributeValue(i);
-                    } else if (MAGIC_WINDOW_VALUE.equals(attrName)) {
-                        main = parser.getAttributeValue(i);
-                    }
-                }
-                if (TextUtils.isEmpty(packageName) || TextUtils.isEmpty(main)) {
-                    continue;
-                }
-                final ArraySet<String> mainActivities = new ArraySet<>();
-                for (String name : main.split("/")) {
-                    name = toSimpleClassName(name.trim());
-                    if (!TextUtils.isEmpty(name)) {
-                        mainActivities.add(name);
-                    }
-                }
-                if (!mainActivities.isEmpty()) {
-                    mMagicWindowConfig.put(packageName, mainActivities);
-                }
-            }
-            Slog.i(TAG, "Loaded parallel world config: " + mMagicWindowConfig);
-        } catch (Exception e) {
-            Slog.w(TAG, "Failed to load magic window config: " + configFile, e);
-        }
-    }
-
-    /**
-     * Returns the parallel world type of the given activity.
-     *
-     * <p>Only the simple class name is compared, and the comparison is exact (with inner class
-     * suffix stripped), so an activity whose name merely contains a configured main activity
-     * name is not misclassified. The caller may pass a fully qualified class name, a
-     * {@code package/Class} short string or a simple class name.
-     */
-    public int getMagicWindowType(String packageName, String activity) {
-        if (TextUtils.isEmpty(packageName) || TextUtils.isEmpty(activity)) {
-            return NOT_MAGIC_WINDOW;
-        }
-        final ArraySet<String> mainActivities = mMagicWindowConfig.get(packageName);
-        if (mainActivities == null) {
-            return NOT_MAGIC_WINDOW;
-        }
-        return mainActivities.contains(toSimpleClassName(activity))
-                ? MAGIC_MAIN_WINDOW : MAGIC_ADDITIONAL_WINDOW;
-    }
-
-    /** Normalizes a class name to its simple class name, without the inner class suffix. */
-    private static String toSimpleClassName(String name) {
-        if (TextUtils.isEmpty(name)) {
-            return name;
-        }
-        // ComponentName#flattenToShortString() uses "package/.Class" or "package/Class".
-        final int slash = name.lastIndexOf('/');
-        if (slash >= 0) {
-            name = name.substring(slash + 1);
-        }
-        final int dollar = name.indexOf('$');
-        if (dollar >= 0) {
-            name = name.substring(0, dollar);
-        }
-        final int dot = name.lastIndexOf('.');
-        if (dot >= 0) {
-            name = name.substring(dot + 1);
-        }
-        return name;
-    }
-    // fde end
 
     void onSystemReady() {
         mLaunchParamsPersister.onSystemReady();
