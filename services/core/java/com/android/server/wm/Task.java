@@ -3490,7 +3490,18 @@ class Task extends TaskFragment {
         info.baseIntent.setFlags(baseIntentFlags);
 
         // fde start MAGIC WINDOW -> parallel world
-        info.magicWindowType = type;
+        int magicWindowType = type;
+        if (magicWindowType == IN_PARALLEL_WINDOW
+                && mAtmService.mParallelVisionOrganizer != null
+                && !mAtmService.mParallelVisionOrganizer.isSplitReady(mTaskId)) {
+            // The split is not fully set up yet (fragments not created or the task is still
+            // being expanded): do not expose it to the shell yet, otherwise the divider would
+            // be shown at the wrong position.
+            magicWindowType = NOT_MAGIC_WINDOW;
+        }
+        info.magicWindowType = magicWindowType;
+        info.magicWindowRatio = mAtmService.mParallelVisionOrganizer != null
+                ? mAtmService.mParallelVisionOrganizer.getSplitRatio(mTaskId) : 0f;
         // fde end
         info.isRunning = top != null;
         info.topActivity = top != null ? top.mActivityComponent : null;
