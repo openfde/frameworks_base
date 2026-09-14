@@ -86,6 +86,9 @@ import static com.android.server.wm.ActivityTaskSupervisor.DEFER_RESUME;
 import static com.android.server.wm.ActivityTaskSupervisor.ON_TOP;
 import static com.android.server.wm.LaunchParamsController.LaunchParamsModifier.PHASE_BOUNDS;
 import static com.android.server.wm.LaunchParamsController.LaunchParamsModifier.PHASE_DISPLAY;
+import static com.android.server.wm.Task.MAGIC_ADDITIONAL_WINDOW;
+import static com.android.server.wm.Task.MAGIC_MAIN_WINDOW;
+import static com.android.server.wm.Task.NOT_MAGIC_WINDOW;
 import static com.android.server.wm.Task.REPARENT_MOVE_ROOT_TASK_TO_FRONT;
 import static com.android.server.wm.TaskFragment.EMBEDDING_ALLOWED;
 import static com.android.server.wm.TaskFragment.EMBEDDING_DISALLOWED_MIN_DIMENSION_VIOLATION;
@@ -157,6 +160,9 @@ import com.android.server.wm.BackgroundActivityStartController.BalVerdict;
 import com.android.server.wm.LaunchParamsController.LaunchParams;
 import com.android.server.wm.TaskFragment.EmbeddingCheckResult;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.PrintWriter;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -180,6 +186,11 @@ class ActivityStarter {
     private static final String TAG_USER_LEAVING = TAG + POSTFIX_USER_LEAVING;
 
     private static final int INVALID_LAUNCH_MODE = -1;
+
+    // fde start MAGIC WINDOW -> parallel world
+    /** Intent extra marking an activity that should be opened in the parallel window. */
+    private static final String KEY_SPLIT = "should_split";
+    // fde end
 
     /**
      * Avoid problematical apps from occupying system resources (e.g. the amount of surface) by
@@ -215,6 +226,13 @@ class ActivityStarter {
     private int mLaunchMode;
     private boolean mLaunchTaskBehind;
     private int mLaunchFlags;
+
+    // fde start MAGIC WINDOW -> parallel world
+    /** Whether the target activity belongs to a configured parallel world package. */
+    private boolean mIsMagicPackage = false;
+    /** The split ratio parsed from the FDE extra, {@code secondary / (primary + secondary)}. */
+    private float mSplitRatio;
+    // fde end
 
     private LaunchParams mLaunchParams = new LaunchParams();
 
@@ -440,6 +458,11 @@ class ActivityStarter {
         PendingIntentRecord originatingPendingIntent;
         boolean allowBalExemptionForSystemProcess;
         boolean freezeScreen;
+
+        // fde start MAGIC WINDOW -> parallel world
+        /** The parallel world config (ratio JSON) carried by the intent. */
+        String extraFDE;
+        // fde end
 
         final StringBuilder logMessage = new StringBuilder();
 
@@ -1114,6 +1137,30 @@ class ActivityStarter {
         Task inTask = request.inTask;
         TaskFragment inTaskFragment = request.inTaskFragment;
 
+        // fde start MAGIC WINDOW -> parallel world
+        // The caller process (Instrumentation) tags the intent with the parallel world config of
+        // the target package. Only when the ratio is valid is the package treated as a parallel
+        // world package.
+        mIsMagicPackage = false;
+        mSplitRatio = 0f;
+        final String extraFDE = request.extraFDE;
+        if (extraFDE != null && aInfo != null) {
+            mSplitRatio = parseRatio(extraFDE);
+            if (mSplitRatio > 0f && mSplitRatio < 1.0f) {
+                mIsMagicPackage = true;
+                Slog.d(TAG, "parallel world package: " + aInfo.packageName
+                        + " extraFDE=" + extraFDE + " ratio=" + mSplitRatio);
+            }
+        }
+        final int magicType = mIsMagicPackage
+                ? mSupervisor.getMagicWindowType(aInfo.packageName, aInfo.name)
+                : NOT_MAGIC_WINDOW;
+        if (magicType == MAGIC_ADDITIONAL_WINDOW && intent != null) {
+            intent.putExtra(KEY_SPLIT, true);
+        }
+        Slog.d(TAG, "parallel world: isMagicPackage=" + mIsMagicPackage + " magicType=" + magicType);
+        // fde end
+
         int err = ActivityManager.START_SUCCESS;
         // Pull the optional Ephemeral Installer-only bundle out of the options early.
         final Bundle verificationBundle =
@@ -1742,8 +1789,102 @@ class ActivityStarter {
 
         if (ActivityManager.isStartResultSuccessful(result)) {
             mInterceptor.onActivityLaunched(targetTask.getTaskInfo(), r);
+            // fde start MAGIC WINDOW -> parallel world
+            try {
+                handleCustomSplitIfNeeded(mSourceRecord, r, targetTask, result);
+            } catch (Exception e) {
+                Slog.e(TAG, "parallel world: custom split failed", e);
+            }
+            // fde end
         }
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    /**
+     * Triggers the parallel world split when the started activity is an additional window
+     * activity of a configured package and the caller is the main window activity.
+     */
+    private void handleCustomSplitIfNeeded(ActivityRecord source, ActivityRecord r, Task task,
+            int result) {
+        if (r == null || task == null || source == null || source.info == null || r.intent == null) {
+            return;
+        }
+        if (result == START_DELIVERED_TO_TOP || result == START_TASK_TO_FRONT) {
+            return;
+        }
+        if (!r.intent.getBooleanExtra(KEY_SPLIT, false)) {
+            return;
+        }
+        // Only the main window may open an additional window in the parallel world.
+        if (mSupervisor.getMagicWindowType(source.info.packageName, source.info.name)
+                != MAGIC_MAIN_WINDOW) {
+            return;
+        }
+        // The split is implemented with TaskFragments, so both activities must already live in
+        // the same task. Launches that created a new task are ignored.
+        if (task != source.getTask() || task != r.getTask()) {
+            Slog.w(TAG, "parallel world: " + source + " and " + r
+                    + " are not in the same task, skip split");
+            return;
+        }
+        final ActivityRecord primary = source;
+        final ActivityRecord secondary = r;
+        final Intent secondaryIntent = r.intent;
+        final float splitRatio = mSplitRatio;
+        Slog.d(TAG, "parallel world: split " + task + " primary=" + primary
+                + " secondary=" + secondary);
+        mService.mH.post(() -> {
+            try {
+                triggerSplit(task, primary, secondary, secondaryIntent, splitRatio);
+            } catch (Exception e) {
+                Slog.e(TAG, "parallel world: triggerSplit error", e);
+            }
+        });
+    }
+
+    /**
+     * Parses the ratio config, e.g. {@code {"ratio":"4:5"}}. The returned value is the fraction
+     * of the task width that belongs to the additional (right) window.
+     */
+    private float parseRatio(String jsonString) {
+        if (TextUtils.isEmpty(jsonString)) {
+            return 0.5f;
+        }
+        try {
+            final JSONObject obj = new JSONObject(jsonString);
+            final String ratio = obj.optString("ratio");
+            if (TextUtils.isEmpty(ratio)) {
+                return 0.5f;
+            }
+            final String[] parts = ratio.split(":");
+            if (parts.length != 2) {
+                return 0.5f;
+            }
+            final int primary = Integer.parseInt(parts[0]);
+            final int secondary = Integer.parseInt(parts[1]);
+            if (primary <= 0 || secondary <= 0) {
+                return 0.5f;
+            }
+            return (float) secondary / (primary + secondary);
+        } catch (JSONException | NumberFormatException e) {
+            Slog.w(TAG, "parallel world: invalid ratio config " + jsonString, e);
+            return 0.5f;
+        }
+    }
+
+    private void triggerSplit(Task task, ActivityRecord primary, ActivityRecord target,
+            Intent secondaryIntent, float splitRatio) {
+        if (task == null || primary == null) {
+            return;
+        }
+        final SystemTaskFragmentOrganizer organizer = mService.mParallelVisionOrganizer;
+        if (organizer == null) {
+            Slog.e(TAG, "parallel world: SystemTaskFragmentOrganizer is null");
+            return;
+        }
+        organizer.startSplit(task, primary, target, secondaryIntent, splitRatio);
+    }
+    // fde end
 
     /**
      * Compute the logical UID based on which the package manager would filter
@@ -3545,6 +3686,9 @@ class ActivityStarter {
     }
 
     ActivityStarter setIntent(Intent intent) {
+        // fde start MAGIC WINDOW -> parallel world
+        mRequest.extraFDE = intent != null ? intent.getExtraFDE() : null;
+        // fde end
         mRequest.intent = intent;
         return this;
     }

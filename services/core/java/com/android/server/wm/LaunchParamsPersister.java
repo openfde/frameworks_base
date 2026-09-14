@@ -188,6 +188,13 @@ class LaunchParamsPersister {
 
     private boolean saveTaskToLaunchParam(
             Task task, DisplayContent display, PersistableLaunchParams params) {
+        // fde start MAGIC WINDOW -> parallel world
+        // Never persist the expanded bounds of a parallel world task, otherwise the app would be
+        // relaunched with the double width after the split is closed.
+        if (task.type == Task.IN_PARALLEL_WINDOW) {
+            return false;
+        }
+        // fde end
         final DisplayInfo info = new DisplayInfo();
         display.mDisplay.getDisplayInfo(info);
 

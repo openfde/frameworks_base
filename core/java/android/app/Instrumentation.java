@@ -50,6 +50,7 @@ import android.os.SystemProperties;
 import android.os.TestLooperManager;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.text.TextUtils;
 import android.ravenwood.annotation.RavenwoodIgnore;
 import android.ravenwood.annotation.RavenwoodKeep;
 import android.ravenwood.annotation.RavenwoodKeepPartialClass;
@@ -70,6 +71,7 @@ import android.view.Window;
 import android.view.WindowManagerGlobal;
 
 import com.android.internal.content.ReferrerIntent;
+import com.android.internal.util.CompatibleConfig;
 
 import java.io.File;
 import java.lang.annotation.Retention;
@@ -2014,6 +2016,7 @@ public class Instrumentation {
         try {
             intent.migrateExtraStreamToClipData(who);
             intent.prepareToLeaveProcess(who);
+            getMagicExtra(intent, who);
             int result = ActivityTaskManager.getService().startActivity(whoThread,
                     who.getOpPackageName(), who.getAttributionTag(), intent,
                     intent.resolveTypeIfNeeded(who.getContentResolver()), token,
@@ -2025,6 +2028,47 @@ public class Instrumentation {
         }
         return null;
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    /**
+     * If the target package is configured as a parallel world (magic window) package, attach the
+     * ratio config to the intent so that the system server can decide how to split the window.
+     *
+     * @param intent the intent that is about to be sent to the system server
+     * @param who    the context that starts the activity
+     * @return {@code true} if the intent was tagged
+     */
+    private boolean getMagicExtra(Intent intent, Context who) {
+        if (intent == null || intent.getComponent() == null
+                || intent.getComponent().getPackageName() == null) {
+            return false;
+        }
+        final String packageName = intent.getComponent().getPackageName();
+        final String result = CompatibleConfig.queryStringValueData(
+                who, "configMagicWindow", packageName);
+        if (!TextUtils.isEmpty(result)) {
+            Log.d(TAG, "parallel world: put extra config for " + packageName + ": " + result);
+            intent.setExtraFDE(result);
+            return true;
+        } else if( packageName.contains("com.jingdong.app.mall")
+                || packageName.contains("com.ss.android.article.news")
+                || packageName.contains("com.zhihu.android")
+                || packageName.contains("com.xingin.xhs")
+                || packageName.contains("com.sina.weibo")
+                || packageName.contains("com.moji.mjweather")
+                || packageName.contains("com.kuaishou.nebula")
+                || packageName.contains("ctrip.android.view")
+                || packageName.contains("com.Qunar")
+                || packageName.contains("com.tencent.mm")
+                || packageName.contains("com.lite.ceclanxin")
+            ){
+            Log.d(TAG, "parallel world: put extra config for " + packageName + ": " + "{\"ratio\":\"4:5\"}");
+            intent.setExtraFDE("{\"ratio\":\"4:5\"}");
+            return true;
+        }
+        return false;
+    }
+    // fde end
 
     /**
      * Like {@link #execStartActivity(Context, IBinder, IBinder, Activity, Intent, int, Bundle)},
@@ -2105,6 +2149,7 @@ public class Instrumentation {
             for (int i=0; i<intents.length; i++) {
                 intents[i].migrateExtraStreamToClipData(who);
                 intents[i].prepareToLeaveProcess(who);
+                getMagicExtra(intents[i], who);
                 resolvedTypes[i] = intents[i].resolveTypeIfNeeded(who.getContentResolver());
             }
             int result = ActivityTaskManager.getService().startActivities(whoThread,

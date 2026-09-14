@@ -9003,6 +9003,36 @@ final class ActivityRecord extends WindowToken {
         mTaskSupervisor.mStoppingActivities.remove(this);
     }
 
+    // fde start MAGIC WINDOW -> parallel world
+    /**
+     * Pauses this activity without starting another one, then resumes the focused top activity
+     * again. Used by the parallel world to force a lifecycle pause on the main window (e.g.
+     * WeChat needs it to refresh its focus state) while the additional window is active.
+     */
+    void pauseActivityLockedOnly() {
+        mAtmService.mH.postDelayed(PauseRunnable, 0);
+    }
+
+    private final Runnable PauseRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (app == null) {
+                return;
+            }
+            final PauseActivityItem item = new PauseActivityItem(token, finishing,
+                    false /* userLeaving */, false /* dontReport */, mAutoEnteringPip);
+            mAtmService.getLifecycleManager().scheduleTransactionItem(app.getThread(), item);
+            // Note: don't need to call pauseIfSleepingLocked() here, because the caller will
+            // only request resume if this activity is currently resumed, which implies we
+            // aren't sleeping.
+            removePauseTimeout();
+            setState(PAUSED, "pauseActivityLockedOnly");
+            mRootWindowContainer.resumeFocusedTasksTopActivities();
+            setState(RESUMED, "pauseActivityLockedOnly");
+        }
+    };
+    // fde end
+
     void resetCompatConfiguration() {
         // Reset the existing override configuration so it can be updated according to the latest
         // configuration.
