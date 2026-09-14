@@ -9019,18 +9019,14 @@ final class ActivityRecord extends WindowToken {
             if (app == null) {
                 return;
             }
-            try {
-                final PauseActivityItem item = new PauseActivityItem(token, finishing,
-                        false /* userLeaving */, false /* dontReport */, mAutoEnteringPip);
-                mAtmService.getLifecycleManager().scheduleTransactionItem(app.getThread(), item);
-                // Note: don't need to call pauseIfSleepingLocked() here, because the caller will
-                // only request resume if this activity is currently resumed, which implies we
-                // aren't sleeping.
-                removePauseTimeout();
-                setState(PAUSED, "pauseActivityLockedOnly");
-            } catch (RemoteException e) {
-                if (DEBUG_SWITCH) Slog.i(TAG_SWITCH, "pauseActivityLockedOnly failed", e);
-            }
+            final PauseActivityItem item = new PauseActivityItem(token, finishing,
+                    false /* userLeaving */, false /* dontReport */, mAutoEnteringPip);
+            mAtmService.getLifecycleManager().scheduleTransactionItem(app.getThread(), item);
+            // Note: don't need to call pauseIfSleepingLocked() here, because the caller will
+            // only request resume if this activity is currently resumed, which implies we
+            // aren't sleeping.
+            removePauseTimeout();
+            setState(PAUSED, "pauseActivityLockedOnly");
             mRootWindowContainer.resumeFocusedTasksTopActivities();
             setState(RESUMED, "pauseActivityLockedOnly");
         }
