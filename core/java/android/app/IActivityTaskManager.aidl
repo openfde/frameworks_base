@@ -167,6 +167,16 @@ interface IActivityTaskManager {
     ActivityTaskManager.RootTaskInfo getFocusedRootTaskInfo();
     Rect getTaskBounds(int taskId);
 
+    // fde start MAGIC WINDOW -> parallel world
+    /** Merges a parallel world task back to a single window. */
+    void exitParallelWorld(int taskId);
+    /** Finishes the activities of the additional (right) window of a parallel world task. */
+    void closeParallelWorldAdditionalWindow(int taskId);
+    /** Updates the pane ratio of a parallel world task, the value is the fraction of the right
+     * window. The ratio is only remembered when {@code persist} is set (drag finished). */
+    void setParallelWorldRatio(int taskId, float ratio, boolean persist);
+    // fde end
+
     /** Focuses the top task on a display if it isn't already focused. Used for Recents. */
     void focusTopTask(int displayId);
 

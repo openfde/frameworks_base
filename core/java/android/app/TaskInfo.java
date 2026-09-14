@@ -453,6 +453,32 @@ public class TaskInfo {
     @Nullable
     public Rect topActivityMainWindowFrame;
 
+    /**
+     * The FDE parallel world type of this task. One of
+     * {@code Task.NOT_MAGIC_WINDOW}, {@code Task.MAGIC_MAIN_WINDOW},
+     * {@code Task.MAGIC_ADDITIONAL_WINDOW} or {@code Task.IN_PARALLEL_WINDOW}.
+     *
+     * @hide
+     */
+    public int magicWindowType = 0;
+
+    /** @hide */
+    public static final int MAGIC_WINDOW_TYPE_NONE = 0;
+    /** @hide */
+    public static final int MAGIC_WINDOW_TYPE_MAIN = 1;
+    /** @hide */
+    public static final int MAGIC_WINDOW_TYPE_ADDITIONAL = 2;
+    /** @hide */
+    public static final int MAGIC_WINDOW_TYPE_IN_PARALLEL = 3;
+
+    /**
+     * The FDE parallel world pane ratio of this task: the fraction of the task width that belongs
+     * to the additional (right) window. {@code 0} when the task is not split.
+     *
+     * @hide
+     */
+    public float magicWindowRatio = 0f;
+
     TaskInfo() {
         // Do nothing
     }
@@ -537,6 +563,8 @@ public class TaskInfo {
                 : null;
         isAppBubble = other.isAppBubble;
         isInteractive = other.isInteractive;
+        magicWindowType = other.magicWindowType;
+        magicWindowRatio = other.magicWindowRatio;
     }
 
     /** @hide */
@@ -686,6 +714,8 @@ public class TaskInfo {
                 && appCompatTaskInfo.equalsForTaskOrganizer(that.appCompatTaskInfo)
                 && Objects.equals(topActivityMainWindowFrame, that.topActivityMainWindowFrame)
                 && isAppBubble == that.isAppBubble
+                && magicWindowType == that.magicWindowType
+                && magicWindowRatio == that.magicWindowRatio
                 && minWidth == that.minWidth && minHeight == that.minHeight;
     }
 
@@ -768,6 +798,8 @@ public class TaskInfo {
         topActivityMainWindowFrame = source.readTypedObject(Rect.CREATOR);
         isAppBubble = source.readBoolean();
         isInteractive = source.readBoolean();
+        magicWindowType = source.readInt();
+        magicWindowRatio = source.readFloat();
     }
 
     /**
@@ -830,6 +862,8 @@ public class TaskInfo {
         dest.writeTypedObject(topActivityMainWindowFrame, flags);
         dest.writeBoolean(isAppBubble);
         dest.writeBoolean(isInteractive);
+        dest.writeInt(magicWindowType);
+        dest.writeFloat(magicWindowRatio);
     }
 
     @Override
@@ -884,6 +918,8 @@ public class TaskInfo {
                 + " appCompatTaskInfo=" + appCompatTaskInfo
                 + " topActivityMainWindowFrame=" + topActivityMainWindowFrame
                 + " isAppBubble=" + isAppBubble
+                + " magicWindowType=" + magicWindowType
+                + " magicWindowRatio=" + magicWindowRatio
                 + "}";
     }
 }

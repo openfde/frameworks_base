@@ -369,6 +369,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     public static final String DUMP_RECENTS_SHORT_CMD = "r";
     public static final String DUMP_TOP_RESUMED_ACTIVITY = "top-resumed";
     public static final String DUMP_VISIBLE_ACTIVITIES = "visible";
+    // fde start MAGIC WINDOW -> parallel world
+    public static final String DUMP_PARALLEL_WORLD_CMD = "parallel";
+    // fde end
 
     /** This activity is not being relaunched, or being relaunched for a non-resize reason. */
     public static final int RELAUNCH_REASON_NONE = 0;
@@ -821,6 +824,11 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     TaskFragmentOrganizerController mTaskFragmentOrganizerController;
     ActionChain.Tracker mChainTracker;
 
+    // fde start MAGIC WINDOW -> parallel world
+    /** Organizer that implements the parallel world (magic window) split inside a task. */
+    public SystemTaskFragmentOrganizer mParallelVisionOrganizer;
+    // fde end
+
     @Nullable
     private BackgroundActivityStartCallback mBackgroundActivityStartCallback;
 
@@ -908,6 +916,15 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             mGrammaticalManagerInternal = LocalServices.getService(
                     GrammaticalInflectionManagerInternal.class);
             mPackageUpdateManager.onSystemReady();
+            // fde start MAGIC WINDOW -> parallel world
+            mH.post(() -> {
+                try {
+                    mParallelVisionOrganizer.register();
+                } catch (Exception e) {
+                    Slog.e(TAG, "parallel world: register organizer failed", e);
+                }
+            });
+            // fde end
         }
     }
 
@@ -1044,6 +1061,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         mKeyguardController = mTaskSupervisor.getKeyguardController();
         mPackageConfigPersister = new PackageConfigPersister(mTaskSupervisor.mPersisterQueue, this);
         mPackageUpdateManager = new PackageUpdateManager(this);
+        // fde start MAGIC WINDOW -> parallel world
+        mParallelVisionOrganizer = new SystemTaskFragmentOrganizer(this);
+        // fde end
     }
 
     public void onActivityManagerInternalAdded() {
@@ -3337,6 +3357,53 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         }
     }
 
+    // fde start MAGIC WINDOW -> parallel world
+    @Override
+    public void exitParallelWorld(int taskId) {
+        enforceTaskPermission("exitParallelWorld()");
+        final long ident = Binder.clearCallingIdentity();
+        try {
+            synchronized (mGlobalLock) {
+                if (mParallelVisionOrganizer != null) {
+                    mParallelVisionOrganizer.exitSplit(taskId);
+                }
+            }
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+    }
+
+    @Override
+    public void closeParallelWorldAdditionalWindow(int taskId) {
+        enforceTaskPermission("closeParallelWorldAdditionalWindow()");
+        final long ident = Binder.clearCallingIdentity();
+        try {
+            synchronized (mGlobalLock) {
+                if (mParallelVisionOrganizer != null) {
+                    mParallelVisionOrganizer.closeAdditionalWindow(taskId);
+                }
+            }
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+    }
+
+    @Override
+    public void setParallelWorldRatio(int taskId, float ratio, boolean persist) {
+        enforceTaskPermission("setParallelWorldRatio()");
+        final long ident = Binder.clearCallingIdentity();
+        try {
+            synchronized (mGlobalLock) {
+                if (mParallelVisionOrganizer != null) {
+                    mParallelVisionOrganizer.setSplitRatio(taskId, ratio, persist);
+                }
+            }
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+    }
+    // fde end
+
     @Override
     public void releaseSomeActivities(IApplicationThread appInt) {
         synchronized (mGlobalLock) {
@@ -4987,6 +5054,17 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             topRecord.dump(pw, "", true);
         }
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    void dumpParallelWorldLocked(PrintWriter pw) {
+        pw.println("ACTIVITY MANAGER PARALLEL WORLD (dumpsys activity parallel)");
+        ParallelWorldConfig.get().dump(pw, mContext);
+        if (mParallelVisionOrganizer != null) {
+            pw.println("Parallel world organizer:");
+            mParallelVisionOrganizer.dump(pw);
+        }
+    }
+    // fde end
 
     void dumpVisibleActivitiesLocked(PrintWriter pw, int displayIdFilter) {
         pw.println("ACTIVITY MANAGER VISIBLE ACTIVITIES (dumpsys activity visible)");
@@ -7761,6 +7839,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                     dumpTopResumedActivityLocked(pw);
                 } else if (DUMP_VISIBLE_ACTIVITIES.equals(cmd)) {
                     dumpVisibleActivitiesLocked(pw, displayIdFilter);
+                } else if (DUMP_PARALLEL_WORLD_CMD.equals(cmd)) {
+                    dumpParallelWorldLocked(pw);
                 }
             }
         }

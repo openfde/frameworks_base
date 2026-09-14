@@ -278,6 +278,19 @@ class Task extends TaskFragment {
     // Do not move the root task as a part of reparenting
     static final int REPARENT_LEAVE_ROOT_TASK_IN_PLACE = 2;
 
+    // fde start MAGIC WINDOW -> parallel world
+    /**
+     * The parallel world type of this task. {@link #NOT_MAGIC_WINDOW} for normal tasks,
+     * {@link #MAGIC_MAIN_WINDOW} for the main window of a parallel world app and
+     * {@link #IN_PARALLEL_WINDOW} when the task hosts both the main and the additional window.
+     */
+    public int type = NOT_MAGIC_WINDOW;
+    public static final int NOT_MAGIC_WINDOW = 0;
+    public static final int MAGIC_MAIN_WINDOW = 1;
+    public static final int MAGIC_ADDITIONAL_WINDOW = 2;
+    public static final int IN_PARALLEL_WINDOW = 3;
+    // fde end
+
     // The topmost Activity passed to convertToTranslucent(). When non-null it means we are
     // waiting for all Activities in mUndrawnActivitiesBelowTopTranslucent to be removed as they
     // are drawn. When the last member of mUndrawnActivitiesBelowTopTranslucent is removed the
@@ -3476,6 +3489,20 @@ class Task extends TaskFragment {
                 : stripExtras ? baseIntent.cloneFilter() : new Intent(baseIntent);
         info.baseIntent.setFlags(baseIntentFlags);
 
+        // fde start MAGIC WINDOW -> parallel world
+        int magicWindowType = type;
+        if (magicWindowType == IN_PARALLEL_WINDOW
+                && mAtmService.mParallelVisionOrganizer != null
+                && !mAtmService.mParallelVisionOrganizer.isSplitReady(mTaskId)) {
+            // The split is not fully set up yet (fragments not created or the task is still
+            // being expanded): do not expose it to the shell yet, otherwise the divider would
+            // be shown at the wrong position.
+            magicWindowType = NOT_MAGIC_WINDOW;
+        }
+        info.magicWindowType = magicWindowType;
+        info.magicWindowRatio = mAtmService.mParallelVisionOrganizer != null
+                ? mAtmService.mParallelVisionOrganizer.getSplitRatio(mTaskId) : 0f;
+        // fde end
         info.isRunning = top != null;
         info.topActivity = top != null ? top.mActivityComponent : null;
         info.origActivity = origActivity;

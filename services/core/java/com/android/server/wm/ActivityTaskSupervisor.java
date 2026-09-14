@@ -176,6 +176,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+
 // TODO: This class has become a dumping ground. Let's
 // - Move things relating to the hierarchy to RootWindowContainer
 // - Move things relating to activity life cycles to maybe a new class called ActivityLifeCycler
@@ -491,6 +492,9 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         mLaunchParamsController.registerDefaultModifiers(this);
 
         mBalController = new BackgroundActivityStartController(mService, this);
+        // fde start MAGIC WINDOW -> parallel world
+        ParallelWorldConfig.get().load(mService.mContext);
+        // fde end
     }
 
     void onSystemReady() {

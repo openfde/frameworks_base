@@ -128,7 +128,9 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Parcel;
+import android.os.Process;
 import android.os.RemoteException;
+import android.os.UserHandle;
 import android.util.AndroidRuntimeException;
 import android.util.ArrayMap;
 import android.util.ArraySet;
@@ -2992,8 +2994,17 @@ class WindowOrganizerController extends IWindowOrganizerController.Stub
         }
         // The ownerActivity has to belong to the same app as the target Task.
         final Task ownerTask = ownerActivity.getTask();
-        if (ownerTask.effectiveUid != ownerActivity.getUid()
-                || ownerTask.effectiveUid != caller.mUid) {
+        // fde start MAGIC WINDOW -> parallel world
+        // A system organizer (e.g. the parallel world organizer running in system_server) is
+        // allowed to create TaskFragments for a task that belongs to another app. The exemption
+        // is limited to the system process itself.
+        final boolean isSystemOrganizer = mTaskFragmentOrganizerController
+                .isSystemOrganizer(creationParams.getOrganizer().asBinder());
+        final boolean isSystemCaller = UserHandle.getAppId(caller.mUid) == Process.SYSTEM_UID;
+        if ((!isSystemOrganizer || !isSystemCaller)
+                && (ownerTask.effectiveUid != ownerActivity.getUid()
+                || ownerTask.effectiveUid != caller.mUid)) {
+            // fde end
             final Throwable exception =
                     new SecurityException("Not allowed to operate with the ownerToken while "
                             + "the root activity of the target task belong to the different app");

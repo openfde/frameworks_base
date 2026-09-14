@@ -86,6 +86,7 @@ import static com.android.server.wm.ActivityTaskSupervisor.DEFER_RESUME;
 import static com.android.server.wm.ActivityTaskSupervisor.ON_TOP;
 import static com.android.server.wm.LaunchParamsController.LaunchParamsModifier.PHASE_BOUNDS;
 import static com.android.server.wm.LaunchParamsController.LaunchParamsModifier.PHASE_DISPLAY;
+import static com.android.server.wm.Task.MAGIC_MAIN_WINDOW;
 import static com.android.server.wm.Task.REPARENT_MOVE_ROOT_TASK_TO_FRONT;
 import static com.android.server.wm.TaskFragment.EMBEDDING_ALLOWED;
 import static com.android.server.wm.TaskFragment.EMBEDDING_DISALLOWED_MIN_DIMENSION_VIOLATION;
@@ -215,6 +216,11 @@ class ActivityStarter {
     private int mLaunchMode;
     private boolean mLaunchTaskBehind;
     private int mLaunchFlags;
+
+    // fde start MAGIC WINDOW -> parallel world
+    /** The split ratio parsed from the FDE extra, {@code secondary / (primary + secondary)}. */
+    private float mSplitRatio;
+    // fde end
 
     private LaunchParams mLaunchParams = new LaunchParams();
 
@@ -1114,6 +1120,20 @@ class ActivityStarter {
         Task inTask = request.inTask;
         TaskFragment inTaskFragment = request.inTaskFragment;
 
+        // fde start MAGIC WINDOW -> parallel world
+        // The parallel world decision is made entirely in the system server: the ratio config of
+        // the target package decides whether the package takes part in the feature.
+        mSplitRatio = 0f;
+        if (aInfo != null && intent != null) {
+            mSplitRatio = ParallelWorldConfig.get().getSplitRatio(
+                    mService.mContext, aInfo.packageName);
+        }
+        if (mSplitRatio > 0f) {
+            Slog.d(TAG, "parallel world: " + aInfo.packageName + "/" + aInfo.name
+                    + " ratio=" + mSplitRatio);
+        }
+        // fde end
+
         int err = ActivityManager.START_SUCCESS;
         // Pull the optional Ephemeral Installer-only bundle out of the options early.
         final Bundle verificationBundle =
@@ -1742,8 +1762,75 @@ class ActivityStarter {
 
         if (ActivityManager.isStartResultSuccessful(result)) {
             mInterceptor.onActivityLaunched(targetTask.getTaskInfo(), r);
+            // fde start MAGIC WINDOW -> parallel world
+            try {
+                handleCustomSplitIfNeeded(mSourceRecord, r, targetTask, result);
+            } catch (Exception e) {
+                Slog.e(TAG, "parallel world: custom split failed", e);
+            }
+            // fde end
         }
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    /**
+     * Triggers the parallel world split when the started activity is an additional window
+     * activity of a configured package and the caller is the main window activity.
+     */
+    private void handleCustomSplitIfNeeded(ActivityRecord source, ActivityRecord r, Task task,
+            int result) {
+        if (r == null || task == null || source == null || source.info == null || r.intent == null) {
+            return;
+        }
+        if (result == START_DELIVERED_TO_TOP || result == START_TASK_TO_FRONT) {
+            return;
+        }
+        // The split is triggered only when the launched activity is an additional window of the
+        // same parallel world package.
+        if (!ParallelWorldConfig.get().isAdditionalWindow(r.packageName, r.info.name)) {
+            return;
+        }
+        // Only the main window may open an additional window in the parallel world.
+        if (ParallelWorldConfig.get().getMagicWindowType(source.info.packageName, source.info.name)
+                != MAGIC_MAIN_WINDOW) {
+            return;
+        }
+        // The split is implemented with TaskFragments, so both activities must already live in
+        // the same task. Launches that created a new task are ignored.
+        if (task != source.getTask() || task != r.getTask()) {
+            Slog.w(TAG, "parallel world: " + source + " and " + r
+                    + " are not in the same task, skip split");
+            return;
+        }
+        final ActivityRecord primary = source;
+        final ActivityRecord secondary = r;
+        final Intent secondaryIntent = r.intent;
+        final float splitRatio = mSplitRatio;
+        Slog.d(TAG, "parallel world: split " + task + " primary=" + primary
+                + " secondary=" + secondary);
+        mService.mH.post(() -> {
+            try {
+                triggerSplit(task, primary, secondary, secondaryIntent, splitRatio);
+            } catch (Exception e) {
+                Slog.e(TAG, "parallel world: triggerSplit error", e);
+            }
+        });
+    }
+
+    /** Asks the organizer to split {@code task} into the main and the additional window. */
+    private void triggerSplit(Task task, ActivityRecord primary, ActivityRecord target,
+            Intent secondaryIntent, float splitRatio) {
+        if (task == null || primary == null) {
+            return;
+        }
+        final SystemTaskFragmentOrganizer organizer = mService.mParallelVisionOrganizer;
+        if (organizer == null) {
+            Slog.e(TAG, "parallel world: SystemTaskFragmentOrganizer is null");
+            return;
+        }
+        organizer.startSplit(task, primary, target, secondaryIntent, splitRatio);
+    }
+    // fde end
 
     /**
      * Compute the logical UID based on which the package manager would filter
@@ -3376,6 +3463,16 @@ class ActivityStarter {
             if (candidateTf == null) {
                 candidateTf = findCandidateTaskFragment(task);
             }
+            // fde start MAGIC WINDOW -> parallel world
+            // In a parallel world task only additional window activities belong to the right
+            // fragment; excluded pages (login, dialogs, ...) open at task level so that they
+            // cover both panes instead of being squeezed into the right one.
+            if (candidateTf != null && task.type == Task.IN_PARALLEL_WINDOW
+                    && !ParallelWorldConfig.get().isAdditionalWindow(
+                            mStartActivity.packageName, mStartActivity.info.name)) {
+                candidateTf = null;
+            }
+            // fde end
             if (candidateTf != null && candidateTf.isEmbedded()
                     && canEmbedActivity(candidateTf, mStartActivity, task) == EMBEDDING_ALLOWED) {
                 // Use the embedded TaskFragment of the top activity as the new parent if the

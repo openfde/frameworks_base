@@ -527,6 +527,15 @@
     <!-- The height of the buttons in the layout menu. -->
     <dimen name="desktop_mode_layout_menu_button_height">52dp</dimen>
 
+    <!-- fde start MAGIC WINDOW -> parallel world -->
+    <!-- The width of the draggable divider surface, which is also its touchable width. It is
+         wider than the visual handle so that the divider is easy to grab with a mouse. -->
+    <dimen name="parallel_world_divider_width">24dp</dimen>
+    <!-- The visual handle of the draggable divider. -->
+    <dimen name="parallel_world_divider_handle_width">4dp</dimen>
+    <dimen name="parallel_world_divider_handle_height">48dp</dimen>
+    <!-- fde end -->
+
     <!-- The radius of the layout menu buttons. -->
     <dimen name="desktop_mode_layout_menu_buttons_radius">4dp</dimen>
 
