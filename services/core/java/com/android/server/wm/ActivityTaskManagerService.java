@@ -821,6 +821,11 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     TaskFragmentOrganizerController mTaskFragmentOrganizerController;
     ActionChain.Tracker mChainTracker;
 
+    // fde start MAGIC WINDOW -> parallel world
+    /** Organizer that implements the parallel world (magic window) split inside a task. */
+    public SystemTaskFragmentOrganizer mParallelVisionOrganizer;
+    // fde end
+
     @Nullable
     private BackgroundActivityStartCallback mBackgroundActivityStartCallback;
 
@@ -908,6 +913,15 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             mGrammaticalManagerInternal = LocalServices.getService(
                     GrammaticalInflectionManagerInternal.class);
             mPackageUpdateManager.onSystemReady();
+            // fde start MAGIC WINDOW -> parallel world
+            mH.post(() -> {
+                try {
+                    mParallelVisionOrganizer.registerOrganizer();
+                } catch (Exception e) {
+                    Slog.e(TAG, "parallel world: register organizer failed", e);
+                }
+            });
+            // fde end
         }
     }
 
@@ -1044,6 +1058,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         mKeyguardController = mTaskSupervisor.getKeyguardController();
         mPackageConfigPersister = new PackageConfigPersister(mTaskSupervisor.mPersisterQueue, this);
         mPackageUpdateManager = new PackageUpdateManager(this);
+        // fde start MAGIC WINDOW -> parallel world
+        mParallelVisionOrganizer = new SystemTaskFragmentOrganizer(this);
+        // fde end
     }
 
     public void onActivityManagerInternalAdded() {

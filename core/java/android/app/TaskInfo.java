@@ -453,6 +453,15 @@ public class TaskInfo {
     @Nullable
     public Rect topActivityMainWindowFrame;
 
+    /**
+     * The FDE parallel world type of this task. One of
+     * {@code Task.NOT_MAGIC_WINDOW}, {@code Task.MAGIC_MAIN_WINDOW},
+     * {@code Task.MAGIC_ADDITIONAL_WINDOW} or {@code Task.IN_PARALLEL_WINDOW}.
+     *
+     * @hide
+     */
+    public int magicWindowType = 0;
+
     TaskInfo() {
         // Do nothing
     }
@@ -537,6 +546,7 @@ public class TaskInfo {
                 : null;
         isAppBubble = other.isAppBubble;
         isInteractive = other.isInteractive;
+        magicWindowType = other.magicWindowType;
     }
 
     /** @hide */
@@ -686,6 +696,7 @@ public class TaskInfo {
                 && appCompatTaskInfo.equalsForTaskOrganizer(that.appCompatTaskInfo)
                 && Objects.equals(topActivityMainWindowFrame, that.topActivityMainWindowFrame)
                 && isAppBubble == that.isAppBubble
+                && magicWindowType == that.magicWindowType
                 && minWidth == that.minWidth && minHeight == that.minHeight;
     }
 
@@ -768,6 +779,7 @@ public class TaskInfo {
         topActivityMainWindowFrame = source.readTypedObject(Rect.CREATOR);
         isAppBubble = source.readBoolean();
         isInteractive = source.readBoolean();
+        magicWindowType = source.readInt();
     }
 
     /**
@@ -830,6 +842,7 @@ public class TaskInfo {
         dest.writeTypedObject(topActivityMainWindowFrame, flags);
         dest.writeBoolean(isAppBubble);
         dest.writeBoolean(isInteractive);
+        dest.writeInt(magicWindowType);
     }
 
     @Override
@@ -884,6 +897,7 @@ public class TaskInfo {
                 + " appCompatTaskInfo=" + appCompatTaskInfo
                 + " topActivityMainWindowFrame=" + topActivityMainWindowFrame
                 + " isAppBubble=" + isAppBubble
+                + " magicWindowType=" + magicWindowType
                 + "}";
     }
 }
