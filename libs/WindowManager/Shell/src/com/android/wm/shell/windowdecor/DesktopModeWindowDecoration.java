@@ -44,6 +44,8 @@ import static com.android.wm.shell.windowdecor.viewholder.AppHandleIdentifier.Ap
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityManager;
+import android.app.ActivityTaskManager;
+import android.app.TaskInfo;
 import android.app.WindowConfiguration.WindowingMode;
 import android.app.assist.AssistContent;
 import android.content.ComponentName;
@@ -59,6 +61,7 @@ import android.graphics.Rect;
 import android.graphics.Region;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.RemoteException;
 import android.os.Trace;
 import android.os.UserHandle;
 import android.util.Size;
@@ -195,6 +198,10 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
     private ManageWindowsViewContainer mManageWindowsMenu;
 
     private LayoutMenu mLayoutMenu;
+
+    // fde start MAGIC WINDOW -> parallel world
+    private ParallelWorldDividerController mParallelWorldDivider;
+    // fde end
 
     private OpenByDefaultDialog mOpenByDefaultDialog;
 
@@ -469,7 +476,54 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
         if (!applyTransactionOnDraw) {
             t.apply();
         }
+        // fde start MAGIC WINDOW -> parallel world
+        updateParallelWorldDivider(taskInfo);
+        // fde end
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    /** Shows, updates or hides the draggable divider between the two parallel world panes. */
+    private void updateParallelWorldDivider(ActivityManager.RunningTaskInfo taskInfo) {
+        final boolean isSplit =
+                taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL;
+        if (!isSplit) {
+            closeParallelWorldDivider();
+            return;
+        }
+        final SurfaceControl taskLeash = getLeash();
+        if (taskLeash == null) {
+            Log.w(TAG, "updateParallelWorldDivider: task leash is null");
+            return;
+        }
+        if (mParallelWorldDivider == null) {
+            Log.d(TAG, "updateParallelWorldDivider: creating divider for task="
+                    + taskInfo.taskId);
+            mParallelWorldDivider = new ParallelWorldDividerController(
+                    mDecorWindowContext,
+                    mDisplayController,
+                    mSurfaceControlTransactionSupplier,
+                    taskInfo,
+                    taskLeash,
+                    (taskId, ratio, persist) -> {
+                        try {
+                            ActivityTaskManager.getService()
+                                    .setParallelWorldRatio(taskId, ratio, persist);
+                        } catch (RemoteException e) {
+                            Log.e(TAG, "Failed to set parallel world ratio for task=" + taskId, e);
+                        }
+                    });
+        }
+        mParallelWorldDivider.update(taskInfo, getCaptionHeight(taskInfo.getWindowingMode()),
+                taskLeash);
+    }
+
+    private void closeParallelWorldDivider() {
+        if (mParallelWorldDivider != null) {
+            mParallelWorldDivider.close();
+            mParallelWorldDivider = null;
+        }
+    }
+    // fde end
 
     /**
      * Disables resizing for the given edge.
@@ -1928,6 +1982,9 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
     public void close() {
         mTaskResourceLoader.onWindowDecorClosed(mTaskInfo);
         closeDragResizeListener();
+        // fde start MAGIC WINDOW -> parallel world
+        closeParallelWorldDivider();
+        // fde end
         closeHandleMenu();
         closeManageWindowsMenu();
         mExclusionRegionListener.onExclusionRegionDismissed(mTaskInfo.taskId);

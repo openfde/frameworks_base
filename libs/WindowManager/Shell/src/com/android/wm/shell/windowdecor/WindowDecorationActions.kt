@@ -114,6 +114,14 @@ interface WindowDecorationActions {
     /** Opens the handle menu. */
     fun onOpenHandleMenu(taskId: Int)
 
+    // fde start MAGIC WINDOW -> parallel world
+    /** Merges the parallel world panes of the task back into a single window. */
+    fun onExitParallelWorld(taskId: Int) {}
+
+    /** Closes the additional (right) window of a parallel world task. */
+    fun onCloseParallelWorldAdditionalWindow(taskId: Int) {}
+    // fde end
+
     /**
      * Opens an arbitrary Intent.
      *

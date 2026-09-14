@@ -287,6 +287,9 @@
     <string name="app_icon_text">App Icon</string>
     <!-- Accessibility text for the handle fullscreen button [CHAR LIMIT=NONE] -->
     <string name="fullscreen_text">Fullscreen</string>
+    <!-- fde start MAGIC WINDOW -> parallel world [CHAR LIMIT=NONE] -->
+    <string name="parallel_world_education_text">Parallel World: the main page stays on the left and opened pages appear on the right.</string>
+    <!-- fde end -->
     <!-- Accessibility text for the handle desktop button [CHAR LIMIT=NONE] -->
     <string name="desktop_text">Desktop windowing</string>
     <!-- Accessibility text for the handle split screen button [CHAR LIMIT=NONE] -->

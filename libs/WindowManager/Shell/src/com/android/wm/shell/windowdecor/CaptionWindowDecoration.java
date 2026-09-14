@@ -29,6 +29,8 @@ import android.annotation.NonNull;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningTaskInfo;
+import android.app.ActivityTaskManager;
+import android.app.TaskInfo;
 import android.app.WindowConfiguration;
 import android.app.WindowConfiguration.WindowingMode;
 import android.content.Context;
@@ -41,6 +43,8 @@ import android.graphics.Rect;
 import android.graphics.Region;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
+import android.os.RemoteException;
+import android.util.Log;
 import android.util.Size;
 import android.view.Choreographer;
 import android.view.Display;
@@ -79,11 +83,16 @@ import java.util.function.BiFunction;
  * maximize button and close button.
  */
 public class CaptionWindowDecoration extends WindowDecoration<WindowDecorLinearLayout> {
+    private static final String TAG = "CaptionWindowDecoration";
     private final Handler mHandler;
     private final @ShellMainThread ShellExecutor mMainExecutor;
     private final Choreographer mChoreographer;
     private final SyncTransactionQueue mSyncQueue;
     private final DesktopConfig mDesktopConfig;
+
+    // fde start MAGIC WINDOW -> parallel world
+    private ParallelWorldDividerController mParallelWorldDivider;
+    // fde end
 
     private View.OnClickListener mOnCaptionButtonClickListener;
     private View.OnTouchListener mOnCaptionTouchListener;
@@ -215,7 +224,54 @@ public class CaptionWindowDecoration extends WindowDecoration<WindowDecorLinearL
         relayout(taskInfo, t, t, true /* applyStartTransactionOnDraw */,
                 shouldSetTaskVisibilityPositionAndCrop, hasGlobalFocus, displayExclusionRegion,
                 /* inSyncWithTransition= */ false);
+        // fde start MAGIC WINDOW -> parallel world
+        updateParallelWorldDivider(taskInfo);
+        // fde end
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    /** Shows, updates or hides the draggable divider between the two parallel world panes. */
+    private void updateParallelWorldDivider(RunningTaskInfo taskInfo) {
+        final boolean isSplit =
+                taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL;
+        if (!isSplit) {
+            closeParallelWorldDivider();
+            return;
+        }
+        final SurfaceControl taskLeash = getLeash();
+        if (taskLeash == null) {
+            Log.w(TAG, "updateParallelWorldDivider: task leash is null");
+            return;
+        }
+        if (mParallelWorldDivider == null) {
+            Log.d(TAG, "updateParallelWorldDivider: creating divider for task="
+                    + taskInfo.taskId);
+            mParallelWorldDivider = new ParallelWorldDividerController(
+                    mDecorWindowContext,
+                    mDisplayController,
+                    mSurfaceControlTransactionSupplier,
+                    taskInfo,
+                    taskLeash,
+                    (taskId, ratio, persist) -> {
+                        try {
+                            ActivityTaskManager.getService()
+                                    .setParallelWorldRatio(taskId, ratio, persist);
+                        } catch (RemoteException e) {
+                            Log.e(TAG, "Failed to set parallel world ratio for task=" + taskId, e);
+                        }
+                    });
+        }
+        mParallelWorldDivider.update(taskInfo, getCaptionHeight(taskInfo.getWindowingMode()),
+                taskLeash);
+    }
+
+    private void closeParallelWorldDivider() {
+        if (mParallelWorldDivider != null) {
+            mParallelWorldDivider.close();
+            mParallelWorldDivider = null;
+        }
+    }
+    // fde end
 
     @VisibleForTesting
     static void updateRelayoutParams(
@@ -469,6 +525,9 @@ public class CaptionWindowDecoration extends WindowDecoration<WindowDecorLinearL
     @Override
     public void close() {
         closeDragResizeListener();
+        // fde start MAGIC WINDOW -> parallel world
+        closeParallelWorldDivider();
+        // fde end
         super.close();
     }
 

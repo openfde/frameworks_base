@@ -17,6 +17,8 @@
 package com.android.wm.shell.windowdecor
 
 import android.app.ActivityManager.RunningTaskInfo
+import android.app.ActivityTaskManager
+import android.app.TaskInfo
 import android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN
 import android.app.compat.CompatChanges
 import android.content.Context
@@ -30,8 +32,10 @@ import android.graphics.Point
 import android.graphics.Rect
 import android.graphics.Region
 import android.os.Handler
+import android.os.RemoteException
 import android.os.Trace
 import android.os.UserHandle
+import android.util.Log
 import android.util.Size
 import android.view.Choreographer
 import android.view.InsetsSource.FLAG_FORCE_CONSUMING
@@ -106,6 +110,10 @@ import com.android.wm.shell.windowdecor.viewholder.FullscreenHeaderViewHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainCoroutineDispatcher
 import kotlinx.coroutines.launch
+
+// fde start MAGIC WINDOW -> parallel world
+private const val TAG = "DefaultWindowDecoration"
+// fde end
 
 /**
  * Default window decoration implementation that controls both the app handle and the app header
@@ -189,6 +197,9 @@ constructor(
     private var dragResizeListener: DragResizeInputListener? = null
     private var resizeVeil: ResizeVeil? = null
     private var openByDefaultFirstRunPrompt: OpenByDefaultFirstRunPrompt? = null
+    // fde start MAGIC WINDOW -> parallel world
+    private var parallelWorldDivider: ParallelWorldDividerController? = null
+    // fde end
     private val isOpenByDefaultFirstRunPromptActive
         get() = openByDefaultFirstRunPrompt != null
 
@@ -364,7 +375,50 @@ constructor(
         if (!applyTransactionOnDraw) {
             t.apply()
         }
+        // fde start MAGIC WINDOW -> parallel world
+        updateParallelWorldDivider(taskInfo)
+        // fde end
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    /** Shows, updates or hides the draggable divider between the two parallel world panes. */
+    private fun updateParallelWorldDivider(taskInfo: RunningTaskInfo) {
+        val isSplit = taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
+        if (!isSplit) {
+            closeParallelWorldDivider()
+            return
+        }
+        val leash = taskSurface
+        if (parallelWorldDivider == null) {
+            Log.d(TAG, "updateParallelWorldDivider: creating divider for task=${taskInfo.taskId}")
+            parallelWorldDivider = ParallelWorldDividerController(
+                context = decorWindowContext,
+                displayController = displayController,
+                transactionSupplier = { surfaceControlTransactionSupplier.invoke() },
+                initialTaskInfo = taskInfo,
+                parentLeash = leash,
+                onRatioChanged = { taskId, ratio, persist ->
+                    try {
+                        ActivityTaskManager.getService()
+                            .setParallelWorldRatio(taskId, ratio, persist)
+                    } catch (e: RemoteException) {
+                        Log.e(TAG, "Failed to set parallel world ratio for task=$taskId", e)
+                    }
+                },
+            )
+        }
+        parallelWorldDivider?.update(
+            taskInfo,
+            captionController?.getCaptionHeight() ?: 0,
+            leash,
+        )
+    }
+
+    private fun closeParallelWorldDivider() {
+        parallelWorldDivider?.close()
+        parallelWorldDivider = null
+    }
+    // fde end
 
     /** Updates all window decorations, including any existing caption. */
     fun relayout(
@@ -1052,6 +1106,9 @@ constructor(
         openByDefaultFirstRunPrompt?.dismiss()
         taskResourceLoader.onWindowDecorClosed(taskInfo)
         closeDragResizeListener()
+        // fde start MAGIC WINDOW -> parallel world
+        closeParallelWorldDivider()
+        // fde end
         disposeResizeVeil()
         exclusionRegionListener.onExclusionRegionDismissed(taskInfo.taskId)
         super.close()
