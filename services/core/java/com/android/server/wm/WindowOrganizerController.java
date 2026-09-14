@@ -2992,8 +2992,14 @@ class WindowOrganizerController extends IWindowOrganizerController.Stub
         }
         // The ownerActivity has to belong to the same app as the target Task.
         final Task ownerTask = ownerActivity.getTask();
-        if (ownerTask.effectiveUid != ownerActivity.getUid()
-                || ownerTask.effectiveUid != caller.mUid) {
+        // fde start MAGIC WINDOW -> parallel world
+        // A system organizer (e.g. the parallel world organizer running in system_server) is
+        // allowed to create TaskFragments for a task that belongs to another app.
+        final boolean isSystemOrganizer = mTaskFragmentOrganizerController
+                .isSystemOrganizer(creationParams.getOrganizer().asBinder());
+        if (!isSystemOrganizer && (ownerTask.effectiveUid != ownerActivity.getUid()
+                || ownerTask.effectiveUid != caller.mUid)) {
+            // fde end
             final Throwable exception =
                     new SecurityException("Not allowed to operate with the ownerToken while "
                             + "the root activity of the target task belong to the different app");

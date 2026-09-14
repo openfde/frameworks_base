@@ -8147,6 +8147,13 @@ public class Intent implements Parcelable, Cloneable {
     private String mLaunchToken;
     private Intent mOriginalIntent; // Used for the experimental "component alias" feature.
 
+    /**
+     * FDE parallel world: the magic window config (ratio JSON) of the target package.
+     * Set by {@code Instrumentation} before the intent leaves the caller process and read by
+     * {@code ActivityStarter} in the system server. Never exposed to apps.
+     */
+    private String mExtraFDE;
+
     // ---------------------------------------------------------------------
 
     private static final int COPY_MODE_ALL = 0;
@@ -8199,6 +8206,7 @@ public class Intent implements Parcelable, Cloneable {
             this.mExtendedFlags = o.mExtendedFlags;
             this.mContentUserHint = o.mContentUserHint;
             this.mLaunchToken = o.mLaunchToken;
+            this.mExtraFDE = o.mExtraFDE;
             if (o.mSourceBounds != null) {
                 this.mSourceBounds = new Rect(o.mSourceBounds);
             }
@@ -10252,6 +10260,26 @@ public class Intent implements Parcelable, Cloneable {
     public @Flags int getFlags() {
         return mFlags;
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    /**
+     * Set the FDE parallel world config of the target package. Only used between
+     * {@code Instrumentation} and the system server, do not use in application code.
+     * @hide
+     */
+    public void setExtraFDE(String extra) {
+        mExtraFDE = extra;
+    }
+
+    /**
+     * Get the FDE parallel world config of the target package, or {@code null} if it was not
+     * configured. Only used between {@code Instrumentation} and the system server.
+     * @hide
+     */
+    public String getExtraFDE() {
+        return mExtraFDE;
+    }
+    // fde end
 
     /**
      * Retrieve any extended flags associated with this intent.  You will
@@ -12944,6 +12972,7 @@ public class Intent implements Parcelable, Cloneable {
         }
         out.writeInt(mContentUserHint);
         out.writeBundle(mExtras);
+        out.writeString8(mExtraFDE);
 
         if (mOriginalIntent != null) {
             out.writeInt(1);
@@ -13027,6 +13056,7 @@ public class Intent implements Parcelable, Cloneable {
         }
         mContentUserHint = in.readInt();
         mExtras = in.readBundle();
+        mExtraFDE = in.readString8();
         if (in.readInt() != 0) {
             mOriginalIntent = new Intent(in);
         }
