@@ -2050,17 +2050,17 @@ public class Instrumentation {
             Log.d(TAG, "parallel world: put extra config for " + packageName + ": " + result);
             intent.setExtraFDE(result);
             return true;
-        } else if( TextUtils.contains("com.jingdong.app.mall")
-                || TextUtils.contains("com.ss.android.article.news")
-                || TextUtils.contains("com.zhihu.android")
-                || TextUtils.contains("com.xingin.xhs")
-                || TextUtils.contains("com.sina.weibo")
-                || TextUtils.contains("com.moji.mjweather")
-                || TextUtils.contains("com.kuaishou.nebula")
-                || TextUtils.contains("ctrip.android.view")
-                || TextUtils.contains("com.Qunar")
-                || TextUtils.contains("com.tencent.mm")
-                || TextUtils.contains("com.lite.ceclanxin")
+        } else if( packageName.contains("com.jingdong.app.mall")
+                || packageName.contains("com.ss.android.article.news")
+                || packageName.contains("com.zhihu.android")
+                || packageName.contains("com.xingin.xhs")
+                || packageName.contains("com.sina.weibo")
+                || packageName.contains("com.moji.mjweather")
+                || packageName.contains("com.kuaishou.nebula")
+                || packageName.contains("ctrip.android.view")
+                || packageName.contains("com.Qunar")
+                || packageName.contains("com.tencent.mm")
+                || packageName.contains("com.lite.ceclanxin")
             ){
             Log.d(TAG, "parallel world: put extra config for " + packageName + ": " + "{\"ratio\":\"4:5\"}");
             intent.setExtraFDE("{\"ratio\":\"4:5\"}");
