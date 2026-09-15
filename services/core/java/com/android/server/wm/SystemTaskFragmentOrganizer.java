@@ -117,7 +117,9 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
     }
 
     public void register() {
-        super.registerOrganizer();
+        // Register as a system organizer: the organizer runs in system_server and creates
+        // TaskFragments for tasks that belong to other apps (the parallel world split).
+        super.registerOrganizer(true /* isSystemOrganizer */);
     }
 
     /**
