@@ -2166,8 +2166,9 @@ public class DisplayDeviceConfig {
                 .config_screenBrightnessSettingDefaultFloat);
         if (def == INVALID_BRIGHTNESS_IN_CONFIG) {
             mBrightnessDefault = BrightnessSynchronizer.brightnessIntToFloat(
-                    mContext.getResources().getInteger(com.android.internal.R.integer
-                            .config_screenBrightnessSettingDefault));
+                    android.openfde.Light.getInstance(null).getBacklight()
+                    /*mContext.getResources().getInteger(com.android.internal.R.integer
+                            .config_screenBrightnessSettingDefault)*/);
         } else {
             mBrightnessDefault = def;
         }

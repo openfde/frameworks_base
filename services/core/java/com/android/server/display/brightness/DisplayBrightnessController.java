@@ -22,6 +22,7 @@ import android.annotation.Nullable;
 import android.content.Context;
 import android.hardware.SensorManager;
 import android.hardware.display.DisplayManagerInternal;
+import android.openfde.Light;
 import android.os.Handler;
 import android.os.HandlerExecutor;
 import android.os.PowerManager;
@@ -150,7 +151,9 @@ public final class DisplayBrightnessController {
         mBrightnessSetting = brightnessSetting;
         mPendingUnthrottledScreenBrightness = PowerManager.BRIGHTNESS_INVALID_FLOAT;
         mScreenBrightnessDefault = BrightnessUtils.clampAbsoluteBrightness(defaultScreenBrightness);
-        mCurrentScreenBrightness = getScreenBrightnessSetting();
+        mCurrentScreenBrightness = MathUtils.constrainedMap(PowerManager.BRIGHTNESS_MIN, PowerManager.BRIGHTNESS_MAX,
+            PowerManager.BRIGHTNESS_OFF + 1, PowerManager.BRIGHTNESS_ON, Light.getInstance(null).getBacklight())/*getScreenBrightnessSetting()*/;
+        setBrightness(mCurrentScreenBrightness);
         mCurrentUnthrottledBrightness = mCurrentScreenBrightness;
         mCurrentMaxBrightness = PowerManager.BRIGHTNESS_MAX;
         mCurrentMinBrightness = PowerManager.BRIGHTNESS_MIN;

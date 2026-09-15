@@ -187,7 +187,6 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.SystemServerLock;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.display.BrightnessSynchronizer;
-import com.android.internal.display.BrightnessUtils;
 import com.android.internal.foldables.FoldLockSettingAvailabilityProvider;
 import com.android.internal.os.BackgroundThread;
 import com.android.internal.util.ArrayUtils;
@@ -6115,8 +6114,10 @@ public final class DisplayManagerService extends SystemService {
                         return;
                     }
 
-                    // Convert from user-perception to power-linear scale
-                    float linearBrightness = BrightnessUtils.convertGammaToLinear(value / 100);
+                    // openfde: the percentage is the power-linear value directly, so that
+                    // a 50% slider maps to 50% of the allowed brightness range (and to
+                    // 1 + 254 * 0.5 = 128, i.e. 50%, at the LightsService boundary).
+                    float linearBrightness = MathUtils.constrain(value / 100f, 0f, 1f);
 
                     // Interpolate to the range [currentlyAllowedMin, currentlyAllowedMax]
                     brightnessFloat = MathUtils.lerp(info.brightnessMinimum, info.brightnessMaximum,
@@ -6165,11 +6166,8 @@ public final class DisplayManagerService extends SystemService {
                     float normalizedBrightness = MathUtils.norm(info.brightnessMinimum,
                             info.brightnessMaximum, brightnessFloat);
 
-                    // Convert from power-linear scale to user-perception
-                    float gammaBrightness = BrightnessUtils.convertLinearToGamma(
-                            normalizedBrightness);
-
-                    return gammaBrightness * 100;
+                    // openfde: the power-linear value is already the user facing percentage.
+                    return MathUtils.constrain(normalizedBrightness, 0f, 1f) * 100;
                 } else if (unit == BRIGHTNESS_UNIT_NITS) {
                     DisplayPowerController dpc = mDisplayPowerControllers.get(displayId);
                     if (dpc == null) {

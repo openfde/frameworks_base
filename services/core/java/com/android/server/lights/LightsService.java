@@ -86,6 +86,7 @@ public class LightsService extends SystemService {
 
     private Handler mH;
     private boolean mSupportsEffects = false;
+    private android.openfde.Light mLight = android.openfde.Light.getInstance(null);
 
     private final class LightsManagerBinderService extends ILightsManager.Stub
           implements IBinder.DeathRecipient {
@@ -784,6 +785,11 @@ public class LightsService extends SystemService {
                     lightState.flashOffMs = offMS;
                     lightState.brightnessMode = (byte) brightnessMode;
                     mVintfLights.get().setLightState(mHwLight.id, lightState);
+                    if (mHwLight.type == LightType.BACKLIGHT) {
+                        mLight.setBacklight(color & 0xff);
+                    } else {
+                        mVintfLights.get().setLightState(mHwLight.id, lightState);
+                    }
                 } else {
                     Slog.e(TAG, "Failed issuing setLightState, no ILights HAL service available");
                 }

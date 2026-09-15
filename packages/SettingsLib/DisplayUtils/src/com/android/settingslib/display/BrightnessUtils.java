@@ -18,34 +18,26 @@ package com.android.settingslib.display;
 
 import android.util.MathUtils;
 
-/** Utility methods for calculating the display brightness. */
+/**
+ * Utility methods for calculating the display brightness.
+ *
+ * openfde: the conversion between the slider space and the linear brightness is a plain linear
+ * mapping (upstream implements a Hybrid Log Gamma curve). The container mirrors the brightness of
+ * the host desktop, whose UI shows brightness as a linear percentage, so the slider percentage
+ * must be the brightness percentage: 0% -> min, 100% -> max (1..255 at the LightsService
+ * boundary). A slider at 50% therefore means 50% brightness.
+ */
 public class BrightnessUtils {
 
+    /** Range of the value used by the brightness sliders. */
     public static final int GAMMA_SPACE_MIN = 0;
     public static final int GAMMA_SPACE_MAX = 65535;
 
-    // Hybrid Log Gamma constant values
-    private static final float R = 0.5f;
-    private static final float A = 0.17883277f;
-    private static final float B = 0.28466892f;
-    private static final float C = 0.55991073f;
-
     /**
-     * A function for converting from the gamma space that the slider works in to the
-     * linear space that the setting works in.
+     * Converts the slider value into the linear brightness value.
      *
-     * The gamma space effectively provides us a way to make linear changes to the slider that
-     * result in linear changes in perception. If we made changes to the slider in the linear space
-     * then we'd see an approximately logarithmic change in perception (c.f. Fechner's Law).
-     *
-     * Internally, this implements the Hybrid Log Gamma electro-optical transfer function, which is
-     * a slight improvement to the typical gamma transfer function for displays whose max
-     * brightness exceeds the 120 nit reference point, but doesn't set a specific reference
-     * brightness like the PQ function does.
-     *
-     * Note that this transfer function is only valid if the display's backlight value is a linear
-     * control. If it's calibrated to be something non-linear, then a different transfer function
-     * should be used.
+     * The mapping is linear (see the class comment), so this is a plain interpolation between
+     * {@code min} and {@code max} driven by the slider position.
      *
      * @param val The slider value.
      * @param min The minimum acceptable value for the setting.
@@ -53,17 +45,12 @@ public class BrightnessUtils {
      * @return The corresponding setting value.
      */
     public static final int convertGammaToLinear(int val, int min, int max) {
-        final float normalizedVal = MathUtils.norm(GAMMA_SPACE_MIN, GAMMA_SPACE_MAX, val);
-        final float ret;
-        if (normalizedVal <= R) {
-            ret = MathUtils.sq(normalizedVal / R);
-        } else {
-            ret = MathUtils.exp((normalizedVal - C) / A) + B;
-        }
-
-        // HLG is normalized to the range [0, 12], so we need to re-normalize to the range [0, 1]
-        // in order to derive the correct setting value.
-        return Math.round(MathUtils.lerp(min, max, ret / 12));
+        // openfde: plain linear mapping, no HLG curve. The slider position is the
+        // brightness percentage, so 0..GAMMA_SPACE_MAX ends up as min..max and a
+        // 50% slider means 50% brightness (1..255 at the LightsService boundary).
+        final float normalizedVal =
+                MathUtils.constrain(MathUtils.norm(GAMMA_SPACE_MIN, GAMMA_SPACE_MAX, val), 0f, 1f);
+        return Math.round(MathUtils.lerp(min, max, normalizedVal));
     }
 
     /**
@@ -76,39 +63,16 @@ public class BrightnessUtils {
      * @return The corresponding setting value.
      */
     public static final float convertGammaToLinearFloat(int val, float min, float max) {
-        final float normalizedVal = MathUtils.norm(GAMMA_SPACE_MIN, GAMMA_SPACE_MAX, val);
-        final float ret;
-        if (normalizedVal <= R) {
-            ret = MathUtils.sq(normalizedVal / R);
-        } else {
-            ret = MathUtils.exp((normalizedVal - C) / A) + B;
-        }
-
-        // HLG is normalized to the range [0, 12], ensure that value is within that range,
-        // it shouldn't be out of bounds.
-        final float normalizedRet = MathUtils.constrain(ret, 0, 12);
-
-        // Re-normalize to the range [0, 1]
-        // in order to derive the correct setting value.
-        return MathUtils.lerp(min, max, normalizedRet / 12);
+        // openfde: plain linear mapping, no HLG curve (see convertGammaToLinear).
+        final float normalizedVal =
+                MathUtils.constrain(MathUtils.norm(GAMMA_SPACE_MIN, GAMMA_SPACE_MAX, val), 0f, 1f);
+        return MathUtils.lerp(min, max, normalizedVal);
     }
 
     /**
-     * A function for converting from the linear space that the setting works in to the
-     * gamma space that the slider works in.
+     * Converts the linear brightness value back into the slider value.
      *
-     * The gamma space effectively provides us a way to make linear changes to the slider that
-     * result in linear changes in perception. If we made changes to the slider in the linear space
-     * then we'd see an approximately logarithmic change in perception (c.f. Fechner's Law).
-     *
-     * Internally, this implements the Hybrid Log Gamma opto-electronic transfer function, which is
-     * a slight improvement to the typical gamma transfer function for displays whose max
-     * brightness exceeds the 120 nit reference point, but doesn't set a specific reference
-     * brightness like the PQ function does.
-     *
-     * Note that this transfer function is only valid if the display's backlight value is a linear
-     * control. If it's calibrated to be something non-linear, then a different transfer function
-     * should be used.
+     * Inverse of {@link #convertGammaToLinear}.
      *
      * @param val The brightness setting value.
      * @param min The minimum acceptable value for the setting.
@@ -128,15 +92,10 @@ public class BrightnessUtils {
      * @return The corresponding slider value
      */
     public static final int convertLinearToGammaFloat(float val, float min, float max) {
-        // For some reason, HLG normalizes to the range [0, 12] rather than [0, 1]
-        final float normalizedVal = MathUtils.norm(min, max, val) * 12;
-        final float ret;
-        if (normalizedVal <= 1f) {
-            ret = MathUtils.sqrt(normalizedVal) * R;
-        } else {
-            ret = A * MathUtils.log(normalizedVal - B) + C;
-        }
-
-        return Math.round(MathUtils.lerp(GAMMA_SPACE_MIN, GAMMA_SPACE_MAX, ret));
+        // openfde: inverse of the plain linear mapping above, so that the slider
+        // position always shows the brightness percentage.
+        final float normalizedVal =
+                MathUtils.constrain(MathUtils.norm(min, max, val), 0f, 1f);
+        return Math.round(MathUtils.lerp(GAMMA_SPACE_MIN, GAMMA_SPACE_MAX, normalizedVal));
     }
 }
