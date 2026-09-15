@@ -916,7 +916,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             // fde start MAGIC WINDOW -> parallel world
             mH.post(() -> {
                 try {
-                    mParallelVisionOrganizer.registerOrganizer();
+                    mParallelVisionOrganizer.register();
                 } catch (Exception e) {
                     Slog.e(TAG, "parallel world: register organizer failed", e);
                 }
