@@ -3490,16 +3490,29 @@ class Task extends TaskFragment {
         info.baseIntent.setFlags(baseIntentFlags);
 
         // fde start MAGIC WINDOW -> parallel world
+        final ParallelWorldConfig parallelWorldConfig = ParallelWorldConfig.get();
+        final boolean parallelWorldPackage = parallelWorldConfig.isEnabled()
+                && top != null && top.info != null;
         int magicWindowType = type;
-        if (magicWindowType == IN_PARALLEL_WINDOW
-                && mAtmService.mParallelVisionOrganizer != null
-                && !mAtmService.mParallelVisionOrganizer.isSplitReady(mTaskId)) {
-            // The split is not fully set up yet (fragments not created or the task is still
-            // being expanded): do not expose it to the shell yet, otherwise the divider would
-            // be shown at the wrong position.
-            magicWindowType = NOT_MAGIC_WINDOW;
+        if (magicWindowType == IN_PARALLEL_WINDOW) {
+            if (mAtmService.mParallelVisionOrganizer != null
+                    && !mAtmService.mParallelVisionOrganizer.isSplitReady(mTaskId)) {
+                // The split is not fully set up yet (fragments not created or the task is still
+                // being expanded): do not expose it to the shell yet, otherwise the divider would
+                // be shown at the wrong position.
+                magicWindowType = NOT_MAGIC_WINDOW;
+            }
+        } else {
+            // Not split: report the type of the top activity, so that the shell can offer the
+            // manual parallel world entry for the packages that take part in the feature.
+            magicWindowType = parallelWorldPackage
+                    ? parallelWorldConfig.getMagicWindowType(top.packageName, top.info.name)
+                    : NOT_MAGIC_WINDOW;
         }
         info.magicWindowType = magicWindowType;
+        info.magicWindowEnabled = parallelWorldPackage
+                && parallelWorldConfig.getUserMode(mAtmService.mContext, top.packageName)
+                        == ParallelWorldConfig.MODE_ON;
         info.magicWindowRatio = mAtmService.mParallelVisionOrganizer != null
                 ? mAtmService.mParallelVisionOrganizer.getSplitRatio(mTaskId) : 0f;
         // fde end

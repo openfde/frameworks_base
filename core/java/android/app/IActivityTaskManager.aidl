@@ -168,10 +168,15 @@ interface IActivityTaskManager {
     Rect getTaskBounds(int taskId);
 
     // fde start MAGIC WINDOW -> parallel world
-    /** Merges a parallel world task back to a single window. */
-    void exitParallelWorld(int taskId);
-    /** Finishes the activities of the additional (right) window of a parallel world task. */
-    void closeParallelWorldAdditionalWindow(int taskId);
+    /**
+     * Enters ({@code enabled=true}) or exits ({@code enabled=false}) the parallel world of the
+     * task: entering moves the activities of the task into the main (left) and the additional
+     * (right) window according to the config, exiting puts them all back into a single window.
+     * The choice is remembered for the package of the task.
+     *
+     * @return whether the request was accepted.
+     */
+    boolean setParallelWorldEnabled(int taskId, boolean enabled);
     /** Updates the pane ratio of a parallel world task, the value is the fraction of the right
      * window. The ratio is only remembered when {@code persist} is set (drag finished). */
     void setParallelWorldRatio(int taskId, float ratio, boolean persist);

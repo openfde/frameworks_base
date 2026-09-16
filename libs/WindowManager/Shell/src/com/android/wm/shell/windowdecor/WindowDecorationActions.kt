@@ -115,11 +115,13 @@ interface WindowDecorationActions {
     fun onOpenHandleMenu(taskId: Int)
 
     // fde start MAGIC WINDOW -> parallel world
-    /** Merges the parallel world panes of the task back into a single window. */
-    fun onExitParallelWorld(taskId: Int) {}
-
-    /** Closes the additional (right) window of a parallel world task. */
-    fun onCloseParallelWorldAdditionalWindow(taskId: Int) {}
+    /**
+     * Enters ([enabled] is {@code true}) or exits the parallel world of the task: entering moves
+     * the activities of the task into the main (left) and the additional (right) window according
+     * to the config, exiting puts them all back into a single window. The choice is remembered for
+     * the package of the task.
+     */
+    fun onSetParallelWorldEnabled(taskId: Int, enabled: Boolean) {}
     // fde end
 
     /**
