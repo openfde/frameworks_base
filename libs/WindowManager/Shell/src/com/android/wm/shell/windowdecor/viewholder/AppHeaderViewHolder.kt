@@ -772,14 +772,32 @@ class AppHeaderViewHolder(
     override fun onHandleMenuClosed() {}
 
     fun onMaximizeWindowHoverExit() {
+        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+        // Log.d("ParallelWorld", "onMaximizeWindowHoverExit")
         maximizeButtonView.cancelHoverAnimation()
     }
 
     fun onMaximizeWindowHoverEnter() {
+        // fde start MAGIC WINDOW -> parallel world
+        // The parallel world entry lives in the layout menu and the split moves the focus to the
+        // additional window, so the hover has to work for a task that is not the focused one:
+        // hover events only reach the window under the pointer, so the menu of a background window
+        // cannot be opened by accident.
+        // fde end
         if (FocusTransitionListener.isDisplayLocalIsFocusedMigrationEnabled()) {
-            if (!focusTransitionObserver.isFocusedOnDisplay(currentTaskInfo)) return
-        } else {
-            if (!currentTaskInfo.isFocused) return
+            if (!focusTransitionObserver.isFocusedOnDisplay(currentTaskInfo)) {
+                // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+                // Log.d("ParallelWorld", "onMaximizeWindowHoverEnter: display not focused, continue"
+                //         + " task=${currentTaskInfo.taskId}"
+                //         + " isFocused=${currentTaskInfo.isFocused}")
+            }
+        } else if (!currentTaskInfo.isFocused) {
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // Log.d("ParallelWorld", "onMaximizeWindowHoverEnter: task not focused, continue"
+            //         + " task=${currentTaskInfo.taskId}"
+            //         + " isVisible=${currentTaskInfo.isVisible}"
+            //         + " isVisibleRequested=${currentTaskInfo.isVisibleRequested}"
+            //         + " windowingMode=${currentTaskInfo.getWindowingMode()}")
         }
         maximizeButtonView.startHoverAnimation()
     }

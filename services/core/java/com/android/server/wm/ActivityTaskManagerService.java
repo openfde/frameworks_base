@@ -3359,33 +3359,19 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
 
     // fde start MAGIC WINDOW -> parallel world
     @Override
-    public void exitParallelWorld(int taskId) {
-        enforceTaskPermission("exitParallelWorld()");
+    public boolean setParallelWorldEnabled(int taskId, boolean enabled) {
+        enforceTaskPermission("setParallelWorldEnabled()");
         final long ident = Binder.clearCallingIdentity();
         try {
             synchronized (mGlobalLock) {
                 if (mParallelVisionOrganizer != null) {
-                    mParallelVisionOrganizer.exitSplit(taskId);
+                    return mParallelVisionOrganizer.setEnabled(taskId, enabled);
                 }
             }
         } finally {
             Binder.restoreCallingIdentity(ident);
         }
-    }
-
-    @Override
-    public void closeParallelWorldAdditionalWindow(int taskId) {
-        enforceTaskPermission("closeParallelWorldAdditionalWindow()");
-        final long ident = Binder.clearCallingIdentity();
-        try {
-            synchronized (mGlobalLock) {
-                if (mParallelVisionOrganizer != null) {
-                    mParallelVisionOrganizer.closeAdditionalWindow(taskId);
-                }
-            }
-        } finally {
-            Binder.restoreCallingIdentity(ident);
-        }
+        return false;
     }
 
     @Override

@@ -1779,19 +1779,25 @@ class ActivityStarter {
      */
     private void handleCustomSplitIfNeeded(ActivityRecord source, ActivityRecord r, Task task,
             int result) {
-        if (r == null || task == null || source == null || source.info == null || r.intent == null) {
+        if (r == null || task == null || source == null || source.info == null
+                || r.info == null || r.intent == null) {
             return;
         }
         if (result == START_DELIVERED_TO_TOP || result == START_TASK_TO_FRONT) {
             return;
         }
+        final ParallelWorldConfig config = ParallelWorldConfig.get();
         // The split is triggered only when the launched activity is an additional window of the
         // same parallel world package.
-        if (!ParallelWorldConfig.get().isAdditionalWindow(r.packageName, r.info.name)) {
+        if (!config.isAdditionalWindow(r.packageName, r.info.name)) {
+            return;
+        }
+        // The user switched the parallel world of the package off: never split automatically.
+        if (!config.isAutoSplitEnabled(mService.mContext, r.packageName)) {
             return;
         }
         // Only the main window may open an additional window in the parallel world.
-        if (ParallelWorldConfig.get().getMagicWindowType(source.info.packageName, source.info.name)
+        if (config.getMagicWindowType(source.info.packageName, source.info.name)
                 != MAGIC_MAIN_WINDOW) {
             return;
         }

@@ -22,6 +22,7 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.ColorInt
 import android.app.ActivityManager.RunningTaskInfo
+import android.app.TaskInfo
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Resources
@@ -29,6 +30,7 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
@@ -318,6 +320,12 @@ class LayoutMenu(
         private val snapContainer = requireViewById(R.id.layout_menu_snap_container) as View
         private val snapWindowText = requireViewById(R.id.layout_menu_snap_window_text) as TextView
         private val snapButtonsLayout = requireViewById(R.id.layout_menu_snap_menu_layout)
+        // fde start MAGIC WINDOW -> parallel world
+        private val parallelWorldContainer =
+            requireViewById(R.id.layout_menu_parallel_world_container) as View
+        private val parallelWorldButton =
+            requireViewById(R.id.layout_menu_parallel_world_button) as Button
+        // fde end
         private val windowingPillView =
             if (Flags.enableConsolidatedWindowOptions())
                 requireViewById(R.id.windowing_pill) as WindowingPillView
@@ -341,7 +349,11 @@ class LayoutMenu(
             }
 
         private val menuButtons =
-            listOf(snapLeftButton, snapRightButton, immersiveToggleButton,fullscreenToggleButton, sizeToggleButton)
+            listOf(snapLeftButton, snapRightButton, immersiveToggleButton,fullscreenToggleButton, sizeToggleButton,
+                // fde start MAGIC WINDOW -> parallel world
+                parallelWorldButton
+                // fde end
+            )
 
         private val decorThemeUtil = DecorThemeUtil(context)
 
@@ -395,6 +407,23 @@ class LayoutMenu(
                 immersiveFillPadding,
                 immersiveFillPadding,
             )
+
+        // fde start MAGIC WINDOW -> parallel world
+        private val parallelWorldFillPadding =
+            context.resources.getDimensionPixelSize(
+                R.dimen.parallel_world_button_fill_padding
+            )
+        private val parallelWorldPaneGap =
+            context.resources.getDimensionPixelSize(
+                R.dimen.parallel_world_button_pane_gap
+            )
+        private val parallelWorldButtonWidth =
+            context.resources.getDimensionPixelSize(R.dimen.parallel_world_button_width)
+        private val parallelWorldButtonHeight =
+            context.resources.getDimensionPixelSize(R.dimen.parallel_world_button_height)
+        private val parallelWorldText =
+            requireViewById(R.id.layout_menu_parallel_world_text) as TextView
+        // fde end
 
         private val hoverTempRect = Rect()
         private var menuAnimatorSet: AnimatorSet? = null
@@ -665,6 +694,13 @@ class LayoutMenu(
                 R.id.layout_menu_snap_left_button -> {
                     windowDecorationActions.onLeftSnap(taskInfo.taskId, lastInputMethod)
                 }
+                // fde start MAGIC WINDOW -> parallel world
+                R.id.layout_menu_parallel_world_button -> {
+                    windowDecorationActions.onSetParallelWorldEnabled(taskInfo.taskId,
+                        !(taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
+                            || taskInfo.magicWindowEnabled))
+                }
+                // fde end
             }
             onLayoutMenuClickedListener?.invoke()
         }
@@ -699,6 +735,21 @@ class LayoutMenu(
             // Snap options.
             snapWindowText.setTextColor(style.textColor)
             updateSplitSnapSelection(SnapToHalfSelection.NONE)
+
+            // fde start MAGIC WINDOW -> parallel world
+            // The parallel world entry is offered for the packages that take part in the feature.
+            // The toggle is on when the task is split or when the user switched the parallel world
+            // of the package on: the task may still be a single window without an additional page.
+            val parallelWorldType = taskInfo.magicWindowType
+            val isParallelWorldTask = parallelWorldType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
+            val isParallelWorldOn = isParallelWorldTask || taskInfo.magicWindowEnabled
+            parallelWorldContainer.isVisible = parallelWorldType != TaskInfo.MAGIC_WINDOW_TYPE_NONE
+            parallelWorldButton.isSelected = isParallelWorldOn
+            parallelWorldButton.background = style.parallelWorldOption.drawable
+            parallelWorldText.setText(
+                if (isParallelWorldOn) R.string.parallel_world_exit_text
+                else R.string.parallel_world_enter_text)
+            // fde end
 
             if (Flags.enableConsolidatedWindowOptions()) {
                 val isInSplitScreen = splitScreenController.isTaskInSplitScreen(taskInfo.taskId)
@@ -995,8 +1046,105 @@ class LayoutMenu(
                         inactiveBackgroundColor = menuBackgroundColor,
                         activeBackgroundColor = colorScheme.primary.toArgb().withAlpha(OPACITY_12),
                     ),
+                // fde start MAGIC WINDOW -> parallel world
+                parallelWorldOption =
+                    MenuStyle.ParallelWorldOption(
+                        drawable = createParallelWorldOptionDrawable(colorScheme),
+                    ),
+                // fde end
             )
         }
+
+        // fde start MAGIC WINDOW -> parallel world
+        /** Draws the parallel world toggle: two panes, the main (left) one is the smaller one. */
+        private fun createParallelWorldOptionDrawable(
+            colorScheme: ColorScheme,
+        ): StateListDrawable {
+            val activeColor = colorScheme.primary.toArgb()
+            val activeDrawable =
+                createParallelWorldButtonDrawable(
+                    backgroundColor = activeColor.withAlpha(OPACITY_12),
+                    iconColor = activeColor,
+                )
+            return StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_pressed), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_focused), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_selected), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_hovered), activeDrawable)
+                addState(
+                    StateSet.WILD_CARD,
+                    createParallelWorldButtonDrawable(
+                        backgroundColor = colorScheme.surfaceContainerLow.toArgb(),
+                        iconColor = colorScheme.outlineVariant.toArgb(),
+                    ),
+                )
+            }
+        }
+
+        private fun createParallelWorldButtonDrawable(
+            @ColorInt backgroundColor: Int,
+            @ColorInt iconColor: Int,
+        ): LayerDrawable {
+            val layers = mutableListOf<Drawable>()
+            layers.add(
+                ShapeDrawable().apply {
+                    shape =
+                        RoundRectShape(
+                            FloatArray(8) { outlineRadius.toFloat() },
+                            null /* inset */,
+                            null, /* innerRadii */
+                        )
+                    paint.color = backgroundColor
+                    paint.style = Paint.Style.FILL
+                }
+            )
+            layers.add(createParallelWorldIconDrawable(iconColor))
+            return LayerDrawable(layers.toTypedArray()).apply {
+                setLayerInset(
+                    numberOfLayers - 1,
+                    parallelWorldFillPadding,
+                    parallelWorldFillPadding,
+                    parallelWorldFillPadding,
+                    parallelWorldFillPadding,
+                )
+            }
+        }
+
+        private fun createParallelWorldIconDrawable(@ColorInt color: Int): Drawable {
+            val width =
+                (parallelWorldButtonWidth - 2 * parallelWorldFillPadding).toFloat()
+            val height =
+                (parallelWorldButtonHeight - 2 * parallelWorldFillPadding).toFloat()
+            // The panes share the space left by the gap with the default 4:5 ratio: the main
+            // (left) window is the smaller one.
+            val panesWidth = width - parallelWorldPaneGap
+            val leftPaneWidth = panesWidth * 4f / 9f
+            val radius = fillRadius.toFloat()
+            return ShapeDrawable().apply {
+                paint.color = color
+                paint.style = Paint.Style.FILL
+                shape =
+                    PathShape(
+                        Path().apply {
+                            addRoundRect(
+                                RectF(0f, 0f, leftPaneWidth, height),
+                                radius,
+                                radius,
+                                Path.Direction.CCW,
+                            )
+                            addRoundRect(
+                                RectF(leftPaneWidth + parallelWorldPaneGap, 0f, width, height),
+                                radius,
+                                radius,
+                                Path.Direction.CCW,
+                            )
+                        },
+                        width,
+                        height,
+                    )
+            }
+        }
+        // fde end
 
         /** Measure width of the root view of this menu. */
         fun measureWidth(): Int {
@@ -1360,12 +1508,19 @@ class LayoutMenu(
             val immersiveOption: ImmersiveOption,
             val fullscreenOption: FullscreenOption,
             val snapOptions: SnapOptions,
+            // fde start MAGIC WINDOW -> parallel world
+            val parallelWorldOption: ParallelWorldOption,
+            // fde end
         ) {
             data class MaximizeOption(val drawable: StateListDrawable)
 
             data class ImmersiveOption(val drawable: StateListDrawable)
 
             data class FullscreenOption(val drawable: StateListDrawable)
+
+            // fde start MAGIC WINDOW -> parallel world
+            data class ParallelWorldOption(val drawable: StateListDrawable)
+            // fde end
 
             data class SnapOptions(
                 @ColorInt val inactiveSnapSideColor: Int,

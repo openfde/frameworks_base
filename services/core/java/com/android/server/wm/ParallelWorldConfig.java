@@ -79,6 +79,14 @@ public final class ParallelWorldConfig {
     private static final String KEY_RATIO = "configMagicWindow";
     /** Settings.Global key prefix of the ratio adjusted by the user. */
     private static final String SETTING_RATIO_PREFIX = "parallel_world_ratio_";
+    /** Settings.Global key prefix of the mode chosen by the user for the package. */
+    private static final String SETTING_MODE_PREFIX = "parallel_world_mode_";
+    /** The user never switched the parallel world of the package: follow the config. */
+    public static final int MODE_UNSET = 0;
+    /** The user switched the parallel world on: the package always starts split. */
+    public static final int MODE_ON = 1;
+    /** The user switched the parallel world off: the package never splits. */
+    public static final int MODE_OFF = 2;
     private static final float MIN_SPLIT_RATIO = 0.2f;
     private static final float MAX_SPLIT_RATIO = 0.8f;
     private static final float DEFAULT_SPLIT_RATIO = 0.5f;
@@ -279,6 +287,33 @@ public final class ParallelWorldConfig {
                 SETTING_RATIO_PREFIX + packageName, clampRatio(ratio));
     }
 
+    /** The mode chosen by the user for the package, see {@link #MODE_UNSET} and friends. */
+    public int getUserMode(Context context, String packageName) {
+        if (context == null || TextUtils.isEmpty(packageName)) {
+            return MODE_UNSET;
+        }
+        return Settings.Global.getInt(context.getContentResolver(),
+                SETTING_MODE_PREFIX + packageName, MODE_UNSET);
+    }
+
+    /** Remembers the mode chosen by the user for the package. */
+    public void setUserMode(Context context, String packageName, int mode) {
+        if (context == null || TextUtils.isEmpty(packageName)) {
+            return;
+        }
+        Settings.Global.putInt(context.getContentResolver(),
+                SETTING_MODE_PREFIX + packageName, mode);
+    }
+
+    /**
+     * Whether the package takes part in the automatic split, i.e. whether opening an additional
+     * window activity from the main window splits the task. The user can switch the automatic
+     * split off with the parallel world entry of the window menu.
+     */
+    public boolean isAutoSplitEnabled(Context context, String packageName) {
+        return isEnabled() && getUserMode(context, packageName) != MODE_OFF;
+    }
+
     /** Parses {@code {"ratio":"4:5"}} into the fraction of the right window. */
     private static float parseRatio(String jsonString) {
         if (TextUtils.isEmpty(jsonString)) {
@@ -351,6 +386,7 @@ public final class ParallelWorldConfig {
                         + " main=" + config.mainActivities
                         + " exclude=" + config.excludedActivities
                         + " pauseLeft=" + config.pauseLeft
+                        + " mode=" + getUserMode(context, entry.getKey())
                         + " ratio=" + getSplitRatio(context, entry.getKey()));
             }
         }

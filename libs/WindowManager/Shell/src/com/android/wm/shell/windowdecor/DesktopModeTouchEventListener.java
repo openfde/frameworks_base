@@ -424,11 +424,18 @@ public class DesktopModeTouchEventListener
         mInputMethod = getInputMethod(ev);
         final WindowDecorationWrapper decoration = mWindowDecorationFinder.apply(mTaskId);
         if (decoration == null) {
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // if (ev.getAction() == ACTION_HOVER_ENTER && v.getId() == R.id.maximize_window) {
+            //     android.util.Log.d("ParallelWorld", "hover enter maximize: decoration is null");
+            // }
             return false;
         }
         final int id = v.getId();
         if (ev.getAction() == ACTION_HOVER_ENTER && id == R.id.maximize_window) {
             if (decoration.getLayoutMenuController() == null) return false;
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // android.util.Log.d("ParallelWorld", "hover enter maximize: menuActive="
+            //         + decoration.getLayoutMenuController().isLayoutMenuActive());
             decoration.getLayoutMenuController().setHeaderMaximizeButtonHovered(true);
             if (!decoration.getLayoutMenuController().isLayoutMenuActive()) {
                 decoration.getLayoutMenuController().onLayoutButtonHoverEnter();
@@ -437,6 +444,9 @@ public class DesktopModeTouchEventListener
         }
         if (ev.getAction() == ACTION_HOVER_EXIT && id == R.id.maximize_window) {
             if (decoration.getLayoutMenuController() == null) return false;
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // android.util.Log.d("ParallelWorld", "hover exit maximize: menuActive="
+            //         + decoration.getLayoutMenuController().isLayoutMenuActive());
             decoration.getLayoutMenuController().setHeaderMaximizeButtonHovered(false);
             decoration.getLayoutMenuController().onLayoutButtonHoverStateChanged();
             if (!decoration.getLayoutMenuController().isLayoutMenuActive()) {

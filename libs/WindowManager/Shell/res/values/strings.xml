@@ -288,6 +288,9 @@
     <!-- Accessibility text for the handle fullscreen button [CHAR LIMIT=NONE] -->
     <string name="fullscreen_text">Fullscreen</string>
     <!-- fde start MAGIC WINDOW -> parallel world [CHAR LIMIT=NONE] -->
+    <string name="parallel_world_text">Parallel World</string>
+    <string name="parallel_world_enter_text">Enter Parallel World</string>
+    <string name="parallel_world_exit_text">Exit Parallel World</string>
     <string name="parallel_world_education_text">Parallel World: the main page stays on the left and opened pages appear on the right.</string>
     <!-- fde end -->
     <!-- Accessibility text for the handle desktop button [CHAR LIMIT=NONE] -->
