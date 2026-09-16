@@ -2115,6 +2115,8 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
                 return true;
             }
             decoration.showResizeVeil(t, bounds);
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // Log.d("ParallelWorld", "resize animation start: task=" + taskId + " bounds=" + bounds);
             decoration.setAnimatingTaskResizeOrReposition(true);
             return true;
         }
@@ -2132,6 +2134,8 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
             final WindowDecorationWrapper decoration = mWindowDecorByTaskId.get(taskId);
             if (decoration == null) return;
             decoration.hideResizeVeil();
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // Log.d("ParallelWorld", "resize animation end: task=" + taskId);
             decoration.setAnimatingTaskResizeOrReposition(false);
             decoration.requestFocusMaximizeButton();
         }
@@ -2305,24 +2309,14 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
 
         // fde start MAGIC WINDOW -> parallel world
         @Override
-        public void onExitParallelWorld(int taskId) {
-            WdLog.logD(TAG, "Using DefaultWindowDecorationActions to exit parallel world task=%d",
-                    taskId);
+        public void onSetParallelWorldEnabled(int taskId, boolean enabled) {
+            WdLog.logD(TAG, "Using DefaultWindowDecorationActions to set parallel world of task=%d"
+                    + " to %b", taskId, enabled);
             try {
-                ActivityTaskManager.getService().exitParallelWorld(taskId);
+                ActivityTaskManager.getService().setParallelWorldEnabled(taskId, enabled);
             } catch (RemoteException e) {
-                Log.e(TAG, "Failed to exit parallel world for task=" + taskId, e);
-            }
-        }
-
-        @Override
-        public void onCloseParallelWorldAdditionalWindow(int taskId) {
-            WdLog.logD(TAG, "Using DefaultWindowDecorationActions to close the additional window"
-                    + " of task=%d", taskId);
-            try {
-                ActivityTaskManager.getService().closeParallelWorldAdditionalWindow(taskId);
-            } catch (RemoteException e) {
-                Log.e(TAG, "Failed to close the additional window of task=" + taskId, e);
+                Log.e(TAG, "Failed to set the parallel world of task=" + taskId + " to " + enabled,
+                        e);
             }
         }
         // fde end

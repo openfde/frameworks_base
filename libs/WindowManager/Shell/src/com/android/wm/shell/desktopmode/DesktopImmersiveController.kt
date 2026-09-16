@@ -18,6 +18,7 @@ package com.android.wm.shell.desktopmode
 import android.animation.RectEvaluator
 import android.animation.ValueAnimator
 import android.app.ActivityManager.RunningTaskInfo
+import android.app.TaskInfo
 import android.graphics.Rect
 import android.os.IBinder
 import android.view.SurfaceControl
@@ -124,9 +125,14 @@ class DesktopImmersiveController(
             return
         }
 
+        val exitBounds = getExitDestinationBounds(taskInfo)
+        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+        // android.util.Log.d("ParallelWorld", "moveTaskToNonImmersive: task=${taskInfo.taskId}"
+        //         + " reason=$reason magicWindowType=${taskInfo.magicWindowType}"
+        //         + " exitBounds=$exitBounds")
         val wct =
             WindowContainerTransaction().apply {
-                setBounds(taskInfo.token, getExitDestinationBounds(taskInfo))
+                setBounds(taskInfo.token, exitBounds)
             }
         logV("Moving task %d out of immersive mode, reason: %s", taskInfo.taskId, reason)
         val transition = transitions.startTransition(TRANSIT_CHANGE, wct, /* handler= */ this)
@@ -456,6 +462,14 @@ class DesktopImmersiveController(
         pendingImmersiveTransitions.firstOrNull { it.transition == transition }
 
     private fun getExitDestinationBounds(taskInfo: RunningTaskInfo): Rect {
+        // fde start MAGIC WINDOW -> parallel world
+        // A parallel world task owns its bounds: they hold the two panes. Restoring the bounds
+        // from before the immersive mode would contract the split and the task would be resized
+        // twice (once by the split, once here).
+        if (taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL) {
+            return Rect(taskInfo.configuration.windowConfiguration.bounds)
+        }
+        // fde end
         val displayLayout =
             displayController.getDisplayLayout(taskInfo.displayId)
                 ?: error("Expected non-null display layout for displayId: ${taskInfo.displayId}")

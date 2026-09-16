@@ -140,4 +140,40 @@
             android:singleLine="true"
             android:alpha="0"/>
     </LinearLayout>
+
+    <!-- fde start MAGIC WINDOW -> parallel world -->
+    <LinearLayout
+        android:id="@+id/layout_menu_parallel_world_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginHorizontal="4dp"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/layout_menu_parallel_world_button"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="@dimen/parallel_world_button_width"
+            android:layout_height="@dimen/parallel_world_button_height"
+            android:layout_marginBottom="4dp"
+            android:stateListAnimator="@null"
+            android:importantForAccessibility="yes"
+            android:contentDescription="@string/parallel_world_text"/>
+
+        <TextView
+            android:id="@+id/layout_menu_parallel_world_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:lineHeight="16sp"
+            android:gravity="center"
+            android:importantForAccessibility="no"
+            android:fontFamily="@*android:string/config_headlineFontFamilyMedium"
+            android:text="@string/parallel_world_enter_text"
+            android:textColor="@color/materialColorOnSurface"
+            android:singleLine="true"/>
+    </LinearLayout>
+    <!-- fde end -->
 </merge>
