@@ -42,6 +42,8 @@ class MaximizeButtonView(context: Context, attrs: AttributeSet) : FrameLayout(co
     lateinit var onHoverAnimationFinishedListener: () -> Unit
     private val hoverProgressAnimatorSet = AnimatorSet()
     var hoverDisabled = false
+    /** Whether the running hover animation was cancelled, see [cancelHoverAnimation]. */
+    private var hoverAnimationCancelled = false
 
     private lateinit var stubProgressBarContainer: ViewStub
     private val maximizeWindow: ImageButton
@@ -57,10 +59,15 @@ class MaximizeButtonView(context: Context, attrs: AttributeSet) : FrameLayout(co
     }
 
     fun startHoverAnimation() {
-        if (hoverDisabled) return
+        if (hoverDisabled) {
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // android.util.Log.d("ParallelWorld", "startHoverAnimation: hover is disabled")
+            return
+        }
         if (hoverProgressAnimatorSet.isRunning) {
             cancelHoverAnimation()
         }
+        hoverAnimationCancelled = false
 
         maximizeWindow.background.alpha = 0
 
@@ -77,7 +84,14 @@ class MaximizeButtonView(context: Context, attrs: AttributeSet) : FrameLayout(co
                     }
                     doOnEnd {
                         progressBar.visibility = View.INVISIBLE
-                        onHoverAnimationFinishedListener()
+                        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+                        // android.util.Log.d("ParallelWorld", "hover animation end"
+                        //         + " cancelled=$hoverAnimationCancelled")
+                        // The end callback is also invoked when the animation is cancelled, only
+                        // open the menu for a hover that ran to completion.
+                        if (!hoverAnimationCancelled) {
+                            onHoverAnimationFinishedListener()
+                        }
                     }
                 },
         )
@@ -85,7 +99,11 @@ class MaximizeButtonView(context: Context, attrs: AttributeSet) : FrameLayout(co
     }
 
     fun cancelHoverAnimation() {
-        hoverProgressAnimatorSet.childAnimations.forEach { it.removeAllListeners() }
+        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+        // android.util.Log.d("ParallelWorld", "cancelHoverAnimation")
+        // Keep the listeners attached: the animator set is reused by the next hover, only mark the
+        // current animation as cancelled so that its finished callback is not invoked.
+        hoverAnimationCancelled = true
         hoverProgressAnimatorSet.cancel()
         progressBar.visibility = View.INVISIBLE
     }

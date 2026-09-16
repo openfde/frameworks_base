@@ -52,6 +52,7 @@ import android.window.TaskFragmentTransaction;
 import android.window.WindowContainerTransaction;
 
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -216,11 +217,34 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
     /** Expands the task and creates the left/right fragments. */
     private void createSplit(int taskId, Task task, ActivityRecord primary,
             ActivityRecord secondary, Intent secondaryIntent, float ratio) {
+        final List<ActivityRecord> leftActivities = new ArrayList<>(1);
+        leftActivities.add(primary);
+        final List<ActivityRecord> rightActivities = new ArrayList<>(1);
+        if (secondary != null) {
+            rightActivities.add(secondary);
+        }
+        createSplit(taskId, task, leftActivities, rightActivities, secondaryIntent, ratio);
+    }
+
+    /**
+     * Expands the task and creates the left/right fragments with the given activities.
+     *
+     * @param leftActivities  activities of the main (left) window, bottom to top, never empty
+     * @param rightActivities activities of the additional (right) window, bottom to top
+     * @param secondaryIntent intent used to start the first activity of the right window when
+     *                        {@code rightActivities} is empty and the split comes from a launch
+     */
+    private void createSplit(int taskId, Task task, List<ActivityRecord> leftActivities,
+            List<ActivityRecord> rightActivities, Intent secondaryIntent, float ratio) {
+        final ActivityRecord primary = leftActivities.get(0);
         final Rect taskBounds = new Rect(task.getBounds());
         final int originalWidth = taskBounds.width();
         final int height = taskBounds.height();
         final int minPrimaryWidth = getMinWidth(primary, task);
-        final int minSecondaryWidth = secondary != null ? getMinWidth(secondary, task) : 0;
+        int minSecondaryWidth = 0;
+        for (ActivityRecord activity : rightActivities) {
+            minSecondaryWidth = Math.max(minSecondaryWidth, getMinWidth(activity, task));
+        }
 
         int leftWidth = Math.max(originalWidth, minPrimaryWidth);
         int rightWidth = Math.max(Math.round(leftWidth * ratio / (1 - ratio)), minSecondaryWidth);
@@ -241,10 +265,26 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         final float effectiveRatio = (float) rightWidth / expandedWidth;
         Slog.d(TAG, "createSplit: task=" + taskId + " bounds=" + taskBounds
                 + " left=" + leftWidth + " right=" + rightWidth
-                + " ratio=" + effectiveRatio);
+                + " ratio=" + effectiveRatio
+                + " leftActivities=" + leftActivities.size()
+                + " rightActivities=" + rightActivities.size());
 
         mSplitRatios.put(taskId, effectiveRatio);
         mTaskBounds.put(taskId, taskBounds);
+        // When a main window fragment is still registered (the split was merged before), pin it to
+        // the main window width before expanding the task: its relative bounds fill the task, so
+        // otherwise the main window would stretch over the whole expanded task and the expansion
+        // would be visible twice.
+        final IBinder existingLeftToken = mLeftFragments.get(taskId);
+        if (existingLeftToken != null && mFragmentInfos.get(existingLeftToken) != null) {
+            final WindowContainerTransaction pinWct = new WindowContainerTransaction();
+            resizeTaskFragment(pinWct, existingLeftToken, new Rect(0, 0, leftWidth, height));
+            if (!pinWct.isEmpty()) {
+                Slog.d(TAG, "createSplit: task=" + taskId + " pin the existing main fragment to "
+                        + leftWidth);
+                applyTransaction(pinWct, 0, false);
+            }
+        }
         // Expand the task first so that the fragments are created with their final bounds.
         final Rect newTaskBounds = new Rect(taskBounds.left, taskBounds.top,
                 taskBounds.left + expandedWidth, taskBounds.bottom);
@@ -266,7 +306,9 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
                             .setInitialRelativeBounds(leftBounds)
                             .build();
             wct.createTaskFragment(primaryParams);
-            wct.reparentActivityToTaskFragment(primaryTfToken, primary.token);
+            for (ActivityRecord activity : leftActivities) {
+                wct.reparentActivityToTaskFragment(primaryTfToken, activity.token);
+            }
 
             final TaskFragmentCreationParams secondaryParams =
                     new TaskFragmentCreationParams.Builder(getOrganizerToken(), secondaryTfToken,
@@ -275,9 +317,10 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
                             .setPairedPrimaryFragmentToken(primaryTfToken)
                             .build();
             wct.createTaskFragment(secondaryParams);
-            if (secondary != null) {
-                wct.reparentActivityToTaskFragment(secondaryTfToken, secondary.token);
-            } else if (secondaryIntent != null) {
+            for (ActivityRecord activity : rightActivities) {
+                wct.reparentActivityToTaskFragment(secondaryTfToken, activity.token);
+            }
+            if (rightActivities.isEmpty() && secondaryIntent != null) {
                 wct.startActivityInTaskFragment(secondaryTfToken, primary.token, secondaryIntent,
                         null);
             }
@@ -288,82 +331,152 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
 
             mLeftFragments.put(taskId, primaryTfToken);
             mRightFragments.put(taskId, secondaryTfToken);
-            if (secondary != null) {
-                mSplittingActivities.put(taskId, secondary);
+            if (!rightActivities.isEmpty()) {
+                mSplittingActivities.put(taskId, rightActivities.get(rightActivities.size() - 1));
             }
             applyTransaction(wct, TASK_FRAGMENT_TRANSIT_OPEN, false);
         });
     }
 
     /**
-     * Merges a parallel world task back into a single window: both TaskFragments are deleted (the
-     * activities are reparented to the task by the framework) and the task is shrunk back to the
-     * main window width.
+     * Merges the parallel world back into a single window: the activities of the additional
+     * window are moved into the main window fragment, the (now empty) additional fragment is
+     * removed by the framework and the task shrinks back to the main window width.
+     *
+     * <p>A TaskFragment must never be deleted while it still has activities: the framework
+     * finishes them in that case, so the activities are reparented first.
      */
     void exitSplit(int taskId) {
-        final Task task = mAtmService.mRootWindowContainer.anyTaskForId(taskId);
         final IBinder leftToken = mLeftFragments.get(taskId);
         final IBinder rightToken = mRightFragments.get(taskId);
-        if (task == null || (leftToken == null && rightToken == null)) {
+        final TaskFragmentInfo rightInfo = mFragmentInfos.get(rightToken);
+        if (leftToken == null || rightToken == null || rightInfo == null) {
+            // Already a single window.
+            Slog.d(TAG, "exitSplit: task=" + taskId + " is not split");
             return;
         }
-        Slog.d(TAG, "exitSplit: task=" + taskId);
-        final Rect taskBounds = mTaskBounds.get(taskId);
-        final Float ratio = mSplitRatios.get(taskId);
-        // Clear the state first so that the vanish callbacks do not trigger the "finish the
-        // additional window" path.
-        clearTaskState(taskId);
-        task.type = Task.NOT_MAGIC_WINDOW;
-
-        final WindowContainerTransaction wct = new WindowContainerTransaction();
-        if (rightToken != null) {
-            wct.deleteTaskFragment(rightToken);
+        final List<IBinder> activities = rightInfo.getActivities();
+        if (activities == null || activities.isEmpty()) {
+            // The additional window is already empty: the framework removes it and the task
+            // contracts through the vanish callback.
+            Slog.d(TAG, "exitSplit: task=" + taskId + " additional window is empty");
+            return;
         }
-        if (leftToken != null) {
-            wct.deleteTaskFragment(leftToken);
+        Slog.d(TAG, "exitSplit: task=" + taskId + " merge " + activities.size()
+                + " activities into the main window");
+        final WindowContainerTransaction wct = new WindowContainerTransaction();
+        for (IBinder activityToken : activities) {
+            wct.reparentActivityToTaskFragment(leftToken, activityToken);
         }
         applyTransaction(wct, TASK_FRAGMENT_TRANSIT_CLOSE, false);
-
-        // Shrink the task back to the main window width once the fragments are removed.
-        mAtmService.mH.post(() -> {
-            final Task t = mAtmService.mRootWindowContainer.anyTaskForId(taskId);
-            if (t == null) {
-                return;
-            }
-            final Rect bounds = taskBounds != null ? taskBounds : new Rect(t.getBounds());
-            final float splitRatio = ratio != null ? ratio : DEFAULT_SPLIT_RATIO;
-            final Rect newTaskBounds = new Rect(bounds.left, bounds.top,
-                    bounds.left + Math.round(bounds.width() * (1 - splitRatio)), bounds.bottom);
-            Slog.d(TAG, "exitSplit: contract task=" + taskId + " bounds=" + newTaskBounds);
-            mAtmService.resizeTask(taskId, newTaskBounds, 0);
-        });
     }
 
-    /** Finishes the activities of the additional (right) window; the task contracts afterwards. */
-    void closeAdditionalWindow(int taskId) {
+    /**
+     * Enters the parallel world of the task on user request: the activities of the task are moved
+     * into the main (left) and the additional (right) window according to the config, and the task
+     * is expanded exactly like the automatic split does.
+     *
+     * <p>Activities that are not additional windows (excluded pages, pages of other applications)
+     * stay in the main window. When the task has no additional window page yet, nothing is split:
+     * the request is remembered by the caller and the automatic split takes over as soon as an
+     * additional page is opened.
+     *
+     * @return whether the request was accepted.
+     */
+    boolean enterSplit(int taskId) {
         final Task task = mAtmService.mRootWindowContainer.anyTaskForId(taskId);
-        final IBinder rightToken = mRightFragments.get(taskId);
-        if (task == null || rightToken == null) {
-            return;
+        if (task == null) {
+            return false;
         }
-        final TaskFragmentInfo rightInfo = mFragmentInfos.get(rightToken);
-        final WindowContainerTransaction wct = new WindowContainerTransaction();
-        boolean hasActivities = false;
-        if (rightInfo != null && rightInfo.getActivities() != null) {
-            for (IBinder activityToken : rightInfo.getActivities()) {
-                wct.finishActivity(activityToken);
-                hasActivities = true;
-            }
+        if (task.type == Task.IN_PARALLEL_WINDOW || mRightFragments.get(taskId) != null) {
+            // Already in the parallel world, nothing to do.
+            return true;
         }
-        if (!hasActivities) {
-            final ActivityRecord secondary = mSplittingActivities.get(taskId);
-            if (secondary == null) {
+        if (task.inPinnedWindowingMode()) {
+            Slog.w(TAG, "enterSplit: the task is in picture-in-picture");
+            return false;
+        }
+        final ParallelWorldConfig config = ParallelWorldConfig.get();
+        if (!config.isEnabled()) {
+            Slog.w(TAG, "enterSplit: the feature is disabled");
+            return false;
+        }
+        final List<ActivityRecord> leftActivities = new ArrayList<>();
+        final List<ActivityRecord> rightActivities = new ArrayList<>();
+        task.forAllActivities(activity -> {
+            if (activity.finishing || activity.info == null) {
                 return;
             }
-            wct.finishActivity(secondary.token);
+            if (config.isAdditionalWindow(activity.packageName, activity.info.name)) {
+                rightActivities.add(activity);
+            } else {
+                leftActivities.add(activity);
+            }
+        }, false /* traverseTopToBottom */);
+        if (leftActivities.isEmpty()) {
+            Slog.w(TAG, "enterSplit: no main window activity in task " + taskId);
+            return false;
         }
-        Slog.d(TAG, "closeAdditionalWindow: task=" + taskId);
-        applyTransaction(wct, TASK_FRAGMENT_TRANSIT_CLOSE, false);
+        final String packageName = leftActivities.get(0).packageName;
+        final float ratio = config.getSplitRatio(mAtmService.mContext, packageName);
+        if (ratio <= 0f) {
+            Slog.w(TAG, "enterSplit: " + packageName + " is not a parallel world package");
+            return false;
+        }
+        if (rightActivities.isEmpty()) {
+            // There is no additional window page yet: keep the task in a single window and let
+            // the automatic split take over as soon as an additional page is opened.
+            Slog.d(TAG, "enterSplit: task=" + taskId + " package=" + packageName
+                    + " has no additional window yet, armed");
+            return true;
+        }
+        Slog.d(TAG, "enterSplit: task=" + taskId + " package=" + packageName
+                + " left=" + leftActivities.size() + " right=" + rightActivities.size());
+        final long origId = Binder.clearCallingIdentity();
+        try {
+            // Mark the task before resizing it, so that the expanded bounds are never persisted
+            // as the launch params of the app.
+            task.type = Task.IN_PARALLEL_WINDOW;
+            createSplit(taskId, task, leftActivities, rightActivities, null /* secondaryIntent */,
+                    ratio);
+        } finally {
+            Binder.restoreCallingIdentity(origId);
+        }
+        return true;
+    }
+
+    /**
+     * Enters or exits the parallel world of the task on user request and remembers the choice for
+     * the package of the task, so that a package the user switched on always starts split and a
+     * package the user switched off never splits automatically.
+     *
+     * @return whether the request was accepted.
+     */
+    boolean setEnabled(int taskId, boolean enabled) {
+        final Task task = mAtmService.mRootWindowContainer.anyTaskForId(taskId);
+        if (task == null) {
+            return false;
+        }
+        final String packageName = getTaskPackage(task);
+        if (enabled) {
+            if (!enterSplit(taskId)) {
+                return false;
+            }
+            if (packageName != null) {
+                ParallelWorldConfig.get().setUserMode(mAtmService.mContext, packageName,
+                        ParallelWorldConfig.MODE_ON);
+            }
+        } else {
+            exitSplit(taskId);
+            if (packageName != null) {
+                ParallelWorldConfig.get().setUserMode(mAtmService.mContext, packageName,
+                        ParallelWorldConfig.MODE_OFF);
+            }
+        }
+        // The mode is not part of the split state, refresh the task info so that the shell can
+        // update the parallel world toggle (the task may still be a single window).
+        task.dispatchTaskInfoChangedIfNeeded(true /* force */);
+        return true;
     }
 
     /** Moves the split point of an existing split; remembers the user preference when persisted. */

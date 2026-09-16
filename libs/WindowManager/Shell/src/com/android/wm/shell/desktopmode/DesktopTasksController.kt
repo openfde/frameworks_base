@@ -7280,6 +7280,9 @@ class DesktopTasksController(
                     " breaking out of desktop-immersive mode",
                 taskInfo.taskId,
             )
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // Log.d("ParallelWorld", "onTaskInfoChanged: task=${taskInfo.taskId}"
+            //         + " exit immersive, magicWindowType=${taskInfo.magicWindowType}")
             // Exit immersive if the app is no longer requesting it.
             desktopImmersiveController.moveTaskToNonImmersive(
                 taskInfo,

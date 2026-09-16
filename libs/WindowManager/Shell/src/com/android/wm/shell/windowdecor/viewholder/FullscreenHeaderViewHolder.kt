@@ -23,6 +23,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.View.OnLongClickListener
@@ -518,14 +519,31 @@ class FullscreenHeaderViewHolder(
     override fun onHandleMenuClosed() {}
 
     fun onExitFullscreenWindowHoverExit() {
+        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+        // Log.d("ParallelWorld", "onExitFullscreenWindowHoverExit")
         exitFullscreenButtonView.cancelHoverAnimation()
     }
 
     fun onExitFullscreenWindowHoverEnter() {
+        // fde start MAGIC WINDOW -> parallel world
+        // The parallel world entry lives in the layout menu and the split moves the focus to the
+        // additional window, so the hover has to work for a task that is not the focused one:
+        // hover events only reach the window under the pointer, so the menu of a background window
+        // cannot be opened by accident.
+        // fde end
         if (FocusTransitionListener.isDisplayLocalIsFocusedMigrationEnabled()) {
-            if (!focusTransitionObserver.isFocusedOnDisplay(currentTaskInfo)) return
-        } else {
-            if (!currentTaskInfo.isFocused) return
+            if (!focusTransitionObserver.isFocusedOnDisplay(currentTaskInfo)) {
+                // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+                // Log.d("ParallelWorld", "onExitFullscreenWindowHoverEnter: display not focused,"
+                //         + " continue task=${currentTaskInfo.taskId}"
+                //         + " isFocused=${currentTaskInfo.isFocused}")
+            }
+        } else if (!currentTaskInfo.isFocused) {
+            // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+            // Log.d("ParallelWorld", "onExitFullscreenWindowHoverEnter: task not focused, continue"
+            //         + " task=${currentTaskInfo.taskId}"
+            //         + " isVisible=${currentTaskInfo.isVisible}"
+            //         + " isVisibleRequested=${currentTaskInfo.isVisibleRequested}")
         }
         exitFullscreenButtonView.startHoverAnimation()
     }

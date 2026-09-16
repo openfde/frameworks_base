@@ -203,13 +203,17 @@ class AppHeaderController(
                 isTaskFocused = taskInfo.isFocused
             }
 
-            // If we get a relayout call while hovering over maximize button in the app header but
-            // the task has lost focus, explicitly cancel the hover (since we don't get a HOVER_EXIT
-            // signal in this case).
-            if (!isTaskFocused && isAppHeaderMaximizeButtonHovered) {
+            // fde start MAGIC WINDOW -> parallel world
+            // Only cancel the hover when the task is gone. It must not be cancelled just because
+            // the task is not the focused one: the hover may legitimately happen on an unfocused
+            // window (see AppHeaderViewHolder#onMaximizeWindowHoverEnter) and cancelling it here
+            // would prevent the layout menu from ever opening again.
+            if (!isTaskFocused && isAppHeaderMaximizeButtonHovered
+                    && !taskInfo.isVisible && !taskInfo.isVisibleRequested) {
                 setHeaderMaximizeButtonHovered(hovered = false)
                 onLayoutButtonHoverExit()
             }
+            // fde end
 
             if (hasGlobalFocus && !params.hasGlobalFocus) {
                 closeHandleMenu()
@@ -337,6 +341,8 @@ class AppHeaderController(
 
     /** Create and display layout menu window */
     override fun createLayoutMenu() {
+        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+        // Log.d("ParallelWorld", "createLayoutMenu: menuActive=$isLayoutMenuActive")
         if (isLayoutMenuActive) return
         desktopModeUiEventLogger.log(
             taskInfo,
@@ -397,6 +403,8 @@ class AppHeaderController(
 
     /** Close the layout menu window if open. */
     override fun closeLayoutMenu() {
+        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+        // Log.d("ParallelWorld", "closeLayoutMenu: menuActive=$isLayoutMenuActive")
         layoutMenu?.close {
             // Request the accessibility service to refocus on the maximize button after closing
             // the menu.
@@ -432,7 +440,15 @@ class AppHeaderController(
 
     private fun canOpenLayoutMenu(animatingTaskResizeOrReposition: Boolean): Boolean {
         val inImmersiveAndRequesting = inFullImmersive && taskInfo.requestingImmersive
-        return !animatingTaskResizeOrReposition && !inImmersiveAndRequesting
+        val canOpen = !animatingTaskResizeOrReposition && !inImmersiveAndRequesting
+        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+        // if (!canOpen) {
+        //     Log.d("ParallelWorld", "canOpenLayoutMenu=false animating=$animatingTaskResizeOrReposition"
+        //             + " inFullImmersive=$inFullImmersive"
+        //             + " requestingImmersive=${taskInfo.requestingImmersive}"
+        //             + " task=${taskInfo.taskId}")
+        // }
+        return canOpen
     }
 
     /**
@@ -610,6 +626,9 @@ class AppHeaderController(
         }
 
     override fun onAnimatingTaskRepositioningOrResize(animatingTaskResizeOrReposition: Boolean) {
+        // TODO(parallel world): debug log, uncomment to debug the layout menu hover.
+        // Log.d("ParallelWorld", "onAnimatingTaskRepositioningOrResize="
+        //         + animatingTaskResizeOrReposition)
         updateViewHolder(hasGlobalFocus, animatingTaskResizeOrReposition)
     }
 
