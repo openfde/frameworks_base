@@ -41,15 +41,21 @@
         android:visibility="gone"
         />
 
+    <!-- region @openfde -->
+    <!-- Keep the stock status bar contents invisible by default: the BoringdroidSystemUI
+         overlay plugin replaces them with its own top bar, but only once it is loaded, so
+         anything visible here would flash before the plugin shows up. -->
     <LinearLayout android:id="@+id/status_bar_contents"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:visibility="invisible"
         android:clipChildren="false"
         android:clipToPadding="false"
         android:paddingStart="@dimen/status_bar_padding_start"
         android:paddingEnd="@dimen/status_bar_padding_end"
         android:paddingTop="@dimen/status_bar_padding_top"
         android:orientation="horizontal">
+    <!-- endregion -->
 
         <!-- Container for the entire start half of the status bar. It will always use the same
              width, independent of the number of visible children and sub-children. -->
