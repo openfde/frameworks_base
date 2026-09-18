@@ -960,6 +960,9 @@ public class InputMethodService extends AbstractInputMethodService {
         @Override
         public void showSoftInput(int flags, ResultReceiver resultReceiver) {
             if (DEBUG) Log.v(TAG, "showSoftInput()");
+            // region @openfde
+            Log.i(TAG, "showSoftInput[fde]: pkg=" + getPackageName() + " flags=" + flags);
+            // endregion
 
             final var statsToken = mCurStatsToken != null ? mCurStatsToken
                     : createStatsToken(true /* show */,
@@ -2346,6 +2349,17 @@ public class InputMethodService extends AbstractInputMethodService {
      */
     public void updateInputViewShown() {
         boolean isShown = mShowInputRequested && onEvaluateInputViewShown();
+        // region @openfde
+        // Desktop (PC) mode: keep the soft keyboard hidden even when the IME asks for it.
+        // IME apps are free to override onEvaluateInputViewShown()/onShowInputRequested()
+        // (third-party IMEs do), so the policy is enforced here as well. mInputFrame is private
+        // to this class, which means every IME has to go through this method to make its input
+        // view visible.
+        if (isShown && !isFdeSoftKeyboardAllowed()) {
+            Log.i(TAG, "updateInputViewShown[fde]: input view suppressed");
+            isShown = false;
+        }
+        // endregion
         if (mIsInputViewShown != isShown && mDecorViewVisible) {
             mIsInputViewShown = isShown;
             mInputFrame.setVisibility(isShown ? View.VISIBLE : View.GONE);
@@ -2392,6 +2406,13 @@ public class InputMethodService extends AbstractInputMethodService {
             Log.w(TAG, "onEvaluateInputViewShown: mSettingsObserver must not be null here.");
             return false;
         }
+        // region @openfde
+        Log.i(TAG, "onEvaluateInputViewShown[fde]: pkg=" + getPackageName()
+                + " showImeWithHardKeyboard=" + mSettingsObserver.shouldShowImeWithHardKeyboard()
+                + " keyboard=" + getResources().getConfiguration().keyboard
+                + " hardKeyboardHidden=" + getResources().getConfiguration().hardKeyboardHidden
+                + " inputViewShown=" + isInputViewShown());
+        // endregion
         if (mSettingsObserver.shouldShowImeWithHardKeyboard()) {
             return true;
         }
@@ -2410,6 +2431,19 @@ public class InputMethodService extends AbstractInputMethodService {
         //         || config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_YES;
         // endregion
     }
+
+    // region @openfde
+    /**
+     * Desktop (PC) mode: whether the on-screen keyboard may be shown at all.
+     *
+     * <p>This is backed by {@link Settings.Secure#SHOW_IME_WITH_HARD_KEYBOARD} ("Show virtual
+     * keyboard"), so the behavior can be flipped at runtime with
+     * {@code settings put secure show_ime_with_hard_keyboard 1} without rebuilding the ROM.
+     */
+    private boolean isFdeSoftKeyboardAllowed() {
+        return mSettingsObserver != null && mSettingsObserver.shouldShowImeWithHardKeyboard();
+    }
+    // endregion
 
     /**
      * Controls the visibility of the candidates display area.  By default
@@ -3048,6 +3082,10 @@ public class InputMethodService extends AbstractInputMethodService {
      */
     private boolean dispatchOnShowInputRequested(int flags, boolean configChange) {
         final boolean result = onShowInputRequested(flags, configChange);
+        // region @openfde
+        Log.i(TAG, "dispatchOnShowInputRequested[fde]: flags=" + flags
+                + " configChange=" + configChange + " result=" + result);
+        // endregion
         mInlineSuggestionSessionController.notifyOnShowInputRequested(result);
         if (result) {
             mShowInputFlags = flags;
@@ -3078,6 +3116,17 @@ public class InputMethodService extends AbstractInputMethodService {
                 + " mWindowVisible=" + mWindowVisible
                 + " mInputStarted=" + mInputStarted
                 + " mShowInputFlags=" + mShowInputFlags);
+        // region @openfde
+        Log.i(TAG, "showWindow[fde]: pkg=" + getPackageName() + " showInput=" + showInput
+                + " mShowInputRequested=" + mShowInputRequested
+                + " mDecorViewVisible=" + mDecorViewVisible
+                + " mWindowVisible=" + mWindowVisible
+                + " stack=" + Log.getStackTraceString(new Throwable()));
+        if (showInput && !isFdeSoftKeyboardAllowed()) {
+            Log.i(TAG, "showWindow[fde]: suppressed, soft keyboard is disabled");
+            return;
+        }
+        // endregion
 
         final var statsToken = mCurStatsToken != null ? mCurStatsToken
                 : createStatsToken(true /* show */,
