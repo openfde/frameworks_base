@@ -2395,9 +2395,20 @@ public class InputMethodService extends AbstractInputMethodService {
         if (mSettingsObserver.shouldShowImeWithHardKeyboard()) {
             return true;
         }
-        Configuration config = getResources().getConfiguration();
-        return config.keyboard == Configuration.KEYBOARD_NOKEYS
-                || config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_YES;
+        // region @openfde
+        // Desktop (PC) mode: never bring up the soft keyboard on our own.
+        //
+        // The stock implementation below returns true whenever the framework sees no hardware
+        // keyboard (Configuration.KEYBOARD_NOKEYS) or the hardware keyboard is reported as
+        // hidden, which is what makes the on-screen keyboard pop up on every text field on our
+        // desktop builds. The soft keyboard can still be enabled by the user with
+        // Settings.Secure.SHOW_IME_WITH_HARD_KEYBOARD ("Show virtual keyboard" in
+        // Settings > Languages & input > Physical keyboard), and that branch is kept above.
+        return false;
+        // Configuration config = getResources().getConfiguration();
+        // return config.keyboard == Configuration.KEYBOARD_NOKEYS
+        //         || config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_YES;
+        // endregion
     }
 
     /**
