@@ -2349,20 +2349,23 @@ public class InputMethodService extends AbstractInputMethodService {
      */
     public void updateInputViewShown() {
         boolean isShown = mShowInputRequested && onEvaluateInputViewShown();
-        // region @openfde
-        // Desktop (PC) mode: keep the soft keyboard hidden even when the IME asks for it.
-        // IME apps are free to override onEvaluateInputViewShown()/onShowInputRequested()
-        // (third-party IMEs do), so the policy is enforced here as well. mInputFrame is private
-        // to this class, which means every IME has to go through this method to make its input
-        // view visible.
-        if (isShown && !isFdeSoftKeyboardAllowed()) {
-            Log.i(TAG, "updateInputViewShown[fde]: input view suppressed");
-            isShown = false;
-        }
-        // endregion
         if (mIsInputViewShown != isShown && mDecorViewVisible) {
             mIsInputViewShown = isShown;
-            mInputFrame.setVisibility(isShown ? View.VISIBLE : View.GONE);
+            // region @openfde
+            // Desktop (PC) mode: never draw the soft keyboard panel. mInputFrame
+            // (android.R.id.inputArea) and mCandidatesFrame (android.R.id.candidatesArea) are
+            // siblings, and mIsInputViewShown is intentionally left untouched, so the IME keeps
+            // its normal input view session: candidates/suggestions still show and hardware key
+            // input keeps working while the keyboard panel stays hidden. (Same approach as
+            // fde_14 91748665 "force hide soft input keyboard", plus our runtime switch.)
+            if (isFdeSoftKeyboardAllowed()) {
+                Log.i(TAG, "updateInputViewShown[fde]: keyboard panel shown");
+                mInputFrame.setVisibility(isShown ? View.VISIBLE : View.GONE);
+            } else {
+                Log.i(TAG, "updateInputViewShown[fde]: keyboard panel forced GONE");
+                mInputFrame.setVisibility(View.GONE);
+            }
+            // endregion
             if (mInputView == null) {
                 initialize();
                 View v = onCreateInputView();
@@ -2416,20 +2419,9 @@ public class InputMethodService extends AbstractInputMethodService {
         if (mSettingsObserver.shouldShowImeWithHardKeyboard()) {
             return true;
         }
-        // region @openfde
-        // Desktop (PC) mode: never bring up the soft keyboard on our own.
-        //
-        // The stock implementation below returns true whenever the framework sees no hardware
-        // keyboard (Configuration.KEYBOARD_NOKEYS) or the hardware keyboard is reported as
-        // hidden, which is what makes the on-screen keyboard pop up on every text field on our
-        // desktop builds. The soft keyboard can still be enabled by the user with
-        // Settings.Secure.SHOW_IME_WITH_HARD_KEYBOARD ("Show virtual keyboard" in
-        // Settings > Languages & input > Physical keyboard), and that branch is kept above.
-        return false;
-        // Configuration config = getResources().getConfiguration();
-        // return config.keyboard == Configuration.KEYBOARD_NOKEYS
-        //         || config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_YES;
-        // endregion
+        Configuration config = getResources().getConfiguration();
+        return config.keyboard == Configuration.KEYBOARD_NOKEYS
+                || config.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_YES;
     }
 
     // region @openfde
@@ -3122,10 +3114,6 @@ public class InputMethodService extends AbstractInputMethodService {
                 + " mDecorViewVisible=" + mDecorViewVisible
                 + " mWindowVisible=" + mWindowVisible
                 + " stack=" + Log.getStackTraceString(new Throwable()));
-        if (showInput && !isFdeSoftKeyboardAllowed()) {
-            Log.i(TAG, "showWindow[fde]: suppressed, soft keyboard is disabled");
-            return;
-        }
         // endregion
 
         final var statsToken = mCurStatsToken != null ? mCurStatsToken
