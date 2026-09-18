@@ -446,10 +446,10 @@
     <dimen name="freeform_decor_caption_height">42dp</dimen>
 
     <!-- The height of the app handle shown for Foldables / Tablets. -->
-    <dimen name="app_handle_height">4dp</dimen>
+    <dimen name="app_handle_height">10dp</dimen>
 
     <!-- The width of the app handle shown for Foldables / Tablets. -->
-    <dimen name="app_handle_width">80dp</dimen>
+    <dimen name="app_handle_width">120dp</dimen>
 
     <!-- The elevation for the individual app handle menu. -->
     <dimen name="app_menu_elevation">4dp</dimen>

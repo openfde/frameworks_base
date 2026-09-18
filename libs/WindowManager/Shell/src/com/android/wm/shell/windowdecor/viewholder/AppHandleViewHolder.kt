@@ -27,6 +27,7 @@ import android.os.Handler
 import android.view.InsetsFlags
 import android.view.LayoutInflater
 import android.view.MotionEvent.ACTION_DOWN
+import android.view.MotionEvent.ACTION_HOVER_EXIT
 import android.view.SurfaceControl
 import android.view.View
 import android.view.ViewDebug
@@ -52,6 +53,7 @@ import com.android.wm.shell.pinnedlayer.phone.PinnedLayerController
 import com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_WINDOW_DECORATION
 import com.android.wm.shell.shared.bubbles.BubbleFlagHelper
 import com.android.wm.shell.transition.FocusTransitionObserver
+import com.android.wm.shell.windowdecor.HandleImageButton
 import com.android.wm.shell.windowdecor.HandleMenuController
 import com.android.wm.shell.windowdecor.WindowDecorLinearLayout
 import com.android.wm.shell.windowdecor.WindowDecorationActions
@@ -110,6 +112,11 @@ class AppHandleViewHolder(
     // above the status bar. The purpose of this View is to receive input intended for
     // captionHandle.
     private var statusBarInputLayer: AdditionalSystemViewContainer? = null
+    // fde start: copy of the handle bar that is drawn inside statusBarInputLayer, i.e. above the
+    // status bar, because captionHandle itself is drawn underneath the status bar.
+    private var statusBarHandle: HandleImageButton? = null
+    private var captionHandleImageAlpha = 255
+    // fde end
     // TODO: b/444730302 - remove config once status bar input layer can be removed for all devices
     private val shouldAddStatusBarInputLayer =
         !context.resources.getBoolean(R.bool.config_removeStatusBarInputLayer)
@@ -176,6 +183,10 @@ class AppHandleViewHolder(
         } else {
             captionHandle.imageTintList = ColorStateList.valueOf(getCaptionHandleBarColor(taskInfo))
         }
+        // fde start: keep the above-the-status-bar copy tinted like the caption handle
+        statusBarHandle?.imageTintList =
+            ColorStateList.valueOf(getCaptionHandleBarColor(taskInfo))
+        // fde end
         this.taskInfo = taskInfo
         if (!shouldAddStatusBarInputLayer) {
             return
@@ -199,10 +210,19 @@ class AppHandleViewHolder(
 
     override fun onHandleMenuOpened() {
         animator.animateCaptionHandleAlpha(startValue = 1f, endValue = 0f)
+        // fde start: the menu replaces the handle, hide the above-the-status-bar copy
+        statusBarHandle?.visibility = View.GONE
+        // fde end
     }
 
     override fun onHandleMenuClosed() {
         animator.animateCaptionHandleAlpha(startValue = 0f, endValue = 1f)
+        // fde start
+        statusBarHandle?.let {
+            it.visibility = captionHandle.visibility
+            it.alpha = 1f
+        }
+        // fde end
     }
 
     private fun createStatusBarInputLayer(
@@ -223,6 +243,7 @@ class AppHandleViewHolder(
                 handleWidth,
                 handleHeight,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                R.layout.desktop_mode_app_handle_overlay,
                 ignoreCutouts,
             )
         val view = statusBarInputLayer?.view ?: error("Unable to find statusBarInputLayer View")
@@ -234,7 +255,26 @@ class AppHandleViewHolder(
         // gesture listener that receives events before window. This is to prevent notification
         // shade gesture when we swipe down to enter desktop.
         lp.inputFeatures = WindowManager.LayoutParams.INPUT_FEATURE_SPY
-        view.setOnHoverListener { _, event -> captionHandle.onHoverEvent(event) }
+        // fde start: this window is the only decor surface layered above the status bar, so draw
+        // the handle bar here as well and hide the in-caption copy, which sits below the status
+        // bar and therefore looks washed out.
+        statusBarHandle =
+            view.requireViewById<HandleImageButton>(R.id.caption_handle).also { overlayHandle ->
+                overlayHandle.imageTintList = captionHandle.imageTintList
+                overlayHandle.alpha = captionHandle.alpha
+                overlayHandle.visibility = captionHandle.visibility
+                overlayHandle.setImageAlpha(captionHandle.imageAlpha)
+            }
+        captionHandleImageAlpha = captionHandle.imageAlpha
+        captionHandle.imageAlpha = 0
+        // fde end
+        view.setOnHoverListener { _, event ->
+            val handled = captionHandle.onHoverEvent(event)
+            // fde start: mirror the hover state so the visible copy grows like the caption handle
+            statusBarHandle?.setHovered(event.actionMasked != ACTION_HOVER_EXIT)
+            // fde end
+            handled
+        }
         // Caption handle is located within the status bar region, meaning the
         // DisplayPolicy will attempt to transfer this input to status bar if it's
         // a swipe down. Pilfer here to keep the gesture in handle alone.
@@ -243,6 +283,10 @@ class AppHandleViewHolder(
                 inputManager.pilferPointers(v.viewRootImpl.inputToken)
             }
             captionHandle.dispatchTouchEvent(event)
+            // fde start: mirror the pressed state so the visible copy shrinks like the caption
+            // handle
+            statusBarHandle?.setPressed(event.actionMasked == ACTION_DOWN)
+            // fde end
             return@setOnTouchListener true
         }
         setupAppHandleA11y(view)
@@ -316,6 +360,11 @@ class AppHandleViewHolder(
         }
         statusBarInputLayerExists = false
         statusBarInputLayer?.view?.setOnTouchListener(null)
+        // fde start: the visible copy is going away with the window, show the caption's own bar
+        // again
+        statusBarHandle = null
+        captionHandle.imageAlpha = captionHandleImageAlpha
+        // fde end
         handler.post {
             statusBarInputLayer?.releaseView()
             statusBarInputLayer = null
@@ -324,6 +373,12 @@ class AppHandleViewHolder(
 
     private fun setVisibility(visible: Boolean) {
         animator.animateVisibilityChange(visible)
+        // fde start: keep the above-the-status-bar copy in sync with the caption handle
+        statusBarHandle?.let {
+            it.visibility = if (visible) View.VISIBLE else View.GONE
+            it.alpha = if (visible) 1f else 0f
+        }
+        // fde end
     }
 
     @ColorInt
