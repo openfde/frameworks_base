@@ -112,8 +112,11 @@ class AppHandleViewHolder(
     // above the status bar. The purpose of this View is to receive input intended for
     // captionHandle.
     private var statusBarInputLayer: AdditionalSystemViewContainer? = null
-    // fde start: copy of the handle bar that is drawn inside statusBarInputLayer, i.e. above the
-    // status bar, because captionHandle itself is drawn underneath the status bar.
+    // fde start: window that draws the handle bar above the status bar, plus the bar view inside
+    // it. captionHandle lives in the task surface, i.e. underneath the status bar window, so the
+    // bar is drawn here instead (NAVIGATION_BAR_PANEL is layered above the status bar).
+    private var statusBarHandleLayer: AdditionalSystemViewContainer? = null
+    private var statusBarHandleLayerExists = false
     private var statusBarHandle: HandleImageButton? = null
     private var captionHandleImageAlpha = 255
     // fde end
@@ -188,6 +191,9 @@ class AppHandleViewHolder(
             ColorStateList.valueOf(getCaptionHandleBarColor(taskInfo))
         // fde end
         this.taskInfo = taskInfo
+        // fde start: keep the bar that is drawn above the status bar in sync
+        updateStatusBarHandleLayer(position, width, height, showInputLayer)
+        // fde end
         if (!shouldAddStatusBarInputLayer) {
             return
         }
@@ -255,22 +261,10 @@ class AppHandleViewHolder(
         // gesture listener that receives events before window. This is to prevent notification
         // shade gesture when we swipe down to enter desktop.
         lp.inputFeatures = WindowManager.LayoutParams.INPUT_FEATURE_SPY
-        // fde start: this window is the only decor surface layered above the status bar, so draw
-        // the handle bar here as well and hide the in-caption copy, which sits below the status
-        // bar and therefore looks washed out.
-        statusBarHandle =
-            view.requireViewById<HandleImageButton>(R.id.caption_handle).also { overlayHandle ->
-                overlayHandle.imageTintList = captionHandle.imageTintList
-                overlayHandle.alpha = captionHandle.alpha
-                overlayHandle.visibility = captionHandle.visibility
-                overlayHandle.setImageAlpha(captionHandle.imageAlpha)
-            }
-        captionHandleImageAlpha = captionHandle.imageAlpha
-        captionHandle.imageAlpha = 0
-        // fde end
         view.setOnHoverListener { _, event ->
             val handled = captionHandle.onHoverEvent(event)
-            // fde start: mirror the hover state so the visible copy grows like the caption handle
+            // fde start: mirror the hover state so the bar above the status bar grows like the
+            // caption handle
             statusBarHandle?.setHovered(event.actionMasked != ACTION_HOVER_EXIT)
             // fde end
             handled
@@ -283,8 +277,8 @@ class AppHandleViewHolder(
                 inputManager.pilferPointers(v.viewRootImpl.inputToken)
             }
             captionHandle.dispatchTouchEvent(event)
-            // fde start: mirror the pressed state so the visible copy shrinks like the caption
-            // handle
+            // fde start: mirror the pressed state so the bar above the status bar shrinks like
+            // the caption handle
             statusBarHandle?.setPressed(event.actionMasked == ACTION_DOWN)
             // fde end
             return@setOnTouchListener true
@@ -350,6 +344,81 @@ class AppHandleViewHolder(
         ) ?: return
     }
 
+    // fde start
+    /**
+     * Desktop (PC) mode: [captionHandle] is drawn inside the task surface, i.e. underneath the
+     * status bar window, so the bar looks washed out where the caption overlaps the status bar.
+     * This keeps a copy of the bar in a window that is layered above the status bar
+     * ([AdditionalSystemViewContainer] uses [WindowManager.LayoutParams.TYPE_NAVIGATION_BAR_PANEL],
+     * which sits above [WindowManager.LayoutParams.TYPE_STATUS_BAR]) and hides the in-caption
+     * copy. The window is not touchable, so it does not change how the handle receives input.
+     */
+    private fun updateStatusBarHandleLayer(
+        position: Point,
+        width: Int,
+        height: Int,
+        visible: Boolean,
+    ) {
+        if (!visible || position.y >= SystemBarUtils.getStatusBarHeight(context)) {
+            disposeStatusBarHandleLayer()
+            return
+        }
+        if (statusBarHandleLayerExists) {
+            statusBarHandleLayer?.setPosition(
+                SurfaceControl.Transaction(),
+                position.x.toFloat(),
+                position.y.toFloat(),
+            )
+            return
+        }
+        // Creating the window is expensive, post it so relayout is not held up.
+        statusBarHandleLayerExists = true
+        val positionCopy = Point(position)
+        handler.post { createStatusBarHandleLayer(positionCopy, width, height) }
+    }
+
+    private fun createStatusBarHandleLayer(position: Point, width: Int, height: Int) {
+        if (!statusBarHandleLayerExists) {
+            // The layer was disposed while this was pending.
+            return
+        }
+        val layer =
+            AdditionalSystemViewContainer(
+                context,
+                windowManagerWrapper,
+                taskInfo.taskId,
+                position.x,
+                position.y,
+                width,
+                height,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                R.layout.desktop_mode_app_handle_overlay,
+                true /* ignoreCutouts */,
+            )
+        val view = layer.view
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        statusBarHandle =
+            view.requireViewById<HandleImageButton>(R.id.caption_handle).also { overlayHandle ->
+                overlayHandle.imageTintList = captionHandle.imageTintList
+                overlayHandle.alpha = captionHandle.alpha
+                overlayHandle.visibility = captionHandle.visibility
+            }
+        captionHandleImageAlpha = captionHandle.imageAlpha
+        captionHandle.imageAlpha = 0
+        statusBarHandleLayer = layer
+    }
+
+    private fun disposeStatusBarHandleLayer() {
+        statusBarHandleLayerExists = false
+        val layer = statusBarHandleLayer ?: return
+        statusBarHandle = null
+        statusBarHandleLayer = null
+        captionHandle.imageAlpha = captionHandleImageAlpha
+        handler.post { layer.releaseView() }
+    }
+    // fde end
+
     /**
      * Remove the input layer from [WindowManager]. Should be used when caption handle is not
      * visible.
@@ -360,11 +429,6 @@ class AppHandleViewHolder(
         }
         statusBarInputLayerExists = false
         statusBarInputLayer?.view?.setOnTouchListener(null)
-        // fde start: the visible copy is going away with the window, show the caption's own bar
-        // again
-        statusBarHandle = null
-        captionHandle.imageAlpha = captionHandleImageAlpha
-        // fde end
         handler.post {
             statusBarInputLayer?.releaseView()
             statusBarInputLayer = null
@@ -436,11 +500,17 @@ class AppHandleViewHolder(
     /** Sets whether the caption's handle is currently being hovered over. */
     fun setHandleHovered(hovered: Boolean) {
         captionHandle.isHovered = hovered
+        // fde start: mirror to the bar drawn above the status bar
+        statusBarHandle?.isHovered = hovered
+        // fde end
     }
 
     /** Sets whether the caption's handle is currently being pressed. */
     fun setHandlePressed(pressed: Boolean) {
         captionHandle.isPressed = pressed
+        // fde start: mirror to the bar drawn above the status bar
+        statusBarHandle?.isPressed = pressed
+        // fde end
     }
 
     override fun setTaskFocusState(taskFocusState: Boolean) {
@@ -448,6 +518,9 @@ class AppHandleViewHolder(
     }
 
     override fun close() {
+        // fde start: drop the window that draws the bar above the status bar
+        disposeStatusBarHandleLayer()
+        // fde end
         animator.cancel()
     }
 
