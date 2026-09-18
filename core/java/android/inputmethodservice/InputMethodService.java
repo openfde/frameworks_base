@@ -1303,6 +1303,15 @@ public class InputMethodService extends AbstractInputMethodService {
      * @param vis the IME window visibility state to be set.
      */
     private void setImeWindowVisibility(@ImeWindowVisibility int vis) {
+        // region @openfde
+        if (!isFdeSoftKeyboardAllowed()) {
+            // Desktop (PC) mode: the keyboard panel is suppressed, so the IME must not report
+            // itself as visible either. SystemUI derives SYSUI_STATE_IME_VISIBLE from this and
+            // Launcher3's taskbar reacts to it (IME stash + background repaint).
+            vis &= ~IME_VISIBLE;
+            syncFdeImeWindowFlags();
+        }
+        // endregion
         if (vis == mImeWindowVisibility) {
             return;
         }
@@ -1768,6 +1777,10 @@ public class InputMethodService extends AbstractInputMethodService {
             final int windowFlagsMask = windowFlags
                     | WindowManager.LayoutParams.FLAG_DIM_BEHIND;  // to be unset
             window.setFlags(windowFlags, windowFlagsMask);
+
+            // region @openfde
+            syncFdeImeWindowFlags();
+            // endregion
 
             // Automotive devices may request the navigation bar to be hidden when the IME shows up
             // (controlled via config_hideNavBarForKeyboard) in order to maximize the visible
@@ -2434,6 +2447,32 @@ public class InputMethodService extends AbstractInputMethodService {
      */
     private boolean isFdeSoftKeyboardAllowed() {
         return mSettingsObserver != null && mSettingsObserver.shouldShowImeWithHardKeyboard();
+    }
+
+    /**
+     * Desktop (PC) mode: while the soft keyboard is suppressed, keep the IME window from taking
+     * ownership of the navigation bar color.
+     *
+     * <p>{@code DisplayPolicy#chooseNavigationColorWindowLw} hands the navigation bar color over
+     * to the IME window whenever it is visible and has
+     * {@link WindowManager.LayoutParams#FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS}, which repaints our
+     * taskbar (a NAVIGATION_BAR window) with the IME's navigation bar color. Clearing the flag
+     * keeps the taskbar following the application window instead.
+     */
+    private void syncFdeImeWindowFlags() {
+        if (mWindow == null || isFdeSoftKeyboardAllowed()) {
+            return;
+        }
+        final Window window = mWindow.getWindow();
+        if (window == null) {
+            return;
+        }
+        final int flag = WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS;
+        if ((window.getAttributes().flags & flag) == 0) {
+            return;
+        }
+        Log.i(TAG, "syncFdeImeWindowFlags[fde]: clearing FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS");
+        window.setFlags(0, flag);
     }
     // endregion
 
