@@ -25,7 +25,7 @@
         android:id="@+id/caption_handle"
         android:layout_width="@dimen/desktop_mode_fullscreen_decor_caption_width"
         android:layout_height="@dimen/desktop_mode_fullscreen_decor_caption_height"
-        android:paddingVertical="16dp"
+        android:paddingVertical="@dimen/desktop_mode_fullscreen_decor_caption_vertical_padding"
         android:paddingHorizontal="10dp"
         android:screenReaderFocusable="true"
         android:importantForAccessibility="yes"
