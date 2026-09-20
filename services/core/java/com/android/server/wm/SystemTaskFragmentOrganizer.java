@@ -612,6 +612,8 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         final float ratio = mSplitRatios.get(taskId, DEFAULT_SPLIT_RATIO);
         final int totalWidth = taskBounds.width();
         final int leftWidth = Math.round(totalWidth * (1 - ratio));
+        Slog.d(TAG, "updateContainersInTask: task=" + taskId + " bounds=" + taskBounds
+                + " ratio=" + ratio + " left=" + leftWidth + " right=" + (totalWidth - leftWidth));
         resizeTaskFragment(wct, mLeftFragments.get(taskId),
                 new Rect(0, 0, leftWidth, taskBounds.height()));
         resizeTaskFragment(wct, rightToken,
@@ -719,10 +721,30 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             return;
         }
         if (!taskFragmentInfo.hasRunningActivity()) {
-            Slog.d(TAG, "onTaskFragmentInfoChanged: fragment has no activity, delete it. task="
-                    + taskId + " token=" + taskFragmentInfo.getFragmentToken());
-            deleteTaskFragment(wct, taskFragmentInfo);
-            mFragmentInfos.remove(taskFragmentInfo.getFragmentToken());
+            final IBinder token = taskFragmentInfo.getFragmentToken();
+            final List<IBinder> activities = taskFragmentInfo.getActivities();
+            final boolean noActivityAtAll = activities == null || activities.isEmpty();
+            final boolean isAdditionalWindow = token.equals(mRightFragments.get(taskId));
+            final boolean isMainWindow = token.equals(mLeftFragments.get(taskId));
+            // Delete the fragments of the split so that they do not stay in the task forever: a
+            // TaskFragment created by an organizer is not removed when it loses its last activity
+            // (see TaskFragment#shouldRemoveSelfOnLastChildRemoval), and an empty fragment keeps
+            // the task from being removed (closing the window would stop working).
+            // The additional window is always deleted, it is empty once its activities were
+            // reparented into the main window. The main window is deleted only when it has no
+            // activity at all: as long as an activity is in it (even a finishing one) it is the
+            // content of the single window and must be kept.
+            // Fragments that are not part of the split belong to the activity (activity embedding)
+            // and are managed by its own organizer, they are left alone.
+            if (isAdditionalWindow || (isMainWindow && noActivityAtAll)) {
+                Slog.d(TAG, "onTaskFragmentInfoChanged: empty split fragment, delete it. task="
+                        + taskId + " token=" + token + " additional=" + isAdditionalWindow);
+                deleteTaskFragment(wct, taskFragmentInfo);
+                mFragmentInfos.remove(token);
+                if (isMainWindow) {
+                    mLeftFragments.remove(taskId);
+                }
+            }
             return;
         }
         pauseLeftIfNeed(taskFragmentInfo, taskId);

@@ -147,6 +147,11 @@ constructor(
     private var dragStartRawX = 0f
     /** Top position of the divider, kept for the local move during a drag. */
     private var lastTop = 0f
+    /** Last x the divider was positioned at, used to log position changes only. */
+    private var lastLoggedX = -1f
+    /** Size of the task at the last update, used to detect window resizes. */
+    private var lastTaskWidth = -1
+    private var lastTaskHeight = -1
     /**
      * Ratio that was sent when the drag finished and that the panes have to reach before the veils
      * are hidden, or {@code -1} when there is nothing pending.
@@ -244,6 +249,23 @@ constructor(
             rootView.postDelayed(hideVeilRunnable, hideDelay)
         }
         val bounds = info.configuration.windowConfiguration.bounds
+        if (bounds.width() != lastTaskWidth || bounds.height() != lastTaskHeight) {
+            // The window was resized (maximize, fullscreen, ...). A drag that was in progress is
+            // over: its pointer events went to the old geometry, so the divider has to follow the
+            // ratio again. Without this the divider would keep the boundary that was computed for
+            // the old, wider task.
+            if (dragStartBoundary >= 0f) {
+                Log.d(TAG, "task resized while dragging, the drag is cancelled")
+                dragStartBoundary = -1f
+                lastBoundary = -1f
+                rootView.removeCallbacks(hideVeilRunnable)
+                pendingVeilHideRatio = -1f
+                dragVeil?.hide()
+                applyVisualState()
+            }
+            lastTaskWidth = bounds.width()
+            lastTaskHeight = bounds.height()
+        }
         val ratio = currentRatio(info)
         // While dragging, the divider follows the pointer instead of the ratio from the task
         // info, which is not refreshed for every ratio change.
@@ -254,6 +276,12 @@ constructor(
         // Coordinates are relative to the task leash, the divider surface is centered on the
         // boundary between the two panes.
         val x = boundary - dividerSurfaceWidth / 2f
+        if (abs(x - lastLoggedX) >= 1f) {
+            Log.d(TAG, "divider position: x=" + x + " boundary=" + boundary
+                    + " ratio=" + ratio + " width=" + bounds.width()
+                    + " dragging=" + (dragStartBoundary >= 0f))
+            lastLoggedX = x
+        }
         val y = captionHeight.toFloat()
         val height = max(0, bounds.height() - captionHeight)
         if (height <= 0) {
@@ -262,7 +290,16 @@ constructor(
         }
         lastTop = y
         if (dividerSurfaceWidth != lastViewWidth || height != lastViewHeight) {
-            viewHost.setView(rootView, buildLayoutParams(dividerSurfaceWidth, height))
+            Log.d(TAG, "divider geometry: " + dividerSurfaceWidth + "x" + height
+                    + " at x=" + x + " y=" + y)
+            val params = buildLayoutParams(dividerSurfaceWidth, height)
+            if (viewHost.view == null) {
+                viewHost.setView(rootView, params)
+            } else {
+                // setView() is a no-op when the view host already has a view, the size has to be
+                // updated with relayout() (see SurfaceControlViewHostAdapter#updateView).
+                viewHost.relayout(params)
+            }
             updateInputRegion(dividerSurfaceWidth, height)
             lastViewWidth = dividerSurfaceWidth
             lastViewHeight = height

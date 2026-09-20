@@ -203,6 +203,20 @@ public final class ParallelWorldConfig {
     }
 
     /**
+     * Whether the package is configured by the device config ({@code magic_config.xml}). Packages
+     * that are not part of it can be configured by the user from the window menu: the page that is
+     * open when the user enables the parallel world becomes the main window.
+     */
+    public boolean isDeviceConfigured(String packageName) {
+        if (TextUtils.isEmpty(packageName)) {
+            return false;
+        }
+        synchronized (mPackages) {
+            return mPackages.containsKey(packageName);
+        }
+    }
+
+    /**
      * Returns the parallel world type of the given activity: {@link Task#MAGIC_MAIN_WINDOW} for a
      * main activity, {@link Task#MAGIC_ADDITIONAL_WINDOW} for any other activity of a configured
      * package and {@link Task#NOT_MAGIC_WINDOW} for everything else (unconfigured package, an

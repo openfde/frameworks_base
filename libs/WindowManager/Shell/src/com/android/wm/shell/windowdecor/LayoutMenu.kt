@@ -759,15 +759,20 @@ class LayoutMenu(
                 }
                 // fde start MAGIC WINDOW -> parallel world
                 R.id.layout_menu_parallel_world_button -> {
-                    if (taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_NONE) {
-                        // The application is not configured yet: ask the user to confirm that the
-                        // current page becomes the main window before enabling the feature. The
-                        // dialog is shown after the menu is closed, see below.
+                    val isParallelWorldOn =
+                        taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
+                            || taskInfo.magicWindowEnabled
+                    if (!isParallelWorldOn
+                        && (taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_NONE
+                            || taskInfo.magicWindowUserConfigured)) {
+                        // The application is not configured by the device config: the user decides
+                        // which page is the main window. Ask for confirmation on every entry, so
+                        // that the main window can be changed by entering the parallel world from
+                        // another page. The dialog is shown after the menu is closed, see below.
                         configureParallelWorld = true
                     } else {
-                        windowDecorationActions.onSetParallelWorldEnabled(taskInfo.taskId,
-                            !(taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
-                                || taskInfo.magicWindowEnabled))
+                        windowDecorationActions.onSetParallelWorldEnabled(
+                            taskInfo.taskId, !isParallelWorldOn)
                     }
                 }
                 // fde end

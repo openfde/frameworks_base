@@ -487,6 +487,15 @@ public class TaskInfo {
     public boolean magicWindowEnabled = false;
 
     /**
+     * Whether the package of the task is configured by the user instead of the device config:
+     * the main window of such a package can be changed by entering the parallel world from another
+     * page.
+     *
+     * @hide
+     */
+    public boolean magicWindowUserConfigured = false;
+
+    /**
      * The FDE parallel world pane ratio of this task: the fraction of the task width that belongs
      * to the additional (right) window. {@code 0} when the task is not split.
      *
@@ -581,6 +590,7 @@ public class TaskInfo {
         magicWindowType = other.magicWindowType;
         magicWindowRatio = other.magicWindowRatio;
         magicWindowEnabled = other.magicWindowEnabled;
+        magicWindowUserConfigured = other.magicWindowUserConfigured;
     }
 
     /** @hide */
@@ -733,6 +743,7 @@ public class TaskInfo {
                 && magicWindowType == that.magicWindowType
                 && magicWindowRatio == that.magicWindowRatio
                 && magicWindowEnabled == that.magicWindowEnabled
+                && magicWindowUserConfigured == that.magicWindowUserConfigured
                 && minWidth == that.minWidth && minHeight == that.minHeight;
     }
 
@@ -818,6 +829,7 @@ public class TaskInfo {
         magicWindowType = source.readInt();
         magicWindowRatio = source.readFloat();
         magicWindowEnabled = source.readBoolean();
+        magicWindowUserConfigured = source.readBoolean();
     }
 
     /**
@@ -883,6 +895,7 @@ public class TaskInfo {
         dest.writeInt(magicWindowType);
         dest.writeFloat(magicWindowRatio);
         dest.writeBoolean(magicWindowEnabled);
+        dest.writeBoolean(magicWindowUserConfigured);
     }
 
     @Override
@@ -940,6 +953,7 @@ public class TaskInfo {
                 + " magicWindowType=" + magicWindowType
                 + " magicWindowRatio=" + magicWindowRatio
                 + " magicWindowEnabled=" + magicWindowEnabled
+                + " magicWindowUserConfigured=" + magicWindowUserConfigured
                 + "}";
     }
 }

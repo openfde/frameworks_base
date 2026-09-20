@@ -33,8 +33,10 @@ import android.graphics.Rect
 import android.graphics.Region
 import android.os.Handler
 import android.os.RemoteException
+import android.os.SystemProperties
 import android.os.Trace
 import android.os.UserHandle
+import android.provider.Settings
 import android.util.Log
 import android.util.Size
 import android.view.Choreographer
@@ -117,6 +119,19 @@ import kotlinx.coroutines.launch
 private const val TAG = "DefaultWindowDecoration"
 /** Fallback pane ratio (4:5) used until the task reports the configured ratio. */
 private const val DEFAULT_DIVIDER_RATIO = 5f / 9f
+/**
+ * Settings.Global key with a bit mask of the parallel world hints that were already shown to the
+ * user, see the GUIDE_FLAG_* constants. Every hint is shown once.
+ */
+private const val PARALLEL_WORLD_GUIDE_SHOWN = "parallel_world_guide_shown"
+/** Debug property: show every parallel world hint again, e.g. to read it a second time. */
+private const val PROP_GUIDE_ALWAYS = "persist.sys.fde.parallel_world.guide_always"
+/** [PARALLEL_WORLD_GUIDE_SHOWN] bit of the hint shown when the parallel world is entered. */
+private const val GUIDE_FLAG_ENTER = 1
+/** [PARALLEL_WORLD_GUIDE_SHOWN] bit of the hint shown when the parallel world is left. */
+private const val GUIDE_FLAG_EXIT = 2
+/** [PARALLEL_WORLD_GUIDE_SHOWN] bit of the hint shown when the divider is hovered. */
+private const val GUIDE_FLAG_DIVIDER = 4
 /** Time the hint of a started parallel world stays on screen. */
 private const val GUIDE_ENTER_AUTO_HIDE_MS = 6000L
 /** Time the hint of a left parallel world stays on screen. */
@@ -389,17 +404,17 @@ constructor(
         if (!applyTransactionOnDraw) {
             t.apply()
         }
-        // fde start MAGIC WINDOW -> parallel world
-        updateParallelWorldDivider(taskInfo)
-        // fde end
+        // The divider is updated by the relayout above (see the parallel world part there).
     }
 
     // fde start MAGIC WINDOW -> parallel world
     /** Shows, updates or hides the draggable divider between the two parallel world panes. */
     private fun updateParallelWorldDivider(taskInfo: RunningTaskInfo) {
         val isSplit = taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
+        val captionHeight = captionController?.getCaptionHeight() ?: 0
         Log.d(TAG, "parallel world: split=" + isSplit + " wasSplit=" + parallelWorldWasSplit
                 + " type=" + taskInfo.magicWindowType + " divider=" + (parallelWorldDivider != null)
+                + " ratio=" + taskInfo.magicWindowRatio + " caption=" + captionHeight
                 + " bounds=" + taskInfo.configuration.windowConfiguration.bounds)
         if (!isSplit) {
             if (parallelWorldWasSplit) {
@@ -415,6 +430,7 @@ constructor(
                     firstHintRes = R.string.parallel_world_guide_exit_hint,
                     secondHintRes = 0,
                     autoHideMs = GUIDE_EXIT_AUTO_HIDE_MS,
+                    guideFlag = GUIDE_FLAG_EXIT,
                 )
             }
             closeParallelWorldDivider()
@@ -465,13 +481,10 @@ constructor(
                 firstHintRes = R.string.parallel_world_guide_drag,
                 secondHintRes = R.string.parallel_world_guide_menu,
                 autoHideMs = GUIDE_ENTER_AUTO_HIDE_MS,
+                    guideFlag = GUIDE_FLAG_ENTER,
             )
         }
-        parallelWorldDivider?.update(
-            taskInfo,
-            captionController?.getCaptionHeight() ?: 0,
-            leash,
-        )
+        parallelWorldDivider?.update(taskInfo, captionHeight, leash)
     }
 
     /** The pointer is on the divider: remind the user that it can be dragged. */
@@ -486,6 +499,7 @@ constructor(
             firstHintRes = R.string.parallel_world_guide_divider_drag,
             secondHintRes = 0,
             autoHideMs = GUIDE_DIVIDER_AUTO_HIDE_MS,
+                    guideFlag = GUIDE_FLAG_DIVIDER,
         )
     }
 
@@ -502,7 +516,10 @@ constructor(
         parallelWorldDivider = null
     }
 
-    /** Shows a hint with the card of the parallel world, creating the card when needed. */
+    /**
+     * Shows a hint with the card of the parallel world, creating the card when needed. Every hint
+     * is shown only once per user, see [PARALLEL_WORLD_GUIDE_SHOWN].
+     */
     private fun showParallelWorldGuide(
         info: RunningTaskInfo,
         x: Float,
@@ -510,7 +527,18 @@ constructor(
         @StringRes firstHintRes: Int,
         @StringRes secondHintRes: Int,
         autoHideMs: Long,
+        guideFlag: Int,
     ) {
+        val resolver = decorWindowContext.contentResolver
+        // Debug: with this property every hint is shown again, e.g. to read it a second time.
+        val always = SystemProperties.getBoolean(PROP_GUIDE_ALWAYS, false)
+        val shown = Settings.Global.getInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, 0)
+        if (!always && (shown and guideFlag) != 0) {
+            return
+        }
+        if (!always) {
+            Settings.Global.putInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, shown or guideFlag)
+        }
         val guide = parallelWorldGuide ?: createParallelWorldGuide() ?: return
         guide.show(
             info,
@@ -628,6 +656,12 @@ constructor(
                 }
             }
             updateOpenByDefaultFirstRunPromptIfNeeded(configChanged, taskInfo)
+            // fde start MAGIC WINDOW -> parallel world
+            // This relayout is also the one used by the transitions (maximize, fullscreen, ...):
+            // the divider has to follow the task bounds here as well, otherwise it would keep the
+            // geometry of the previous window mode.
+            updateParallelWorldDivider(taskInfo)
+            // fde end
         }
 
     /**
