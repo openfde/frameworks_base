@@ -226,11 +226,14 @@ constructor(
         taskInfo = info
         updateDividerColors(info)
         // The panes reached their final size once the task reports the ratio that was applied when
-        // the drag finished: hide the veils now, the user sees the final layout right away.
+        // the drag finished. The applications still need a few frames to redraw behind the veils,
+        // so they are kept a little longer: when they disappear, the content is final and does not
+        // have to settle afterwards.
         if (pendingVeilHideRatio > 0f
             && abs(info.magicWindowRatio - pendingVeilHideRatio) < RATIO_EPSILON) {
+            pendingVeilHideRatio = -1f
             rootView.removeCallbacks(hideVeilRunnable)
-            hideVeilRunnable.run()
+            rootView.postDelayed(hideVeilRunnable, VEIL_HIDE_DELAY_MS)
         }
         val bounds = info.configuration.windowConfiguration.bounds
         val ratio = currentRatio(info)
@@ -513,7 +516,12 @@ constructor(
         const val RATIO_EPSILON = 0.001f
         /** Minimum time between two live ratio updates while dragging. */
         const val LIVE_RATIO_UPDATE_MS = 32L
+        /**
+         * Time the veils are kept after the final ratio was applied, to give the applications a few
+         * frames to redraw behind them.
+         */
+        const val VEIL_HIDE_DELAY_MS = 200L
         /** Latest time the veils are kept after a drag before they are hidden anyway. */
-        const val VEIL_HIDE_TIMEOUT_MS = 300L
+        const val VEIL_HIDE_TIMEOUT_MS = 800L
     }
 }
