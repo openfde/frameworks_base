@@ -398,6 +398,9 @@ constructor(
     /** Shows, updates or hides the draggable divider between the two parallel world panes. */
     private fun updateParallelWorldDivider(taskInfo: RunningTaskInfo) {
         val isSplit = taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
+        Log.d(TAG, "parallel world: split=" + isSplit + " wasSplit=" + parallelWorldWasSplit
+                + " type=" + taskInfo.magicWindowType + " divider=" + (parallelWorldDivider != null)
+                + " bounds=" + taskInfo.configuration.windowConfiguration.bounds)
         if (!isSplit) {
             if (parallelWorldWasSplit) {
                 // The parallel world was just left: the system server shrank the task without a
@@ -505,9 +508,11 @@ constructor(
     private fun cropTaskSurfaceToBounds(info: RunningTaskInfo) {
         val leash = taskSurface
         if (!leash.isValid) {
+            Log.w(TAG, "cropTaskSurfaceToBounds: invalid task surface")
             return
         }
         val bounds = info.configuration.windowConfiguration.bounds
+        Log.d(TAG, "cropTaskSurfaceToBounds: " + bounds)
         surfaceControlTransactionSupplier
             .invoke()
             .setWindowCrop(leash, bounds.width(), bounds.height())
@@ -515,6 +520,7 @@ constructor(
     }
 
     private fun closeParallelWorldDivider() {
+        Log.d(TAG, "closeParallelWorldDivider: divider=" + (parallelWorldDivider != null))
         parallelWorldDivider?.close()
         parallelWorldDivider = null
     }

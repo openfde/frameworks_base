@@ -357,9 +357,14 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         }
         final List<IBinder> activities = rightInfo.getActivities();
         if (activities == null || activities.isEmpty()) {
-            // The additional window is already empty: the framework removes it and the task
-            // contracts through the vanish callback.
+            // The additional window is already empty: delete it here, a TaskFragment created by an
+            // organizer is not removed when it loses its last activity (see
+            // TaskFragment#shouldRemoveSelfOnLastChildRemoval). Removing it makes the framework
+            // call onTaskFragmentVanished, which contracts the task.
             Slog.d(TAG, "exitSplit: task=" + taskId + " additional window is empty");
+            final WindowContainerTransaction wct = new WindowContainerTransaction();
+            deleteTaskFragment(wct, rightInfo);
+            applyTransaction(wct, 0, false);
             return;
         }
         Slog.d(TAG, "exitSplit: task=" + taskId + " merge " + activities.size()
@@ -368,6 +373,11 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         for (IBinder activityToken : activities) {
             wct.reparentActivityToTaskFragment(leftToken, activityToken);
         }
+        // Delete the additional window in the same transaction: a TaskFragment created by an
+        // organizer is not removed when its last activity is reparented away, it would stay as an
+        // empty, blank pane where the additional window was. Removing it makes the framework call
+        // onTaskFragmentVanished, which contracts the task.
+        deleteTaskFragment(wct, rightInfo);
         // No transition: the additional window should just disappear and the task contract
         // immediately, without a merge animation.
         applyTransaction(wct, 0, false);
@@ -708,6 +718,8 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             return;
         }
         if (!taskFragmentInfo.hasRunningActivity()) {
+            Slog.d(TAG, "onTaskFragmentInfoChanged: fragment has no activity, delete it. task="
+                    + taskId + " token=" + taskFragmentInfo.getFragmentToken());
             deleteTaskFragment(wct, taskFragmentInfo);
             mFragmentInfos.remove(taskFragmentInfo.getFragmentToken());
             return;
