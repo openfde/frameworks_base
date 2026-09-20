@@ -147,6 +147,9 @@ constructor(
     private var dragStartRawX = 0f
     /** Top position of the divider, kept for the local move during a drag. */
     private var lastTop = 0f
+    /** Size of the task at the last update, used to detect window resizes. */
+    private var lastTaskWidth = -1
+    private var lastTaskHeight = -1
     /**
      * Ratio that was sent when the drag finished and that the panes have to reach before the veils
      * are hidden, or {@code -1} when there is nothing pending.
@@ -244,6 +247,23 @@ constructor(
             rootView.postDelayed(hideVeilRunnable, hideDelay)
         }
         val bounds = info.configuration.windowConfiguration.bounds
+        if (bounds.width() != lastTaskWidth || bounds.height() != lastTaskHeight) {
+            // The window was resized (maximize, fullscreen, ...). A drag that was in progress is
+            // over: its pointer events went to the old geometry, so the divider has to follow the
+            // ratio again. Without this the divider would keep the boundary that was computed for
+            // the old, wider task.
+            if (dragStartBoundary >= 0f) {
+                Log.d(TAG, "task resized while dragging, the drag is cancelled")
+                dragStartBoundary = -1f
+                lastBoundary = -1f
+                rootView.removeCallbacks(hideVeilRunnable)
+                pendingVeilHideRatio = -1f
+                dragVeil?.hide()
+                applyVisualState()
+            }
+            lastTaskWidth = bounds.width()
+            lastTaskHeight = bounds.height()
+        }
         val ratio = currentRatio(info)
         // While dragging, the divider follows the pointer instead of the ratio from the task
         // info, which is not refreshed for every ratio change.
