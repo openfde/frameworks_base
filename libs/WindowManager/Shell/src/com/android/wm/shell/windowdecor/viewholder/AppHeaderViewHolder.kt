@@ -596,17 +596,7 @@ class AppHeaderViewHolder(
 
         updateA11yFocus(hasGlobalFocus)
 
-        // Caption Background
-        when (headerStyle.background) {
-            is HeaderStyle.Background.Opaque -> {
-                captionView.setBackgroundColor(headerStyle.background.color)
-            }
-            HeaderStyle.Background.Transparent -> {
-                captionView.setBackgroundColor(Color.TRANSPARENT)
-            }
-        }
 
-        // Caption Foreground
         var foregroundColor = headerStyle.foreground.color
         val foregroundAlpha = headerStyle.foreground.opacity
 
@@ -614,6 +604,16 @@ class AppHeaderViewHolder(
             val packageName = topActivity.packageName
             if (packageName in titleBarColorPackages) {
                 foregroundColor = if (isDarkMode()) Color.WHITE else Color.BLACK
+            }else{
+                // Caption Foreground
+                when (headerStyle.background) {
+                    is HeaderStyle.Background.Opaque -> {
+                        captionView.setBackgroundColor(headerStyle.background.color)
+                    }
+                    HeaderStyle.Background.Transparent -> {
+                        captionView.setBackgroundColor(Color.TRANSPARENT)
+                    }
+                }
             }
         }
 
