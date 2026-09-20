@@ -809,14 +809,19 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             final Rect newTaskBounds = new Rect(bounds.left, bounds.top,
                     bounds.left + Math.round(bounds.width() * (1 - splitRatio)), bounds.bottom);
             Slog.d(TAG, "contractTask: task=" + taskId + " bounds=" + newTaskBounds);
-            // Reset the type before resizing: the resize triggers a task info update which the
-            // window decoration uses to remove the divider, it must not see the task as split
-            // with the already contracted bounds.
+            // Reset the type before resizing: the task info update sent below is used by the
+            // window decoration to remove the divider, it must not see the task as split with the
+            // already contracted bounds.
             task.type = Task.NOT_MAGIC_WINDOW;
             // Resize the task directly instead of ActivityTaskManagerService#resizeTask: that one
             // wraps the resize into a TRANSIT_CHANGE transition, which animates the contraction.
             // The additional window has to disappear and the task has to shrink immediately.
             task.resize(newTaskBounds, 0 /* resizeMode */, false /* preserveWindow */);
+            // The resize above does not go through a transition, so no task info update is sent
+            // for it: the shell would keep the window decoration (caption, shadow, divider) at the
+            // old, wider bounds and leave an empty area where the additional window was. Refresh
+            // the task info so that the shell relayouts the decoration right away.
+            task.dispatchTaskInfoChangedIfNeeded(true /* force */);
             // Keep the left fragment registered: if the task is resized later, the fragment has
             // to be resized to fill the task (see updateContainersInTask).
             mRightFragments.remove(taskId);

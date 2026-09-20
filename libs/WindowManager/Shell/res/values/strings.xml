@@ -300,6 +300,10 @@
     <string name="parallel_world_guide_title">Parallel World is on</string>
     <string name="parallel_world_guide_drag">Drag the divider to adjust the pane ratio</string>
     <string name="parallel_world_guide_menu">Turn it off in the window menu</string>
+    <string name="parallel_world_guide_exit_title">Parallel World is off</string>
+    <string name="parallel_world_guide_exit_hint">Turn it back on in the window menu</string>
+    <string name="parallel_world_guide_divider_title">Drag the divider</string>
+    <string name="parallel_world_guide_divider_drag">Drag left or right to adjust both panes, the ratio is applied and remembered when released</string>
     <!-- fde end -->
     <!-- Accessibility text for the handle desktop button [CHAR LIMIT=NONE] -->
     <string name="desktop_text">Desktop windowing</string>

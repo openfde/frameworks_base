@@ -38,6 +38,9 @@ import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.StateListDrawable
 import android.graphics.drawable.shapes.RoundRectShape
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.util.StateSet
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -123,6 +126,7 @@ class LayoutMenu(
         loadDimensionPixelSize(R.dimen.desktop_mode_layout_menu_corner_radius).toFloat()
     private lateinit var menuPosition: Point
     private val menuPadding = loadDimensionPixelSize(R.dimen.desktop_mode_menu_padding)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Position the menu relative to the caption's position. */
     fun positionMenu(t: Transaction) {
@@ -187,25 +191,35 @@ class LayoutMenu(
      */
     private fun showConfigureDialog(backgroundColor: Int, textColor: Int, accentColor: Int) {
         if (parallelWorldDialog != null) {
+            Log.d(TAG, "showConfigureDialog: a dialog is already open, task=${taskInfo.taskId}")
             return
         }
-        val dialog =
-            ParallelWorldConfigureDialog(
-                context = decorWindowContext,
-                displayController = displayController,
-                transactionSupplier = transactionSupplier,
-                rootTdaOrganizer = rootTdaOrganizer,
-                taskInfo = taskInfo,
-                backgroundColor = backgroundColor,
-                textColor = textColor,
-                accentColor = accentColor,
-                onConfirm = {
-                    windowDecorationActions.onConfigureParallelWorldMain(taskInfo.taskId)
-                },
-                onDismiss = { parallelWorldDialog = null },
-            )
-        parallelWorldDialog = dialog
-        dialog.show()
+        Log.d(TAG, "showConfigureDialog: task=${taskInfo.taskId} package=${taskInfo.topActivity}")
+        // The menu closes itself when one of its entries is clicked (the click listener is invoked
+        // before this): create the dialog once the menu is gone, so that the closing menu cannot
+        // take the focus or the input of the dialog away.
+        mainHandler.postDelayed({
+            if (parallelWorldDialog != null) {
+                return@postDelayed
+            }
+            val dialog =
+                ParallelWorldConfigureDialog(
+                    context = decorWindowContext,
+                    displayController = displayController,
+                    transactionSupplier = transactionSupplier,
+                    rootTdaOrganizer = rootTdaOrganizer,
+                    taskInfo = taskInfo,
+                    backgroundColor = backgroundColor,
+                    textColor = textColor,
+                    accentColor = accentColor,
+                    onConfirm = {
+                        windowDecorationActions.onConfigureParallelWorldMain(taskInfo.taskId)
+                    },
+                    onDismiss = { parallelWorldDialog = null },
+                )
+            parallelWorldDialog = dialog
+            dialog.show()
+        }, DIALOG_AFTER_MENU_DELAY_MS)
     }
     // fde end
 
@@ -319,6 +333,12 @@ class LayoutMenu(
         } else {
             decorWindowContext.resources.getDimensionPixelSize(resourceId)
         }
+    }
+
+    private companion object {
+        const val TAG = "ParallelWorld"
+        /** Time to wait for the layout menu to close before showing the configure dialog. */
+        const val DIALOG_AFTER_MENU_DELAY_MS = 250L
     }
 
     /**

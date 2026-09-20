@@ -21,11 +21,13 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.SurfaceControl
 import android.view.SurfaceControlViewHost
+import android.view.View
 import android.view.WindowManager
 import android.view.WindowlessWindowManager
 import android.widget.LinearLayout
@@ -35,6 +37,7 @@ import com.android.wm.shell.R
 import com.android.wm.shell.RootTaskDisplayAreaOrganizer
 import com.android.wm.shell.common.DisplayController
 import java.util.function.Supplier
+import kotlin.math.max
 
 /**
  * Confirmation dialog shown when the user enables the parallel world on an application that is not
@@ -60,7 +63,11 @@ class ParallelWorldConfigureDialog(
     private val rootView: LinearLayout
 
     private val dialogWidth: Int = dp(DIALOG_WIDTH_DP)
-    private val dialogHeight: Int = dp(DIALOG_HEIGHT_DP)
+    /**
+     * Height of the dialog. It is measured from the content in the constructor: the card has a
+     * fixed size, a content that is higher than the card would clip the buttons.
+     */
+    private var dialogHeight: Int = dp(DIALOG_MIN_HEIGHT_DP)
     private var isDismissed = false
 
     init {
@@ -79,6 +86,11 @@ class ParallelWorldConfigureDialog(
                 "ParallelWorldConfigureDialog",
             )
         rootView = buildCard()
+        rootView.measure(
+            View.MeasureSpec.makeMeasureSpec(dialogWidth, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        dialogHeight = max(rootView.measuredHeight, dp(DIALOG_MIN_HEIGHT_DP))
         viewHost.setView(rootView, buildLayoutParams())
     }
 
@@ -90,6 +102,7 @@ class ParallelWorldConfigureDialog(
         val bounds = taskInfo.configuration.windowConfiguration.bounds
         val x = bounds.left + (bounds.width() - dialogWidth) / 2
         val y = bounds.top + (bounds.height() - dialogHeight) / 2
+        Log.d(TAG, "configure dialog show: task=${taskInfo.taskId} h=$dialogHeight")
         transactionSupplier
             .get()
             .setLayer(leash, TaskConstants.TASK_CHILD_LAYER_FLOATING_MENU)
@@ -105,6 +118,7 @@ class ParallelWorldConfigureDialog(
             return
         }
         isDismissed = true
+        Log.d(TAG, "configure dialog dismiss: task=${taskInfo.taskId}")
         viewHost.release()
         transactionSupplier.get().remove(leash).apply()
         onDismiss()
@@ -203,8 +217,9 @@ class ParallelWorldConfigureDialog(
         (value * context.resources.displayMetrics.density).toInt()
 
     private companion object {
+        const val TAG = "ParallelWorld"
         const val DIALOG_WIDTH_DP = 320
-        const val DIALOG_HEIGHT_DP = 190
+        const val DIALOG_MIN_HEIGHT_DP = 190
         const val CORNER_RADIUS_DP = 10
         const val PADDING_DP = 16
         const val ACTION_PADDING_DP = 8

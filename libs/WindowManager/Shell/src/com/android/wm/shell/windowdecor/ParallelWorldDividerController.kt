@@ -25,6 +25,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Binder
 import android.os.Looper
 import android.os.RemoteException
+import android.os.SystemClock
 import android.util.Log
 import android.view.IWindowSession
 import android.view.InputChannel
@@ -86,8 +87,10 @@ constructor(
      * even when the activities cannot be resized live; optional.
      */
     private val dragVeil: ParallelWorldDragVeil? = null,
-    /** Invoked when a drag starts, used to hide the one-time hint; optional. */
+    /** Invoked when a drag starts, used to hide the hint; optional. */
     private val onDragStarted: (() -> Unit)? = null,
+    /** Invoked when the pointer starts or stops hovering the divider; optional. */
+    private val onHoverChanged: ((Boolean) -> Unit)? = null,
 ) {
     private val taskId: Int = initialTaskInfo.taskId
     private var taskInfo: RunningTaskInfo = initialTaskInfo
@@ -127,6 +130,10 @@ constructor(
 
     /** Ratio computed from the latest drag move, persisted when the drag finishes. */
     private var lastDraggedRatio = -1f
+    /** Last ratio that was sent to the system server during the drag. */
+    private var lastLiveRatio = -1f
+    /** Uptime of the last live ratio update, used to throttle them. */
+    private var lastLiveRatioTime = 0L
     /**
      * Boundary between the two panes, in task coordinates. It follows the actual divider
      * position, which is more reliable than the ratio from the task info: the task info is not
@@ -378,12 +385,14 @@ constructor(
                 else bounds.width() * (1 - currentRatio(taskInfo))
                 dragStartRawX = event.rawX
                 lastDraggedRatio = -1f
+                lastLiveRatio = -1f
+                lastLiveRatioTime = 0L
                 // A new drag starts: a pending hide from the previous drag must not fire while the
                 // veils are visible again.
                 rootView.removeCallbacks(hideVeilRunnable)
                 pendingVeilHideRatio = -1f
-                // Cover the panes: the divider (and the veils) follow the pointer, the panes are
-                // only resized once the drag finishes.
+                // Cover the panes: the divider (and the veils) follow the pointer while the panes
+                // are resized behind the veils (see the move handling).
                 onDragStarted?.invoke()
                 updateDragVeil()
                 applyVisualState()
@@ -404,12 +413,22 @@ constructor(
                 val ratio = 1f - boundaryX / bounds.width()
                 val clamped = min(MAX_RATIO, max(MIN_RATIO, ratio))
                 lastDraggedRatio = clamped
-                // Move the divider and the veils right away for a responsive drag; the panes are
-                // resized once, when the drag finishes (see endDrag).
+                // Move the divider and the veils right away for a responsive drag.
                 lastBoundary = bounds.width() * (1 - clamped)
                 val x = lastBoundary - dividerSurfaceWidth / 2f
                 transactionSupplier.get().setPosition(leash, x, lastTop).apply()
                 updateDragVeil()
+                // Resize the panes while dragging too (throttled), like the window resize of the
+                // desktop mode does: the applications relayout behind the veils, so when the drag
+                // finishes the content already has its final size and does not have to scale
+                // afterwards. Only the final ratio is persisted.
+                val now = SystemClock.uptimeMillis()
+                if (abs(clamped - lastLiveRatio) >= RATIO_EPSILON
+                    && now - lastLiveRatioTime >= LIVE_RATIO_UPDATE_MS) {
+                    lastLiveRatio = clamped
+                    lastLiveRatioTime = now
+                    onRatioChanged.onRatioChanged(taskId, clamped, false /* persist */)
+                }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -419,11 +438,13 @@ constructor(
             MotionEvent.ACTION_HOVER_ENTER -> {
                 isHovered = true
                 applyVisualState()
+                onHoverChanged?.invoke(true)
                 return true
             }
             MotionEvent.ACTION_HOVER_EXIT -> {
                 isHovered = false
                 applyVisualState()
+                onHoverChanged?.invoke(false)
                 return true
             }
         }
@@ -432,8 +453,8 @@ constructor(
 
     private fun endDrag() {
         if (lastDraggedRatio > 0f) {
-            // The panes are resized here, once: the drag itself only moved the veils and the
-            // divider, so the final ratio is the only update sent to the system server.
+            // The final ratio is sent here once more with persist: the live updates during the drag
+            // are throttled, so the last one can be slightly behind the position of the pointer.
             onRatioChanged.onRatioChanged(taskId, lastDraggedRatio, true /* persist */)
             // Keep the veils until the panes have their final size, so that the user sees the
             // final layout as soon as the veils are gone (see update). A timeout makes sure the
@@ -490,6 +511,8 @@ constructor(
         const val MAX_RATIO = 0.8f
         /** Difference below which two ratios are considered the same. */
         const val RATIO_EPSILON = 0.001f
+        /** Minimum time between two live ratio updates while dragging. */
+        const val LIVE_RATIO_UPDATE_MS = 32L
         /** Latest time the veils are kept after a drag before they are hidden anyway. */
         const val VEIL_HIDE_TIMEOUT_MS = 300L
     }

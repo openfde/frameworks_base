@@ -33,10 +33,8 @@ import android.graphics.Rect
 import android.graphics.Region
 import android.os.Handler
 import android.os.RemoteException
-import android.os.SystemProperties
 import android.os.Trace
 import android.os.UserHandle
-import android.provider.Settings
 import android.util.Log
 import android.util.Size
 import android.view.Choreographer
@@ -54,6 +52,7 @@ import android.view.WindowManagerGlobal
 import android.window.DesktopExperienceFlags
 import android.window.DesktopModeFlags
 import android.window.WindowContainerTransaction
+import androidx.annotation.StringRes
 import androidx.annotation.VisibleForTesting
 import androidx.compose.ui.graphics.toArgb
 import com.android.app.tracing.traceSection
@@ -116,12 +115,14 @@ import kotlinx.coroutines.launch
 
 // fde start MAGIC WINDOW -> parallel world
 private const val TAG = "DefaultWindowDecoration"
-/** Settings.Global key remembering that the one-time parallel world hint was shown. */
-private const val PARALLEL_WORLD_GUIDE_SHOWN = "parallel_world_guide_shown"
-/** Debug property: show the parallel world hint on every split, not only the first time. */
-private const val PROP_GUIDE_ALWAYS = "persist.sys.fde.parallel_world.guide_always"
 /** Fallback pane ratio (4:5) used until the task reports the configured ratio. */
 private const val DEFAULT_DIVIDER_RATIO = 5f / 9f
+/** Time the hint of a started parallel world stays on screen. */
+private const val GUIDE_ENTER_AUTO_HIDE_MS = 6000L
+/** Time the hint of a left parallel world stays on screen. */
+private const val GUIDE_EXIT_AUTO_HIDE_MS = 4000L
+/** Time the hint shown when the divider is hovered stays on screen. */
+private const val GUIDE_DIVIDER_AUTO_HIDE_MS = 3000L
 // fde end
 
 /**
@@ -210,6 +211,8 @@ constructor(
     private var parallelWorldDivider: ParallelWorldDividerController? = null
     private var parallelWorldGuide: ParallelWorldGuide? = null
     private var parallelWorldThemeUtil: DecorThemeUtil? = null
+    /** Whether the task was split the last time the decoration was laid out. */
+    private var parallelWorldWasSplit = false
     // fde end
     private val isOpenByDefaultFirstRunPromptActive
         get() = openByDefaultFirstRunPrompt != null
@@ -396,6 +399,20 @@ constructor(
     private fun updateParallelWorldDivider(taskInfo: RunningTaskInfo) {
         val isSplit = taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
         if (!isSplit) {
+            if (parallelWorldWasSplit) {
+                // The parallel world was just left: the additional window and the divider are gone
+                // and it may not be obvious how to get them back, so tell the user where the entry
+                // is. The hint is shown after the contraction, the card is placed on the left.
+                parallelWorldWasSplit = false
+                showParallelWorldGuide(
+                    info = taskInfo,
+                    x = 0f,
+                    titleRes = R.string.parallel_world_guide_exit_title,
+                    firstHintRes = R.string.parallel_world_guide_exit_hint,
+                    secondHintRes = 0,
+                    autoHideMs = GUIDE_EXIT_AUTO_HIDE_MS,
+                )
+            }
             closeParallelWorldDivider()
             return
         }
@@ -417,16 +434,6 @@ constructor(
                     parentLeash = leash,
                     transactionSupplier = { surfaceControlTransactionSupplier.invoke() },
                 )
-            val guide = ParallelWorldGuide(
-                context = decorWindowContext,
-                displayController = displayController,
-                transactionSupplier = { surfaceControlTransactionSupplier.invoke() },
-                initialTaskInfo = taskInfo,
-                parentLeash = leash,
-                backgroundColor = themeUtil.getColorScheme(taskInfo).surfaceContainerHigh.toArgb(),
-                textColor = themeUtil.getColorScheme(taskInfo).onSurface.toArgb(),
-            )
-            parallelWorldGuide = guide
             parallelWorldDivider = ParallelWorldDividerController(
                 context = decorWindowContext,
                 displayController = displayController,
@@ -443,9 +450,18 @@ constructor(
                 },
                 decorThemeUtil = themeUtil,
                 dragVeil = veil,
-                onDragStarted = { guide.hide() },
+                onDragStarted = { parallelWorldGuide?.hide() },
+                onHoverChanged = { hovered -> onParallelWorldDividerHoverChanged(hovered) },
             )
-            maybeShowParallelWorldGuide(guide, taskInfo)
+            parallelWorldWasSplit = true
+            showParallelWorldGuide(
+                info = taskInfo,
+                x = parallelWorldDividerPosition(taskInfo),
+                titleRes = R.string.parallel_world_guide_title,
+                firstHintRes = R.string.parallel_world_guide_drag,
+                secondHintRes = R.string.parallel_world_guide_menu,
+                autoHideMs = GUIDE_ENTER_AUTO_HIDE_MS,
+            )
         }
         parallelWorldDivider?.update(
             taskInfo,
@@ -454,32 +470,70 @@ constructor(
         )
     }
 
+    /** The pointer is on the divider: remind the user that it can be dragged. */
+    private fun onParallelWorldDividerHoverChanged(hovered: Boolean) {
+        if (!hovered) {
+            return
+        }
+        showParallelWorldGuide(
+            info = taskInfo,
+            x = parallelWorldDividerPosition(taskInfo),
+            titleRes = R.string.parallel_world_guide_divider_title,
+            firstHintRes = R.string.parallel_world_guide_divider_drag,
+            secondHintRes = 0,
+            autoHideMs = GUIDE_DIVIDER_AUTO_HIDE_MS,
+        )
+    }
+
+    /** x position of the divider in the task, in task coordinates. */
+    private fun parallelWorldDividerPosition(info: RunningTaskInfo): Float {
+        val bounds = info.configuration.windowConfiguration.bounds
+        val ratio = if (info.magicWindowRatio > 0f) info.magicWindowRatio else DEFAULT_DIVIDER_RATIO
+        return bounds.width() * (1 - ratio)
+    }
+
     private fun closeParallelWorldDivider() {
-        parallelWorldGuide?.dispose()
-        parallelWorldGuide = null
         parallelWorldDivider?.close()
         parallelWorldDivider = null
     }
 
-    /**
-     * Shows the one-time hint the first time a task is split into the parallel world, so that the
-     * user knows how to drag the divider and how to turn the feature off again.
-     */
-    private fun maybeShowParallelWorldGuide(guide: ParallelWorldGuide, info: RunningTaskInfo) {
-        val resolver = decorWindowContext.contentResolver
-        // Debug: with this property the hint is shown on every split, e.g. to read it again.
-        if (!SystemProperties.getBoolean(PROP_GUIDE_ALWAYS, false)
-            && Settings.Global.getInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, 0) != 0) {
-            return
-        }
-        Settings.Global.putInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, 1)
-        val bounds = info.configuration.windowConfiguration.bounds
-        val ratio = if (info.magicWindowRatio > 0f) info.magicWindowRatio else DEFAULT_DIVIDER_RATIO
+    /** Shows a hint with the card of the parallel world, creating the card when needed. */
+    private fun showParallelWorldGuide(
+        info: RunningTaskInfo,
+        x: Float,
+        @StringRes titleRes: Int,
+        @StringRes firstHintRes: Int,
+        @StringRes secondHintRes: Int,
+        autoHideMs: Long,
+    ) {
+        val guide = parallelWorldGuide ?: createParallelWorldGuide() ?: return
         guide.show(
             info,
             captionController?.getCaptionHeight() ?: 0,
-            bounds.width() * (1 - ratio),
+            x,
+            titleRes,
+            firstHintRes,
+            secondHintRes,
+            autoHideMs,
         )
+    }
+
+    private fun createParallelWorldGuide(): ParallelWorldGuide? {
+        val themeUtil =
+            parallelWorldThemeUtil
+                ?: decorThemeUtilFactory.create(decorWindowContext).also {
+                    parallelWorldThemeUtil = it
+                }
+        return ParallelWorldGuide(
+            context = decorWindowContext,
+            displayController = displayController,
+            transactionSupplier = { surfaceControlTransactionSupplier.invoke() },
+            initialTaskInfo = taskInfo,
+            parentLeash = taskSurface,
+            backgroundColor = themeUtil.getColorScheme(taskInfo).surfaceContainerHigh.toArgb(),
+            textColor = themeUtil.getColorScheme(taskInfo).onSurface.toArgb(),
+        )
+            .also { parallelWorldGuide = it }
     }
     // fde end
 
@@ -1171,6 +1225,8 @@ constructor(
         closeDragResizeListener()
         // fde start MAGIC WINDOW -> parallel world
         closeParallelWorldDivider()
+        parallelWorldGuide?.dispose()
+        parallelWorldGuide = null
         // fde end
         disposeResizeVeil()
         exclusionRegionListener.onExclusionRegionDismissed(taskInfo.taskId)
