@@ -335,12 +335,6 @@ class LayoutMenu(
         }
     }
 
-    private companion object {
-        const val TAG = "ParallelWorld"
-        /** Time to wait for the layout menu to close before showing the configure dialog. */
-        const val DIALOG_AFTER_MENU_DELAY_MS = 250L
-    }
-
     /**
      * The view within the Layout Menu, presents maximize, restore and snap-to-side options for
      * resizing a Task.
@@ -1657,6 +1651,11 @@ class LayoutMenu(
         private const val CONTROLS_ALPHA_OPEN_MENU_ANIMATION_DELAY_MS = 33L
         private const val CONTAINER_ALPHA_CLOSE_MENU_ANIMATION_DELAY_MS = 33L
         private const val MENU_Z_TRANSLATION = 1f
+        // fde start MAGIC WINDOW -> parallel world
+        private const val TAG = "ParallelWorld"
+        /** Time to wait for the layout menu to close before showing the configure dialog. */
+        private const val DIALOG_AFTER_MENU_DELAY_MS = 250L
+        // fde end
     }
 }
 
