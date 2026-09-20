@@ -23,7 +23,6 @@ import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
 import static android.window.TaskFragmentOrganizer.KEY_ERROR_CALLBACK_OP_TYPE;
 import static android.window.TaskFragmentOrganizer.KEY_ERROR_CALLBACK_TASK_FRAGMENT_INFO;
 import static android.window.TaskFragmentOrganizer.KEY_ERROR_CALLBACK_THROWABLE;
-import static android.window.TaskFragmentOrganizer.TASK_FRAGMENT_TRANSIT_CLOSE;
 import static android.window.TaskFragmentOrganizer.TASK_FRAGMENT_TRANSIT_OPEN;
 import static android.window.TaskFragmentTransaction.TYPE_ACTIVITY_REPARENTED_TO_TASK;
 import static android.window.TaskFragmentTransaction.TYPE_TASK_FRAGMENT_APPEARED;
@@ -41,9 +40,11 @@ import android.graphics.Rect;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Slog;
 import android.util.SparseArray;
+import android.view.SurfaceControl;
 import android.window.TaskFragmentCreationParams;
 import android.window.TaskFragmentInfo;
 import android.window.TaskFragmentOrganizer;
@@ -357,9 +358,14 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         }
         final List<IBinder> activities = rightInfo.getActivities();
         if (activities == null || activities.isEmpty()) {
-            // The additional window is already empty: the framework removes it and the task
-            // contracts through the vanish callback.
+            // The additional window is already empty: delete it here, a TaskFragment created by an
+            // organizer is not removed when it loses its last activity (see
+            // TaskFragment#shouldRemoveSelfOnLastChildRemoval). Removing it makes the framework
+            // call onTaskFragmentVanished, which contracts the task.
             Slog.d(TAG, "exitSplit: task=" + taskId + " additional window is empty");
+            final WindowContainerTransaction wct = new WindowContainerTransaction();
+            deleteTaskFragment(wct, rightInfo);
+            applyTransaction(wct, 0, false);
             return;
         }
         Slog.d(TAG, "exitSplit: task=" + taskId + " merge " + activities.size()
@@ -368,7 +374,14 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         for (IBinder activityToken : activities) {
             wct.reparentActivityToTaskFragment(leftToken, activityToken);
         }
-        applyTransaction(wct, TASK_FRAGMENT_TRANSIT_CLOSE, false);
+        // Delete the additional window in the same transaction: a TaskFragment created by an
+        // organizer is not removed when its last activity is reparented away, it would stay as an
+        // empty, blank pane where the additional window was. Removing it makes the framework call
+        // onTaskFragmentVanished, which contracts the task.
+        deleteTaskFragment(wct, rightInfo);
+        // No transition: the additional window should just disappear and the task contract
+        // immediately, without a merge animation.
+        applyTransaction(wct, 0, false);
     }
 
     /**
@@ -477,6 +490,37 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         // update the parallel world toggle (the task may still be a single window).
         task.dispatchTaskInfoChangedIfNeeded(true /* force */);
         return true;
+    }
+
+    /**
+     * Configures the top activity of the task as the main window of the parallel world and enables
+     * the feature for its package. Used when the user enables the parallel world from the window
+     * menu of an application that is not part of the device config: the page that is open when the
+     * user enables it becomes the main (left) window.
+     *
+     * @return whether the request was accepted.
+     */
+    boolean configureMain(int taskId) {
+        final Task task = mAtmService.mRootWindowContainer.anyTaskForId(taskId);
+        if (task == null) {
+            return false;
+        }
+        final ActivityRecord top = task.getTopNonFinishingActivity();
+        if (top == null || top.info == null) {
+            return false;
+        }
+        final String packageName = top.packageName;
+        final String activityName = top.info.name;
+        if (TextUtils.isEmpty(packageName) || TextUtils.isEmpty(activityName)) {
+            return false;
+        }
+        Slog.d(TAG, "configureMain: task=" + taskId + " package=" + packageName
+                + " activity=" + activityName);
+        ParallelWorldConfig.get().setUserMainActivity(mAtmService.mContext, packageName,
+                ParallelWorldConfig.toSimpleClassName(activityName));
+        // Enables the feature for the package (and splits right away when the task already has an
+        // additional window page).
+        return setEnabled(taskId, true);
     }
 
     /** Moves the split point of an existing split; remembers the user preference when persisted. */
@@ -675,6 +719,8 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             return;
         }
         if (!taskFragmentInfo.hasRunningActivity()) {
+            Slog.d(TAG, "onTaskFragmentInfoChanged: fragment has no activity, delete it. task="
+                    + taskId + " token=" + taskFragmentInfo.getFragmentToken());
             deleteTaskFragment(wct, taskFragmentInfo);
             mFragmentInfos.remove(taskFragmentInfo.getFragmentToken());
             return;
@@ -766,29 +812,59 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         final Rect taskBounds = mTaskBounds.get(taskId);
         final Float ratio = mSplitRatios.get(taskId);
         mAtmService.mH.post(() -> {
-            final Task task = mAtmService.mRootWindowContainer.anyTaskForId(taskId);
-            if (task == null) {
-                clearTaskState(taskId);
-                return;
+            // The window manager state may only be touched while holding the global lock: the task
+            // info dispatch below would otherwise race with the dispatch of the pending task events
+            // on the animation thread (TaskOrganizerController#dispatchPendingEvents).
+            synchronized (mAtmService.mGlobalLock) {
+                contractTaskLocked(taskId, taskBounds, ratio);
             }
-            final Rect bounds = taskBounds != null ? taskBounds : new Rect(task.getBounds());
-            final float splitRatio = ratio != null ? ratio : DEFAULT_SPLIT_RATIO;
-            final Rect newTaskBounds = new Rect(bounds.left, bounds.top,
-                    bounds.left + Math.round(bounds.width() * (1 - splitRatio)), bounds.bottom);
-            Slog.d(TAG, "contractTask: task=" + taskId + " bounds=" + newTaskBounds);
-            // Reset the type before resizing: the resize triggers a task info update which the
-            // window decoration uses to remove the divider, it must not see the task as split
-            // with the already contracted bounds.
-            task.type = Task.NOT_MAGIC_WINDOW;
-            mAtmService.resizeTask(taskId, newTaskBounds, 0);
-            // Keep the left fragment registered: if the task is resized later, the fragment has
-            // to be resized to fill the task (see updateContainersInTask).
-            mRightFragments.remove(taskId);
-            mSplitRatios.remove(taskId);
-            mExpectedExpandedWidths.remove(taskId);
-            mSplittingActivities.remove(taskId);
-            removeErrorCallback(taskId);
         });
+    }
+
+    private void contractTaskLocked(int taskId, @Nullable Rect taskBounds, @Nullable Float ratio) {
+        final Task task = mAtmService.mRootWindowContainer.anyTaskForId(taskId);
+        if (task == null) {
+            clearTaskState(taskId);
+            return;
+        }
+        final Rect bounds = taskBounds != null ? taskBounds : new Rect(task.getBounds());
+        final float splitRatio = ratio != null ? ratio : DEFAULT_SPLIT_RATIO;
+        final Rect newTaskBounds = new Rect(bounds.left, bounds.top,
+                bounds.left + Math.round(bounds.width() * (1 - splitRatio)), bounds.bottom);
+        Slog.d(TAG, "contractTask: task=" + taskId + " bounds=" + newTaskBounds);
+        // Reset the type before resizing: the task info update sent below is used by the
+        // window decoration to remove the divider, it must not see the task as split with the
+        // already contracted bounds.
+        task.type = Task.NOT_MAGIC_WINDOW;
+        // Resize the task directly instead of ActivityTaskManagerService#resizeTask: that one
+        // wraps the resize into a TRANSIT_CHANGE transition, which animates the contraction.
+        // The additional window has to disappear and the task has to shrink immediately.
+        task.resize(newTaskBounds, 0 /* resizeMode */, false /* preserveWindow */);
+        // Organized tasks are not cropped by the window manager (see Task#updateSurfaceSize),
+        // the shell owns the task surface and only updates the crop during transitions. The
+        // contraction above happens without a transition, so the crop has to be updated here:
+        // otherwise the task surface (the window background and the caption) keeps its old,
+        // wider size and an empty area stays where the additional window was.
+        final SurfaceControl taskSurface = task.getSurfaceControl();
+        if (taskSurface != null && taskSurface.isValid()) {
+            Slog.d(TAG, "contractTask: crop task surface to " + newTaskBounds.width() + "x"
+                    + newTaskBounds.height());
+            new SurfaceControl.Transaction()
+                    .setWindowCrop(taskSurface, newTaskBounds.width(), newTaskBounds.height())
+                    .apply();
+        }
+        // The resize above does not go through a transition, so no task info update is sent
+        // for it: the shell would keep the window decoration (caption, shadow, divider) at the
+        // old, wider bounds and leave an empty area where the additional window was. Refresh
+        // the task info so that the shell relayouts the decoration right away.
+        task.dispatchTaskInfoChangedIfNeeded(true /* force */);
+        // Keep the left fragment registered: if the task is resized later, the fragment has
+        // to be resized to fill the task (see updateContainersInTask).
+        mRightFragments.remove(taskId);
+        mSplitRatios.remove(taskId);
+        mExpectedExpandedWidths.remove(taskId);
+        mSplittingActivities.remove(taskId);
+        removeErrorCallback(taskId);
     }
 
     /** Resets the task after a failed split. */

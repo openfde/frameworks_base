@@ -125,7 +125,19 @@
     <string name="parallel_world_text">"平行视界"</string>
     <string name="parallel_world_enter_text">"进入平行视界"</string>
     <string name="parallel_world_exit_text">"退出平行视界"</string>
-    <string name="parallel_world_education_text">"平行视界：左侧为主页面，右侧显示新打开的页面。"</string>
+    <string name="parallel_world_enable_text">"启用平行视界"</string>
+    <string name="parallel_world_configure_title">"将当前页面设为平行视界主窗口？"</string>
+    <string name="parallel_world_configure_message">"· 当前页面会成为左侧主窗口\n· 从它打开的其它页面会显示在右侧\n· 可随时在标题栏菜单里关闭"</string>
+    <string name="parallel_world_configure_hint">"提示：启用后当前页面会固定在左侧作为主窗口，请确认这是你希望常驻左侧的页面（例如应用的主界面）。"</string>
+    <string name="parallel_world_configure_enable">"启用"</string>
+    <string name="parallel_world_configure_cancel">"取消"</string>
+    <string name="parallel_world_guide_title">"平行视界已开启"</string>
+    <string name="parallel_world_guide_drag">"拖动分割线可调整左右比例"</string>
+    <string name="parallel_world_guide_menu">"标题栏菜单里可退出平行视界"</string>
+    <string name="parallel_world_guide_exit_title">"已退出平行视界"</string>
+    <string name="parallel_world_guide_exit_hint">"可在标题栏菜单里重新开启"</string>
+    <string name="parallel_world_guide_divider_title">"拖动分割线"</string>
+    <string name="parallel_world_guide_divider_drag">"左右拖动分割线可调整两边宽度，松手后生效并记住比例"</string>
     <string name="desktop_text" msgid="9058641752519570266">"窗口化模式"</string>
     <string name="split_screen_text" msgid="1396336058129570886">"分屏"</string>
     <string name="more_button_text" msgid="3655388105592893530">"更多"</string>

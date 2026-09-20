@@ -46,10 +46,8 @@ import android.app.ActivityManager.RunningTaskInfo;
 import android.app.ActivityOptions;
 import android.app.ActivityTaskManager;
 import android.app.IActivityManager;
-import android.app.TaskInfo;
 import android.app.compat.CompatChanges;
 import android.content.Context;
-import android.provider.Settings;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.PointF;
@@ -73,7 +71,6 @@ import android.view.InsetsState;
 import android.view.MotionEvent;
 import android.view.SurfaceControl;
 import android.view.SurfaceControl.Transaction;
-import android.widget.Toast;
 import android.window.DesktopExperienceFlags;
 import android.window.DesktopModeFlags;
 import android.window.TaskSnapshot;
@@ -695,9 +692,6 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
 
     @Override
     public void onTaskInfoChanged(RunningTaskInfo taskInfo) {
-        // fde start MAGIC WINDOW -> parallel world
-        maybeShowParallelWorldEducation(taskInfo);
-        // fde end
         final WindowDecorationWrapper decoration = mWindowDecorByTaskId.get(taskInfo.taskId);
         if (decoration == null) return;
         final RunningTaskInfo oldTaskInfo = decoration.getTaskInfo();
@@ -713,26 +707,6 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         mActivityOrientationChangeHandler.ifPresent(handler ->
                 handler.handleActivityOrientationChange(oldTaskInfo, taskInfo));
     }
-
-    // fde start MAGIC WINDOW -> parallel world
-    private static final String PARALLEL_WORLD_EDUCATION_SHOWN = "parallel_world_education_shown";
-
-    /** Shows the one-time hint the first time a task is split into the parallel world. */
-    private void maybeShowParallelWorldEducation(RunningTaskInfo taskInfo) {
-        if (taskInfo.magicWindowType != TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL) {
-            return;
-        }
-        final android.content.ContentResolver resolver = mContext.getContentResolver();
-        if (Settings.Global.getInt(resolver, PARALLEL_WORLD_EDUCATION_SHOWN, 0) != 0) {
-            return;
-        }
-        Settings.Global.putInt(resolver, PARALLEL_WORLD_EDUCATION_SHOWN, 1);
-        final Context displayContext = mDisplayController.getDisplayContext(taskInfo.displayId);
-        Toast.makeText(displayContext != null ? displayContext : mContext,
-                com.android.wm.shell.R.string.parallel_world_education_text,
-                Toast.LENGTH_LONG).show();
-    }
-    // fde end
 
     @Override
     public void onTaskVanished(RunningTaskInfo taskInfo) {
@@ -2317,6 +2291,17 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
             } catch (RemoteException e) {
                 Log.e(TAG, "Failed to set the parallel world of task=" + taskId + " to " + enabled,
                         e);
+            }
+        }
+
+        @Override
+        public void onConfigureParallelWorldMain(int taskId) {
+            WdLog.logD(TAG, "Using DefaultWindowDecorationActions to configure the parallel world"
+                    + " main window of task=%d", taskId);
+            try {
+                ActivityTaskManager.getService().configureParallelWorldMain(taskId);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Failed to configure the parallel world of task=" + taskId, e);
             }
         }
         // fde end
