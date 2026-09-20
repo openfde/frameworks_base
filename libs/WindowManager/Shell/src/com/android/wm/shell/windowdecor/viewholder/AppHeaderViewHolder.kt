@@ -600,9 +600,15 @@ class AppHeaderViewHolder(
         }
 
         // Caption Foreground
-        val foregroundColor = headerStyle.foreground.color
+        var foregroundColor = headerStyle.foreground.color
         val foregroundAlpha = headerStyle.foreground.opacity
+        if (isDarkMode()) {
+            foregroundColor = Color.WHITE
+        }else{
+            foregroundColor = Color.BLACK   
+        }
         val colorStateList = ColorStateList.valueOf(foregroundColor).withAlpha(foregroundAlpha)
+
         // App chip.
         openMenuButton.apply {
             val isRestartMenuEnabledForDisplayMove =
