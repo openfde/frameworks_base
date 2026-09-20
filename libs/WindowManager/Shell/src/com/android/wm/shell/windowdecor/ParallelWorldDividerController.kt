@@ -25,6 +25,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Binder
 import android.os.Looper
 import android.os.RemoteException
+import android.os.SystemClock
 import android.util.Log
 import android.view.IWindowSession
 import android.view.InputChannel
@@ -129,6 +130,10 @@ constructor(
 
     /** Ratio computed from the latest drag move, persisted when the drag finishes. */
     private var lastDraggedRatio = -1f
+    /** Last ratio that was sent to the system server during the drag. */
+    private var lastLiveRatio = -1f
+    /** Uptime of the last live ratio update, used to throttle them. */
+    private var lastLiveRatioTime = 0L
     /**
      * Boundary between the two panes, in task coordinates. It follows the actual divider
      * position, which is more reliable than the ratio from the task info: the task info is not
@@ -386,6 +391,8 @@ constructor(
                 else bounds.width() * (1 - currentRatio(taskInfo))
                 dragStartRawX = event.rawX
                 lastDraggedRatio = -1f
+                lastLiveRatio = -1f
+                lastLiveRatioTime = 0L
                 // A new drag starts: a pending hide from the previous drag must not fire while the
                 // veils are visible again.
                 rootView.removeCallbacks(hideVeilRunnable)
@@ -412,14 +419,21 @@ constructor(
                 val ratio = 1f - boundaryX / bounds.width()
                 val clamped = min(MAX_RATIO, max(MIN_RATIO, ratio))
                 lastDraggedRatio = clamped
-                // Move the divider and the veils right away for a responsive drag. The panes are
-                // resized once, when the drag finishes (see endDrag), like the desktop mode does
-                // when a window is resized: resizing them for every pointer move would keep the
-                // applications busy and the final layout would only show up after the drag.
+                // Move the divider and the veils right away for a responsive drag.
                 lastBoundary = bounds.width() * (1 - clamped)
                 val x = lastBoundary - dividerSurfaceWidth / 2f
                 transactionSupplier.get().setPosition(leash, x, lastTop).apply()
                 updateDragVeil()
+                // Resize the panes while dragging too (throttled): the applications relayout behind
+                // the veils, so when the drag finishes they are already close to their final size
+                // and the last relayout is small. Only the final ratio is persisted.
+                val now = SystemClock.uptimeMillis()
+                if (abs(clamped - lastLiveRatio) >= RATIO_EPSILON
+                    && now - lastLiveRatioTime >= LIVE_RATIO_UPDATE_MS) {
+                    lastLiveRatio = clamped
+                    lastLiveRatioTime = now
+                    onRatioChanged.onRatioChanged(taskId, clamped, false /* persist */)
+                }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -503,11 +517,14 @@ constructor(
         const val MAX_RATIO = 0.8f
         /** Difference below which two ratios are considered the same. */
         const val RATIO_EPSILON = 0.001f
+        /** Minimum time between two live ratio updates while dragging. */
+        const val LIVE_RATIO_UPDATE_MS = 32L
         /**
          * Time the veils are kept after the final ratio was applied, to give the applications a few
-         * frames to redraw behind them.
+         * frames to redraw behind them. It is deliberately generous: the veils disappear slowly so
+         * that the user does not see the applications relayout.
          */
-        const val VEIL_HIDE_DELAY_MS = 250L
+        const val VEIL_HIDE_DELAY_MS = 400L
         /** Latest time the veils are kept after a drag before they are hidden anyway. */
         const val VEIL_HIDE_TIMEOUT_MS = 800L
     }

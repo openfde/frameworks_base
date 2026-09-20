@@ -44,6 +44,7 @@ import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Slog;
 import android.util.SparseArray;
+import android.view.SurfaceControl;
 import android.window.TaskFragmentCreationParams;
 import android.window.TaskFragmentInfo;
 import android.window.TaskFragmentOrganizer;
@@ -829,6 +830,19 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             // wraps the resize into a TRANSIT_CHANGE transition, which animates the contraction.
             // The additional window has to disappear and the task has to shrink immediately.
             task.resize(newTaskBounds, 0 /* resizeMode */, false /* preserveWindow */);
+            // Organized tasks are not cropped by the window manager (see Task#updateSurfaceSize),
+            // the shell owns the task surface and only updates the crop during transitions. The
+            // contraction above happens without a transition, so the crop has to be updated here:
+            // otherwise the task surface (the window background and the caption) keeps its old,
+            // wider size and an empty area stays where the additional window was.
+            final SurfaceControl taskSurface = task.getSurfaceControl();
+            if (taskSurface != null && taskSurface.isValid()) {
+                Slog.d(TAG, "contractTask: crop task surface to " + newTaskBounds.width() + "x"
+                        + newTaskBounds.height());
+                new SurfaceControl.Transaction()
+                        .setWindowCrop(taskSurface, newTaskBounds.width(), newTaskBounds.height())
+                        .apply();
+            }
             // The resize above does not go through a transition, so no task info update is sent
             // for it: the shell would keep the window decoration (caption, shadow, divider) at the
             // old, wider bounds and leave an empty area where the additional window was. Refresh

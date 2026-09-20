@@ -403,14 +403,11 @@ constructor(
                 + " bounds=" + taskInfo.configuration.windowConfiguration.bounds)
         if (!isSplit) {
             if (parallelWorldWasSplit) {
-                // The parallel world was just left: the system server shrank the task without a
-                // transition. Organized tasks are cropped by the shell instead of the window
-                // manager (see Task#updateSurfaceSize), so the crop has to be updated here:
-                // otherwise the task surface keeps its old, wider size and an empty area stays
-                // where the additional window was. A hint tells the user where to turn the
-                // feature back on, the card is placed on the left.
+                // The parallel world was just left: the additional window and the divider are gone
+                // and it may not be obvious how to get them back, so tell the user where the entry
+                // is. The task itself is contracted by the system server, which also updates the
+                // crop of the task surface (see SystemTaskFragmentOrganizer#contractTask).
                 parallelWorldWasSplit = false
-                cropTaskSurfaceToBounds(taskInfo)
                 showParallelWorldGuide(
                     info = taskInfo,
                     x = 0f,
@@ -497,26 +494,6 @@ constructor(
         val bounds = info.configuration.windowConfiguration.bounds
         val ratio = if (info.magicWindowRatio > 0f) info.magicWindowRatio else DEFAULT_DIVIDER_RATIO
         return bounds.width() * (1 - ratio)
-    }
-
-    /**
-     * Crops the task surface to the bounds of the task. The window manager only updates the crop of
-     * an organized task during transitions, so a task that was resized without a transition (the
-     * contraction of the parallel world) has to be cropped here, otherwise the window keeps its old
-     * size.
-     */
-    private fun cropTaskSurfaceToBounds(info: RunningTaskInfo) {
-        val leash = taskSurface
-        if (!leash.isValid) {
-            Log.w(TAG, "cropTaskSurfaceToBounds: invalid task surface")
-            return
-        }
-        val bounds = info.configuration.windowConfiguration.bounds
-        Log.d(TAG, "cropTaskSurfaceToBounds: " + bounds)
-        surfaceControlTransactionSupplier
-            .invoke()
-            .setWindowCrop(leash, bounds.width(), bounds.height())
-            .apply()
     }
 
     private fun closeParallelWorldDivider() {
