@@ -177,6 +177,14 @@ interface IActivityTaskManager {
      * @return whether the request was accepted.
      */
     boolean setParallelWorldEnabled(int taskId, boolean enabled);
+    /**
+     * Configures the top activity of the task as the main window of the parallel world and
+     * enables the feature for its package. Used when the user enables the parallel world on an
+     * application that is not part of the device config.
+     *
+     * @return whether the configuration was accepted.
+     */
+    boolean configureParallelWorldMain(int taskId);
     /** Updates the pane ratio of a parallel world task, the value is the fraction of the right
      * window. The ratio is only remembered when {@code persist} is set (drag finished). */
     void setParallelWorldRatio(int taskId, float ratio, boolean persist);

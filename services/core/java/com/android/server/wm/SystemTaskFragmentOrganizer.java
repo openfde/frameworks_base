@@ -23,7 +23,6 @@ import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
 import static android.window.TaskFragmentOrganizer.KEY_ERROR_CALLBACK_OP_TYPE;
 import static android.window.TaskFragmentOrganizer.KEY_ERROR_CALLBACK_TASK_FRAGMENT_INFO;
 import static android.window.TaskFragmentOrganizer.KEY_ERROR_CALLBACK_THROWABLE;
-import static android.window.TaskFragmentOrganizer.TASK_FRAGMENT_TRANSIT_CLOSE;
 import static android.window.TaskFragmentOrganizer.TASK_FRAGMENT_TRANSIT_OPEN;
 import static android.window.TaskFragmentTransaction.TYPE_ACTIVITY_REPARENTED_TO_TASK;
 import static android.window.TaskFragmentTransaction.TYPE_TASK_FRAGMENT_APPEARED;
@@ -41,6 +40,7 @@ import android.graphics.Rect;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Slog;
 import android.util.SparseArray;
@@ -368,7 +368,9 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         for (IBinder activityToken : activities) {
             wct.reparentActivityToTaskFragment(leftToken, activityToken);
         }
-        applyTransaction(wct, TASK_FRAGMENT_TRANSIT_CLOSE, false);
+        // No transition: the additional window should just disappear and the task contract
+        // immediately, without a merge animation.
+        applyTransaction(wct, 0, false);
     }
 
     /**
@@ -477,6 +479,37 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         // update the parallel world toggle (the task may still be a single window).
         task.dispatchTaskInfoChangedIfNeeded(true /* force */);
         return true;
+    }
+
+    /**
+     * Configures the top activity of the task as the main window of the parallel world and enables
+     * the feature for its package. Used when the user enables the parallel world from the window
+     * menu of an application that is not part of the device config: the page that is open when the
+     * user enables it becomes the main (left) window.
+     *
+     * @return whether the request was accepted.
+     */
+    boolean configureMain(int taskId) {
+        final Task task = mAtmService.mRootWindowContainer.anyTaskForId(taskId);
+        if (task == null) {
+            return false;
+        }
+        final ActivityRecord top = task.getTopNonFinishingActivity();
+        if (top == null || top.info == null) {
+            return false;
+        }
+        final String packageName = top.packageName;
+        final String activityName = top.info.name;
+        if (TextUtils.isEmpty(packageName) || TextUtils.isEmpty(activityName)) {
+            return false;
+        }
+        Slog.d(TAG, "configureMain: task=" + taskId + " package=" + packageName
+                + " activity=" + activityName);
+        ParallelWorldConfig.get().setUserMainActivity(mAtmService.mContext, packageName,
+                ParallelWorldConfig.toSimpleClassName(activityName));
+        // Enables the feature for the package (and splits right away when the task already has an
+        // additional window page).
+        return setEnabled(taskId, true);
     }
 
     /** Moves the split point of an existing split; remembers the user preference when persisted. */

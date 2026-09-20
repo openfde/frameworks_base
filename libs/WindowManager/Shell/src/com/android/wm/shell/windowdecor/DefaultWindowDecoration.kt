@@ -35,6 +35,7 @@ import android.os.Handler
 import android.os.RemoteException
 import android.os.Trace
 import android.os.UserHandle
+import android.provider.Settings
 import android.util.Log
 import android.util.Size
 import android.view.Choreographer
@@ -53,6 +54,7 @@ import android.window.DesktopExperienceFlags
 import android.window.DesktopModeFlags
 import android.window.WindowContainerTransaction
 import androidx.annotation.VisibleForTesting
+import androidx.compose.ui.graphics.toArgb
 import com.android.app.tracing.traceSection
 import com.android.internal.policy.DesktopModeCompatPolicy
 import com.android.window.flags.Flags
@@ -113,6 +115,10 @@ import kotlinx.coroutines.launch
 
 // fde start MAGIC WINDOW -> parallel world
 private const val TAG = "DefaultWindowDecoration"
+/** Settings.Global key remembering that the one-time parallel world hint was shown. */
+private const val PARALLEL_WORLD_GUIDE_SHOWN = "parallel_world_guide_shown"
+/** Fallback pane ratio (4:5) used until the task reports the configured ratio. */
+private const val DEFAULT_DIVIDER_RATIO = 5f / 9f
 // fde end
 
 /**
@@ -199,6 +205,8 @@ constructor(
     private var openByDefaultFirstRunPrompt: OpenByDefaultFirstRunPrompt? = null
     // fde start MAGIC WINDOW -> parallel world
     private var parallelWorldDivider: ParallelWorldDividerController? = null
+    private var parallelWorldGuide: ParallelWorldGuide? = null
+    private var parallelWorldThemeUtil: DecorThemeUtil? = null
     // fde end
     private val isOpenByDefaultFirstRunPromptActive
         get() = openByDefaultFirstRunPrompt != null
@@ -391,6 +399,31 @@ constructor(
         val leash = taskSurface
         if (parallelWorldDivider == null) {
             Log.d(TAG, "updateParallelWorldDivider: creating divider for task=${taskInfo.taskId}")
+            val themeUtil =
+                parallelWorldThemeUtil
+                    ?: decorThemeUtilFactory.create(decorWindowContext).also {
+                        parallelWorldThemeUtil = it
+                    }
+            val veil =
+                ParallelWorldDragVeil(
+                    context = decorWindowContext,
+                    displayController = displayController,
+                    taskResourceLoader = taskResourceLoader,
+                    mainDispatcher = mainDispatcher,
+                    mainImmediateScope = mainImmediateScope,
+                    parentLeash = leash,
+                    transactionSupplier = { surfaceControlTransactionSupplier.invoke() },
+                )
+            val guide = ParallelWorldGuide(
+                context = decorWindowContext,
+                displayController = displayController,
+                transactionSupplier = { surfaceControlTransactionSupplier.invoke() },
+                initialTaskInfo = taskInfo,
+                parentLeash = leash,
+                backgroundColor = themeUtil.getColorScheme(taskInfo).surfaceContainerHigh.toArgb(),
+                textColor = themeUtil.getColorScheme(taskInfo).onSurface.toArgb(),
+            )
+            parallelWorldGuide = guide
             parallelWorldDivider = ParallelWorldDividerController(
                 context = decorWindowContext,
                 displayController = displayController,
@@ -405,7 +438,11 @@ constructor(
                         Log.e(TAG, "Failed to set parallel world ratio for task=$taskId", e)
                     }
                 },
+                decorThemeUtil = themeUtil,
+                dragVeil = veil,
+                onDragStarted = { guide.hide() },
             )
+            maybeShowParallelWorldGuide(guide, taskInfo)
         }
         parallelWorldDivider?.update(
             taskInfo,
@@ -415,8 +452,29 @@ constructor(
     }
 
     private fun closeParallelWorldDivider() {
+        parallelWorldGuide?.dispose()
+        parallelWorldGuide = null
         parallelWorldDivider?.close()
         parallelWorldDivider = null
+    }
+
+    /**
+     * Shows the one-time hint the first time a task is split into the parallel world, so that the
+     * user knows how to drag the divider and how to turn the feature off again.
+     */
+    private fun maybeShowParallelWorldGuide(guide: ParallelWorldGuide, info: RunningTaskInfo) {
+        val resolver = decorWindowContext.contentResolver
+        if (Settings.Global.getInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, 0) != 0) {
+            return
+        }
+        Settings.Global.putInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, 1)
+        val bounds = info.configuration.windowConfiguration.bounds
+        val ratio = if (info.magicWindowRatio > 0f) info.magicWindowRatio else DEFAULT_DIVIDER_RATIO
+        guide.show(
+            info,
+            captionController?.getCaptionHeight() ?: 0,
+            bounds.width() * (1 - ratio),
+        )
     }
     // fde end
 

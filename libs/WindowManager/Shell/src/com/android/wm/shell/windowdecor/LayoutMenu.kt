@@ -114,6 +114,9 @@ class LayoutMenu(
 ) {
     private var layoutMenu: AdditionalViewHostViewContainer? = null
     private var layoutMenuView: LayoutMenuView? = null
+    // fde start MAGIC WINDOW -> parallel world
+    private var parallelWorldDialog: ParallelWorldConfigureDialog? = null
+    // fde end
     private lateinit var viewHost: SurfaceControlViewHost
     private lateinit var leash: SurfaceControl
     private val cornerRadius =
@@ -157,6 +160,10 @@ class LayoutMenu(
 
     /** Closes the maximize window and releases its view. */
     fun close(onEnd: () -> Unit) {
+        // fde start MAGIC WINDOW -> parallel world
+        parallelWorldDialog?.dismiss()
+        parallelWorldDialog = null
+        // fde end
         val view = layoutMenuView
         val menu = layoutMenu
         if (view == null) {
@@ -172,6 +179,35 @@ class LayoutMenu(
         layoutMenu = null
         layoutMenuView = null
     }
+
+    // fde start MAGIC WINDOW -> parallel world
+    /**
+     * Asks the user to confirm that the current page becomes the main window of the parallel world
+     * before configuring the application and enabling the feature for it.
+     */
+    private fun showConfigureDialog(backgroundColor: Int, textColor: Int, accentColor: Int) {
+        if (parallelWorldDialog != null) {
+            return
+        }
+        val dialog =
+            ParallelWorldConfigureDialog(
+                context = decorWindowContext,
+                displayController = displayController,
+                transactionSupplier = transactionSupplier,
+                rootTdaOrganizer = rootTdaOrganizer,
+                taskInfo = taskInfo,
+                backgroundColor = backgroundColor,
+                textColor = textColor,
+                accentColor = accentColor,
+                onConfirm = {
+                    windowDecorationActions.onConfigureParallelWorldMain(taskInfo.taskId)
+                },
+                onDismiss = { parallelWorldDialog = null },
+            )
+        parallelWorldDialog = dialog
+        dialog.show()
+    }
+    // fde end
 
     /** Create a layout menu that is attached to the display area. */
     private fun createLayoutMenu(
@@ -217,6 +253,11 @@ class LayoutMenu(
                     showSnapOptions = showSnapOptions,
                     menuPadding = menuPadding,
                     splitScreenController = splitScreenController,
+                    // fde start MAGIC WINDOW -> parallel world
+                    onConfigureParallelWorld = { backgroundColor, textColor, accentColor ->
+                        showConfigureDialog(backgroundColor, textColor, accentColor)
+                    },
+                    // fde end
                 )
                 .also { menuView ->
                     menuView.bind(taskInfo)
@@ -293,6 +334,11 @@ class LayoutMenu(
         showSnapOptions: Boolean,
         private val menuPadding: Int,
         private val splitScreenController: SplitScreenController,
+        // fde start MAGIC WINDOW -> parallel world
+        /** Invoked when the user enables the parallel world on an unconfigured application. */
+        private val onConfigureParallelWorld: (backgroundColor: Int, textColor: Int,
+            accentColor: Int) -> Unit = { _, _, _ -> },
+        // fde end
     ) : OnClickListener, OnTouchListener {
         val rootView =
             LayoutInflater.from(context)
@@ -674,6 +720,9 @@ class LayoutMenu(
         }
 
         override fun onClick(v: View) {
+            // fde start MAGIC WINDOW -> parallel world
+            var configureParallelWorld = false
+            // fde end
             when (v.id) {
                 R.id.layout_menu_immersive_toggle_button -> {
                     windowDecorationActions.onImmersiveOrRestore(taskInfo)
@@ -696,13 +745,26 @@ class LayoutMenu(
                 }
                 // fde start MAGIC WINDOW -> parallel world
                 R.id.layout_menu_parallel_world_button -> {
-                    windowDecorationActions.onSetParallelWorldEnabled(taskInfo.taskId,
-                        !(taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
-                            || taskInfo.magicWindowEnabled))
+                    if (taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_NONE) {
+                        // The application is not configured yet: ask the user to confirm that the
+                        // current page becomes the main window before enabling the feature. The
+                        // dialog is shown after the menu is closed, see below.
+                        configureParallelWorld = true
+                    } else {
+                        windowDecorationActions.onSetParallelWorldEnabled(taskInfo.taskId,
+                            !(taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
+                                || taskInfo.magicWindowEnabled))
+                    }
                 }
                 // fde end
             }
             onLayoutMenuClickedListener?.invoke()
+            // fde start MAGIC WINDOW -> parallel world
+            if (configureParallelWorld) {
+                onConfigureParallelWorld(style.backgroundColor, style.textColor,
+                    style.snapOptions.activeSnapSideColor)
+            }
+            // fde end
         }
 
         override fun onTouch(v: View, ev: MotionEvent): Boolean {
@@ -737,18 +799,22 @@ class LayoutMenu(
             updateSplitSnapSelection(SnapToHalfSelection.NONE)
 
             // fde start MAGIC WINDOW -> parallel world
-            // The parallel world entry is offered for the packages that take part in the feature.
-            // The toggle is on when the task is split or when the user switched the parallel world
-            // of the package on: the task may still be a single window without an additional page.
+            // The parallel world entry is offered for every task: for the packages of the device
+            // config it toggles the feature, for the others it offers to configure the current
+            // page as the main window first.
             val parallelWorldType = taskInfo.magicWindowType
             val isParallelWorldTask = parallelWorldType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL
             val isParallelWorldOn = isParallelWorldTask || taskInfo.magicWindowEnabled
-            parallelWorldContainer.isVisible = parallelWorldType != TaskInfo.MAGIC_WINDOW_TYPE_NONE
+            val isParallelWorldConfigured = parallelWorldType != TaskInfo.MAGIC_WINDOW_TYPE_NONE
+            parallelWorldContainer.isVisible = true
             parallelWorldButton.isSelected = isParallelWorldOn
             parallelWorldButton.background = style.parallelWorldOption.drawable
             parallelWorldText.setText(
-                if (isParallelWorldOn) R.string.parallel_world_exit_text
-                else R.string.parallel_world_enter_text)
+                when {
+                    isParallelWorldOn -> R.string.parallel_world_exit_text
+                    isParallelWorldConfigured -> R.string.parallel_world_enter_text
+                    else -> R.string.parallel_world_enable_text
+                })
             // fde end
 
             if (Flags.enableConsolidatedWindowOptions()) {

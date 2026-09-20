@@ -3375,6 +3375,22 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     }
 
     @Override
+    public boolean configureParallelWorldMain(int taskId) {
+        enforceTaskPermission("configureParallelWorldMain()");
+        final long ident = Binder.clearCallingIdentity();
+        try {
+            synchronized (mGlobalLock) {
+                if (mParallelVisionOrganizer != null) {
+                    return mParallelVisionOrganizer.configureMain(taskId);
+                }
+            }
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+        return false;
+    }
+
+    @Override
     public void setParallelWorldRatio(int taskId, float ratio, boolean persist) {
         enforceTaskPermission("setParallelWorldRatio()");
         final long ident = Binder.clearCallingIdentity();
