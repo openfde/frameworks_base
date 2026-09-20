@@ -813,7 +813,10 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             // window decoration uses to remove the divider, it must not see the task as split
             // with the already contracted bounds.
             task.type = Task.NOT_MAGIC_WINDOW;
-            mAtmService.resizeTask(taskId, newTaskBounds, 0);
+            // Resize the task directly instead of ActivityTaskManagerService#resizeTask: that one
+            // wraps the resize into a TRANSIT_CHANGE transition, which animates the contraction.
+            // The additional window has to disappear and the task has to shrink immediately.
+            task.resize(newTaskBounds, 0 /* resizeMode */, false /* preserveWindow */);
             // Keep the left fragment registered: if the task is resized later, the fragment has
             // to be resized to fill the task (see updateContainersInTask).
             mRightFragments.remove(taskId);

@@ -33,6 +33,7 @@ import android.graphics.Rect
 import android.graphics.Region
 import android.os.Handler
 import android.os.RemoteException
+import android.os.SystemProperties
 import android.os.Trace
 import android.os.UserHandle
 import android.provider.Settings
@@ -117,6 +118,8 @@ import kotlinx.coroutines.launch
 private const val TAG = "DefaultWindowDecoration"
 /** Settings.Global key remembering that the one-time parallel world hint was shown. */
 private const val PARALLEL_WORLD_GUIDE_SHOWN = "parallel_world_guide_shown"
+/** Debug property: show the parallel world hint on every split, not only the first time. */
+private const val PROP_GUIDE_ALWAYS = "persist.sys.fde.parallel_world.guide_always"
 /** Fallback pane ratio (4:5) used until the task reports the configured ratio. */
 private const val DEFAULT_DIVIDER_RATIO = 5f / 9f
 // fde end
@@ -464,7 +467,9 @@ constructor(
      */
     private fun maybeShowParallelWorldGuide(guide: ParallelWorldGuide, info: RunningTaskInfo) {
         val resolver = decorWindowContext.contentResolver
-        if (Settings.Global.getInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, 0) != 0) {
+        // Debug: with this property the hint is shown on every split, e.g. to read it again.
+        if (!SystemProperties.getBoolean(PROP_GUIDE_ALWAYS, false)
+            && Settings.Global.getInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, 0) != 0) {
             return
         }
         Settings.Global.putInt(resolver, PARALLEL_WORLD_GUIDE_SHOWN, 1)

@@ -26,7 +26,6 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.SurfaceControl
 import android.view.SurfaceControlViewHost
-import android.view.View
 import android.view.WindowManager
 import android.view.WindowlessWindowManager
 import android.widget.LinearLayout
@@ -127,11 +126,10 @@ class ParallelWorldConfigureDialog(
             }
         val hint =
             TextView(context).apply {
-                // The current page may not be the home page of the application: warn the user, the
-                // configured main window cannot be changed easily.
-                val isHomePage = taskInfo.topActivity?.className == launcherActivity()
-                visibility = if (isHomePage) View.GONE else View.VISIBLE
-                setText(R.string.parallel_world_configure_hint_not_launcher)
+                // The main window cannot be changed easily, so always remind the user that the
+                // page which is open right now is the one that becomes the left window. Which page
+                // is the "main" one cannot be detected reliably (many apps open an ad page first).
+                setText(R.string.parallel_world_configure_hint)
                 setTextColor(accentColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_SIZE_SP)
             }
@@ -185,12 +183,6 @@ class ParallelWorldConfigureDialog(
             isClickable = true
             setOnClickListener { onClick() }
         }
-
-    private fun launcherActivity(): String? =
-        context.packageManager
-            .getLaunchIntentForPackage(taskInfo.topActivity?.packageName ?: "")
-            ?.component
-            ?.className
 
     private fun buildLayoutParams(): WindowManager.LayoutParams {
         val lp =

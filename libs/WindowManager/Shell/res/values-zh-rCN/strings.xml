@@ -128,7 +128,7 @@
     <string name="parallel_world_enable_text">"启用平行视界"</string>
     <string name="parallel_world_configure_title">"将当前页面设为平行视界主窗口？"</string>
     <string name="parallel_world_configure_message">"· 当前页面会成为左侧主窗口\n· 从它打开的其它页面会显示在右侧\n· 可随时在标题栏菜单里关闭"</string>
-    <string name="parallel_world_configure_hint_not_launcher">"提示：当前不是应用首页，启用后当前页面会作为主窗口；建议在应用首页上启用。"</string>
+    <string name="parallel_world_configure_hint">"提示：启用后当前页面会固定在左侧作为主窗口，请确认这是你希望常驻左侧的页面（例如应用的主界面）。"</string>
     <string name="parallel_world_configure_enable">"启用"</string>
     <string name="parallel_world_configure_cancel">"取消"</string>
     <string name="parallel_world_guide_title">"平行视界已开启"</string>

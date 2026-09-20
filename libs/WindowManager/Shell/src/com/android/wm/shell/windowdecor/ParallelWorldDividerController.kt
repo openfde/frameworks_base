@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.android.wm.shell.R
 import com.android.wm.shell.common.DisplayController
 import com.android.wm.shell.windowdecor.common.DecorThemeUtil
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -138,6 +139,15 @@ constructor(
     private var dragStartRawX = 0f
     /** Top position of the divider, kept for the local move during a drag. */
     private var lastTop = 0f
+    /**
+     * Ratio that was sent when the drag finished and that the panes have to reach before the veils
+     * are hidden, or {@code -1} when there is nothing pending.
+     */
+    private var pendingVeilHideRatio = -1f
+    private val hideVeilRunnable = Runnable {
+        pendingVeilHideRatio = -1f
+        dragVeil?.hide()
+    }
     /** Size the hosted view was last measured with, to avoid unnecessary setView calls. */
     private var lastViewWidth = -1
     private var lastViewHeight = -1
@@ -208,6 +218,13 @@ constructor(
     fun update(info: RunningTaskInfo, captionHeight: Int, parentLeash: SurfaceControl) {
         taskInfo = info
         updateDividerColors(info)
+        // The panes reached their final size once the task reports the ratio that was applied when
+        // the drag finished: hide the veils now, the user sees the final layout right away.
+        if (pendingVeilHideRatio > 0f
+            && abs(info.magicWindowRatio - pendingVeilHideRatio) < RATIO_EPSILON) {
+            rootView.removeCallbacks(hideVeilRunnable)
+            hideVeilRunnable.run()
+        }
         val bounds = info.configuration.windowConfiguration.bounds
         val ratio = currentRatio(info)
         // While dragging, the divider follows the pointer instead of the ratio from the task
@@ -360,6 +377,11 @@ constructor(
                 dragStartBoundary = if (lastBoundary >= 0f) lastBoundary
                 else bounds.width() * (1 - currentRatio(taskInfo))
                 dragStartRawX = event.rawX
+                lastDraggedRatio = -1f
+                // A new drag starts: a pending hide from the previous drag must not fire while the
+                // veils are visible again.
+                rootView.removeCallbacks(hideVeilRunnable)
+                pendingVeilHideRatio = -1f
                 // Cover the panes: the divider (and the veils) follow the pointer, the panes are
                 // only resized once the drag finishes.
                 onDragStarted?.invoke()
@@ -413,9 +435,16 @@ constructor(
             // The panes are resized here, once: the drag itself only moved the veils and the
             // divider, so the final ratio is the only update sent to the system server.
             onRatioChanged.onRatioChanged(taskId, lastDraggedRatio, true /* persist */)
+            // Keep the veils until the panes have their final size, so that the user sees the
+            // final layout as soon as the veils are gone (see update). A timeout makes sure the
+            // veils are hidden even if the update never comes.
+            pendingVeilHideRatio = lastDraggedRatio
+            rootView.removeCallbacks(hideVeilRunnable)
+            rootView.postDelayed(hideVeilRunnable, VEIL_HIDE_TIMEOUT_MS)
+        } else {
+            dragVeil?.hide()
         }
         dragStartBoundary = -1f
-        dragVeil?.hide()
         applyVisualState()
     }
 
@@ -438,6 +467,8 @@ constructor(
 
     /** Releases the divider overlay and its input. */
     fun close() {
+        rootView.removeCallbacks(hideVeilRunnable)
+        pendingVeilHideRatio = -1f
         dragVeil?.dispose()
         // The receiver owns the input channel, disposing it also disposes the channel.
         inputEventReceiver?.dispose()
@@ -457,5 +488,9 @@ constructor(
         const val DEFAULT_RATIO = 5f / 9f
         const val MIN_RATIO = 0.2f
         const val MAX_RATIO = 0.8f
+        /** Difference below which two ratios are considered the same. */
+        const val RATIO_EPSILON = 0.001f
+        /** Latest time the veils are kept after a drag before they are hidden anyway. */
+        const val VEIL_HIDE_TIMEOUT_MS = 300L
     }
 }

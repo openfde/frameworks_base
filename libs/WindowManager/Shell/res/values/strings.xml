@@ -294,7 +294,7 @@
     <string name="parallel_world_enable_text">Enable Parallel World</string>
     <string name="parallel_world_configure_title">Set this page as the main window?</string>
     <string name="parallel_world_configure_message">· The current page becomes the left main window\n· Pages opened from it appear on the right\n· It can be turned off in the window menu</string>
-    <string name="parallel_world_configure_hint_not_launcher">Note: this is not the app\'s home page, the current page would become the main window. Enabling it on the home page is recommended.</string>
+    <string name="parallel_world_configure_hint">Note: the current page becomes the fixed left main window. Make sure it is the page you want to keep there (e.g. the app\'s main screen).</string>
     <string name="parallel_world_configure_enable">Enable</string>
     <string name="parallel_world_configure_cancel">Cancel</string>
     <string name="parallel_world_guide_title">Parallel World is on</string>
