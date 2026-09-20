@@ -416,7 +416,7 @@ constructor(
         val captionHeight = captionController?.getCaptionHeight() ?: 0
         Log.d(TAG, "parallel world: split=" + isSplit + " wasSplit=" + parallelWorldWasSplit
                 + " type=" + taskInfo.magicWindowType + " divider=" + (parallelWorldDivider != null)
-                + " caption=" + captionHeight
+                + " ratio=" + taskInfo.magicWindowRatio + " caption=" + captionHeight
                 + " bounds=" + taskInfo.configuration.windowConfiguration.bounds)
         if (!isSplit) {
             if (parallelWorldWasSplit) {

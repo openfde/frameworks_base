@@ -147,6 +147,8 @@ constructor(
     private var dragStartRawX = 0f
     /** Top position of the divider, kept for the local move during a drag. */
     private var lastTop = 0f
+    /** Last x the divider was positioned at, used to log position changes only. */
+    private var lastLoggedX = -1f
     /** Size of the task at the last update, used to detect window resizes. */
     private var lastTaskWidth = -1
     private var lastTaskHeight = -1
@@ -274,6 +276,12 @@ constructor(
         // Coordinates are relative to the task leash, the divider surface is centered on the
         // boundary between the two panes.
         val x = boundary - dividerSurfaceWidth / 2f
+        if (abs(x - lastLoggedX) >= 1f) {
+            Log.d(TAG, "divider position: x=" + x + " boundary=" + boundary
+                    + " ratio=" + ratio + " width=" + bounds.width()
+                    + " dragging=" + (dragStartBoundary >= 0f))
+            lastLoggedX = x
+        }
         val y = captionHeight.toFloat()
         val height = max(0, bounds.height() - captionHeight)
         if (height <= 0) {

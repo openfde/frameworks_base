@@ -612,6 +612,8 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         final float ratio = mSplitRatios.get(taskId, DEFAULT_SPLIT_RATIO);
         final int totalWidth = taskBounds.width();
         final int leftWidth = Math.round(totalWidth * (1 - ratio));
+        Slog.d(TAG, "updateContainersInTask: task=" + taskId + " bounds=" + taskBounds
+                + " ratio=" + ratio + " left=" + leftWidth + " right=" + (totalWidth - leftWidth));
         resizeTaskFragment(wct, mLeftFragments.get(taskId),
                 new Rect(0, 0, leftWidth, taskBounds.height()));
         resizeTaskFragment(wct, rightToken,
