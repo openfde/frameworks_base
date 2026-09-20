@@ -262,7 +262,16 @@ constructor(
         }
         lastTop = y
         if (dividerSurfaceWidth != lastViewWidth || height != lastViewHeight) {
-            viewHost.setView(rootView, buildLayoutParams(dividerSurfaceWidth, height))
+            Log.d(TAG, "divider geometry: " + dividerSurfaceWidth + "x" + height
+                    + " at x=" + x + " y=" + y)
+            val params = buildLayoutParams(dividerSurfaceWidth, height)
+            if (viewHost.view == null) {
+                viewHost.setView(rootView, params)
+            } else {
+                // setView() is a no-op when the view host already has a view, the size has to be
+                // updated with relayout() (see SurfaceControlViewHostAdapter#updateView).
+                viewHost.relayout(params)
+            }
             updateInputRegion(dividerSurfaceWidth, height)
             lastViewWidth = dividerSurfaceWidth
             lastViewHeight = height
