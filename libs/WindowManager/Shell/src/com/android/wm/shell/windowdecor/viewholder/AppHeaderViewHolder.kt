@@ -117,7 +117,10 @@ class AppHeaderViewHolder(
     private val titleBarColorPackages = setOf(
         "com.android.settings",
         "com.fde.gallery3d",
-        "com.android.documentsui"
+        "com.android.documentsui",
+        "com.android.wallpaper",
+        "com.android.permissioncontroller",
+        "com.android.settings.intelligence"
     )
 
     override val rootView =
@@ -602,6 +605,7 @@ class AppHeaderViewHolder(
 
         if (topActivity != null) {
             val packageName = topActivity.packageName
+            Log.d(TAG,"bella_framework packageName $packageName")
             if (packageName in titleBarColorPackages) {
                 foregroundColor = if (isDarkMode()) Color.WHITE else Color.BLACK
             }else{
