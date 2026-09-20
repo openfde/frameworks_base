@@ -26,6 +26,7 @@ import android.os.Binder
 import android.os.Looper
 import android.os.RemoteException
 import android.os.SystemClock
+import android.os.SystemProperties
 import android.util.Log
 import android.view.IWindowSession
 import android.view.InputChannel
@@ -232,11 +233,15 @@ constructor(
         // have to settle afterwards.
         if (pendingVeilHideRatio > 0f
             && abs(info.magicWindowRatio - pendingVeilHideRatio) < RATIO_EPSILON) {
+            val hideDelay = SystemProperties.getInt(
+                PROP_VEIL_HIDE_DELAY_MS,
+                VEIL_HIDE_DELAY_MS.toInt(),
+            ).toLong()
             Log.d(TAG, "final ratio applied: " + info.magicWindowRatio
-                    + ", veils hide in " + VEIL_HIDE_DELAY_MS + "ms")
+                    + ", veils hide in " + hideDelay + "ms")
             pendingVeilHideRatio = -1f
             rootView.removeCallbacks(hideVeilRunnable)
-            rootView.postDelayed(hideVeilRunnable, VEIL_HIDE_DELAY_MS)
+            rootView.postDelayed(hideVeilRunnable, hideDelay)
         }
         val bounds = info.configuration.windowConfiguration.bounds
         val ratio = currentRatio(info)
@@ -522,10 +527,13 @@ constructor(
         /**
          * Time the veils are kept after the final ratio was applied, to give the applications a few
          * frames to redraw behind them. It is deliberately generous: the veils disappear slowly so
-         * that the user does not see the applications relayout.
+         * that the user does not see the applications relayout. It can be tuned on the device with
+         * {@code persist.sys.fde.parallel_world.veil_hide_ms}.
          */
-        const val VEIL_HIDE_DELAY_MS = 400L
+        const val VEIL_HIDE_DELAY_MS = 600L
+        /** Property overriding [VEIL_HIDE_DELAY_MS], in milliseconds. */
+        const val PROP_VEIL_HIDE_DELAY_MS = "persist.sys.fde.parallel_world.veil_hide_ms"
         /** Latest time the veils are kept after a drag before they are hidden anyway. */
-        const val VEIL_HIDE_TIMEOUT_MS = 800L
+        const val VEIL_HIDE_TIMEOUT_MS = 2000L
     }
 }
