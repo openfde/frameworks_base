@@ -114,6 +114,12 @@ class AppHeaderViewHolder(
     private val lightColors = dynamicLightColorScheme(context)
     private val darkColors = dynamicDarkColorScheme(context)
 
+    private val titleBarColorPackages = setOf(
+        "com.android.settings",
+        "com.fde.gallery3d",
+        "com.android.documentsui"
+    )
+
     override val rootView =
         appHeaderView
             ?: if (DesktopExperienceFlags.ENABLE_WINDOW_DECORATION_REFACTOR.isTrue) {
@@ -582,6 +588,7 @@ class AppHeaderViewHolder(
     ) {
         val header = fillHeaderInfo(taskInfo, hasGlobalFocus)
         val headerStyle = getHeaderStyle(header)
+        val topActivity = taskInfo.topActivity
 
         if (DesktopModeFlags.ENABLE_DESKTOP_APP_HANDLE_ANIMATION.isTrue()) {
             setCaptionVisibility(isCaptionVisible)
@@ -602,11 +609,14 @@ class AppHeaderViewHolder(
         // Caption Foreground
         var foregroundColor = headerStyle.foreground.color
         val foregroundAlpha = headerStyle.foreground.opacity
-        if (isDarkMode()) {
-            foregroundColor = Color.WHITE
-        }else{
-            foregroundColor = Color.BLACK   
+
+        if (topActivity != null) {
+            val packageName = topActivity.packageName
+            if (packageName in titleBarColorPackages) {
+                foregroundColor = if (isDarkMode()) Color.WHITE else Color.BLACK
+            }
         }
+
         val colorStateList = ColorStateList.valueOf(foregroundColor).withAlpha(foregroundAlpha)
 
         // App chip.
@@ -714,7 +724,7 @@ class AppHeaderViewHolder(
 
         var x11HideCaptionButton = false
         Log.d(TAG, "updateRelayoutParams:" + taskInfo)
-        val topActivity = taskInfo.topActivity
+
         if (topActivity != null) {
             Log.d(TAG, "updateRelayoutParams: topActivity:" + topActivity.getClassName())
             x11HideCaptionButton = topActivity.getClassName().contains("fde") &&
