@@ -334,6 +334,14 @@ class DesktopTasksTransitionObserver(
                         // state.
                         return@forEachLoop
                     }
+                    // fde start MAGIC WINDOW -> parallel world
+                    if (taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL) {
+                        // A task in the parallel world is expanded to fit both panes: the bounds of
+                        // the expanded window must not be remembered, otherwise the application
+                        // would come back with the size of both panes when it is opened again.
+                        return@forEachLoop
+                    }
+                    // fde end
 
                     val displayLayout =
                         displayController.getDisplayLayout(taskInfo.displayId) ?: return@forEachLoop

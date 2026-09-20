@@ -18,6 +18,7 @@ package com.android.wm.shell.desktopmode
 
 import android.app.ActivityManager.RunningTaskInfo
 import android.app.ActivityTaskManager
+import android.app.TaskInfo
 import android.graphics.Rect
 import android.os.RemoteException
 import android.window.DesktopExperienceFlags
@@ -274,7 +275,7 @@ class DesktopTaskChangeListener(
             taskInfo.displayId,
             taskInfo.taskId,
             isVisible = false,
-            taskInfo.configuration.windowConfiguration.bounds,
+            taskBoundsForRepository(taskInfo),
         )
     }
 
@@ -317,7 +318,7 @@ class DesktopTaskChangeListener(
                     taskInfo.displayId,
                     taskInfo.taskId,
                     isVisible = false,
-                    taskInfo.configuration.windowConfiguration.bounds,
+                    taskBoundsForRepository(taskInfo),
                 )
             } else {
                 removeTask(desktopRepository, taskInfo.taskId, isClosingTask = false)
@@ -363,7 +364,7 @@ class DesktopTaskChangeListener(
             deskId,
             taskId,
             taskInfo.isVisible,
-            taskInfo.configuration.windowConfiguration.bounds,
+            taskBoundsForRepository(taskInfo),
         )
 
         // Enables the task as a perceptible task (i.e. OOM adj is boosted)
@@ -417,6 +418,21 @@ class DesktopTaskChangeListener(
 
     private fun isDesktopTask(taskInfo: RunningTaskInfo): Boolean =
         taskInfo.isFreeform && !isTaskPinned(taskInfo)
+
+    // fde start MAGIC WINDOW -> parallel world
+    /**
+     * Bounds to remember for the task in the desktop repository. A task in the parallel world is
+     * expanded to fit both panes: its current bounds are not the bounds of the single window the
+     * user sees, remembering them would make the window come back with the expanded size
+     * (main + additional window). Returning null keeps the previously remembered bounds.
+     */
+    private fun taskBoundsForRepository(taskInfo: RunningTaskInfo): Rect? =
+        if (taskInfo.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL) {
+            null
+        } else {
+            taskInfo.configuration.windowConfiguration.bounds
+        }
+    // fde end
 
     private fun isTaskPinned(taskInfo: RunningTaskInfo) =
         pinnedController?.isPinned(taskInfo.taskId) ?: false
