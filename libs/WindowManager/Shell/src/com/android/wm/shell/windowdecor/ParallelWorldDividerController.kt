@@ -113,7 +113,6 @@ constructor(
     private val handleDragHeight: Int =
         context.resources.getDimensionPixelSize(R.dimen.parallel_world_divider_handle_drag_height)
 
-    private val decorThemeUtil = DecorThemeUtil(context)
     /** Colors of the divider, refreshed from the task theme on every update. */
     private var lineColor: Int = DEFAULT_LINE_COLOR
     private var handleColor: Int = DEFAULT_HANDLE_COLOR
@@ -450,8 +449,8 @@ constructor(
     private companion object {
         /** Fallback colors used until the task theme has been applied. */
         const val DEFAULT_LINE_COLOR = 0x66000000
-        const val DEFAULT_HANDLE_COLOR = 0x99000000
-        const val DEFAULT_HIGHLIGHT_COLOR = 0xFF1A73E8.toInt()
+        const val DEFAULT_HANDLE_COLOR = -0x67000000 // 0x99000000
+        val DEFAULT_HIGHLIGHT_COLOR = 0xFF1A73E8.toInt()
         /** Alpha of the line and the handle when the divider is neither hovered nor dragged. */
         const val LINE_ALPHA = 0.5f
         const val HANDLE_ALPHA = 0.7f
