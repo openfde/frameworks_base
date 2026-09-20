@@ -122,6 +122,12 @@ interface WindowDecorationActions {
      * the package of the task.
      */
     fun onSetParallelWorldEnabled(taskId: Int, enabled: Boolean) {}
+
+    /**
+     * Configures the top activity of the task as the main window of the parallel world and enables
+     * the feature for its package. Used for applications that are not part of the device config.
+     */
+    fun onConfigureParallelWorldMain(taskId: Int) {}
     // fde end
 
     /**

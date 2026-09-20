@@ -538,9 +538,13 @@
     <!-- The width of the draggable divider surface, which is also its touchable width. It is
          wider than the visual handle so that the divider is easy to grab with a mouse. -->
     <dimen name="parallel_world_divider_width">24dp</dimen>
-    <!-- The visual handle of the draggable divider. -->
+    <!-- The full height line of the draggable divider and its width while dragging. -->
+    <dimen name="parallel_world_divider_line_width">1dp</dimen>
+    <dimen name="parallel_world_divider_line_drag_width">4dp</dimen>
+    <!-- The visual handle of the draggable divider and its height while dragging. -->
     <dimen name="parallel_world_divider_handle_width">4dp</dimen>
     <dimen name="parallel_world_divider_handle_height">48dp</dimen>
+    <dimen name="parallel_world_divider_handle_drag_height">64dp</dimen>
     <!-- fde end -->
 
     <!-- The radius of the layout menu buttons. -->

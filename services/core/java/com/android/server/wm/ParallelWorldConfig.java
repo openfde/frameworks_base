@@ -81,6 +81,8 @@ public final class ParallelWorldConfig {
     private static final String SETTING_RATIO_PREFIX = "parallel_world_ratio_";
     /** Settings.Global key prefix of the mode chosen by the user for the package. */
     private static final String SETTING_MODE_PREFIX = "parallel_world_mode_";
+    /** Settings.Global key prefix of the main activity configured by the user. */
+    private static final String SETTING_USER_MAIN_PREFIX = "parallel_world_user_main_";
     /** The user never switched the parallel world of the package: follow the config. */
     public static final int MODE_UNSET = 0;
     /** The user switched the parallel world on: the package always starts split. */
@@ -96,6 +98,13 @@ public final class ParallelWorldConfig {
     private static final ParallelWorldConfig sInstance = new ParallelWorldConfig();
 
     private final HashMap<String, PackageConfig> mPackages = new HashMap<>();
+    /**
+     * Packages whose main activity was configured by the user, see {@link #getUserMainActivity}.
+     * Kept in memory so that the dumpsys can report them; the value itself lives in Settings.
+     */
+    private final ArraySet<String> mUserConfiguredPackages = new ArraySet<>();
+    /** Application context, set by {@link #load(Context)}, used to read the user configuration. */
+    private Context mContext;
 
     private ParallelWorldConfig() {
     }
@@ -120,6 +129,7 @@ public final class ParallelWorldConfig {
      * {@code /system/magicwindow_config/magic_config.xml}.
      */
     public void load(Context context) {
+        mContext = context != null ? context.getApplicationContext() : null;
         final File configFile = new File(CONFIG_DIR, CONFIG_FILE);
         if (!configFile.exists()) {
             Slog.i(TAG, "Didn't find parallel world config file: " + configFile);
@@ -212,7 +222,14 @@ public final class ParallelWorldConfig {
             config = mPackages.get(packageName);
         }
         if (config == null) {
-            return Task.NOT_MAGIC_WINDOW;
+            // Not part of the device config: the user may have configured the package from the
+            // window menu, then the activity that was open when it was enabled is the main one.
+            final String userMain = getUserMainActivity(mContext, packageName);
+            if (userMain == null) {
+                return Task.NOT_MAGIC_WINDOW;
+            }
+            return userMain.equals(toSimpleClassName(activity))
+                    ? Task.MAGIC_MAIN_WINDOW : Task.MAGIC_ADDITIONAL_WINDOW;
         }
         final String simpleName = toSimpleClassName(activity);
         if (config.excludedActivities.contains(simpleName)) {
@@ -253,10 +270,13 @@ public final class ParallelWorldConfig {
         if (!isEnabled() || TextUtils.isEmpty(packageName)) {
             return 0f;
         }
+        boolean configured;
         synchronized (mPackages) {
-            if (!mPackages.containsKey(packageName)) {
-                return 0f;
-            }
+            configured = mPackages.containsKey(packageName);
+        }
+        if (!configured && getUserMainActivity(context, packageName) == null) {
+            // Neither the device config nor the user configured this package.
+            return 0f;
         }
         final float userRatio = getUserRatio(context, packageName);
         if (userRatio > 0f) {
@@ -303,6 +323,39 @@ public final class ParallelWorldConfig {
         }
         Settings.Global.putInt(context.getContentResolver(),
                 SETTING_MODE_PREFIX + packageName, mode);
+    }
+
+    /**
+     * The main activity of the package configured by the user, or {@code null} when the user never
+     * configured it. Applications that are not part of the device config can be configured from
+     * the window menu: the activity that is open when the user enables the parallel world becomes
+     * the main (left) window.
+     */
+    public String getUserMainActivity(Context context, String packageName) {
+        if (context == null || TextUtils.isEmpty(packageName)) {
+            return null;
+        }
+        final String activity = Settings.Global.getString(context.getContentResolver(),
+                SETTING_USER_MAIN_PREFIX + packageName);
+        if (TextUtils.isEmpty(activity)) {
+            return null;
+        }
+        synchronized (mUserConfiguredPackages) {
+            mUserConfiguredPackages.add(packageName);
+        }
+        return activity;
+    }
+
+    /** Remembers the main activity configured by the user for the package. */
+    public void setUserMainActivity(Context context, String packageName, String activity) {
+        if (context == null || TextUtils.isEmpty(packageName) || TextUtils.isEmpty(activity)) {
+            return;
+        }
+        Settings.Global.putString(context.getContentResolver(),
+                SETTING_USER_MAIN_PREFIX + packageName, activity);
+        synchronized (mUserConfiguredPackages) {
+            mUserConfiguredPackages.add(packageName);
+        }
     }
 
     /**
@@ -377,17 +430,36 @@ public final class ParallelWorldConfig {
                 + " pauseMode=" + SystemProperties.get(PROP_PAUSE_MODE, PAUSE_MODE_LEGACY));
         synchronized (mPackages) {
             if (mPackages.isEmpty()) {
-                pw.println("  (no package configured)");
-                return;
+                pw.println("  (no package configured in the device config)");
+            } else {
+                for (Map.Entry<String, PackageConfig> entry : mPackages.entrySet()) {
+                    final PackageConfig config = entry.getValue();
+                    final String userMain = getUserMainActivity(context, entry.getKey());
+                    pw.println("  " + entry.getKey()
+                            + " source=xml"
+                            + " main=" + config.mainActivities
+                            + " exclude=" + config.excludedActivities
+                            + " pauseLeft=" + config.pauseLeft
+                            + (userMain != null ? " userMain=" + userMain : "")
+                            + " mode=" + getUserMode(context, entry.getKey())
+                            + " ratio=" + getSplitRatio(context, entry.getKey()));
+                }
             }
-            for (Map.Entry<String, PackageConfig> entry : mPackages.entrySet()) {
-                final PackageConfig config = entry.getValue();
-                pw.println("  " + entry.getKey()
-                        + " main=" + config.mainActivities
-                        + " exclude=" + config.excludedActivities
-                        + " pauseLeft=" + config.pauseLeft
-                        + " mode=" + getUserMode(context, entry.getKey())
-                        + " ratio=" + getSplitRatio(context, entry.getKey()));
+        }
+        // Packages the user configured from the window menu, see getUserMainActivity.
+        synchronized (mUserConfiguredPackages) {
+            for (int i = 0; i < mUserConfiguredPackages.size(); i++) {
+                final String packageName = mUserConfiguredPackages.valueAt(i);
+                synchronized (mPackages) {
+                    if (mPackages.containsKey(packageName)) {
+                        continue;
+                    }
+                }
+                pw.println("  " + packageName
+                        + " source=user"
+                        + " main=[" + getUserMainActivity(context, packageName) + "]"
+                        + " mode=" + getUserMode(context, packageName)
+                        + " ratio=" + getSplitRatio(context, packageName));
             }
         }
     }
