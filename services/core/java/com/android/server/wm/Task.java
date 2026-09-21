@@ -3518,6 +3518,8 @@ class Task extends TaskFragment {
         info.magicWindowEnabled = parallelWorldPackage
                 && parallelWorldConfig.getUserMode(mAtmService.mContext, top.packageName)
                         == ParallelWorldConfig.MODE_ON;
+        info.magicWindowUserConfigured = parallelWorldPackage
+                && !parallelWorldConfig.isDeviceConfigured(top.packageName);
         info.magicWindowRatio = mAtmService.mParallelVisionOrganizer != null
                 ? mAtmService.mParallelVisionOrganizer.getSplitRatio(mTaskId) : 0f;
         // fde end
