@@ -127,8 +127,10 @@ class ParallelWorldConfigureDialog(
             // The window background is transparent, so the card is what is visible. Paint the leash
             // with the same colour as the card and give it a shadow: SurfaceFlinger only draws a
             // shadow for a layer that has a colour, and the shadow makes the dialog stand out from
-            // the window behind it.
+            // the window behind it. The corner radius has to be set on the leash as well, otherwise
+            // the painted rectangle shows its right angles behind the rounded corners of the card.
             .setColor(leash, floatArrayOf(cardRed, cardGreen, cardBlue))
+            .setCornerRadius(leash, dp(CORNER_RADIUS_DP).toFloat())
             .setShadowRadius(leash, dp(SHADOW_RADIUS_DP).toFloat())
             .show(leash)
             .apply()
