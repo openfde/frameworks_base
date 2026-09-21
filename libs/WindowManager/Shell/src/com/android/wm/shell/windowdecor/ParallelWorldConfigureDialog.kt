@@ -18,6 +18,7 @@ package com.android.wm.shell.windowdecor
 
 import android.app.ActivityManager.RunningTaskInfo
 import android.content.Context
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -64,6 +65,18 @@ class ParallelWorldConfigureDialog(
 
     private val dialogWidth: Int = dp(DIALOG_WIDTH_DP)
     /**
+     * Background of the card: the colour from the theme made opaque, a dialog that lets the window
+     * behind it shine through is hard to read.
+     */
+    private val cardBackgroundColor: Int = Color.argb(
+        255,
+        Color.red(backgroundColor),
+        Color.green(backgroundColor),
+        Color.blue(backgroundColor),
+    )
+    /** Border of the card, a translucent accent colour. */
+    private val borderColor: Int = (accentColor and 0x00FFFFFF) or 0x40000000
+    /**
      * Height of the dialog. It is measured from the content in the constructor: the card has a
      * fixed size, a content that is higher than the card would clip the buttons.
      */
@@ -103,11 +116,20 @@ class ParallelWorldConfigureDialog(
         val x = bounds.left + (bounds.width() - dialogWidth) / 2
         val y = bounds.top + (bounds.height() - dialogHeight) / 2
         Log.d(TAG, "configure dialog show: task=${taskInfo.taskId} h=$dialogHeight")
+        val cardRed = Color.red(cardBackgroundColor) / 255f
+        val cardGreen = Color.green(cardBackgroundColor) / 255f
+        val cardBlue = Color.blue(cardBackgroundColor) / 255f
         transactionSupplier
             .get()
             .setLayer(leash, TaskConstants.TASK_CHILD_LAYER_FLOATING_MENU)
             .setPosition(leash, x.toFloat(), y.toFloat())
             .setWindowCrop(leash, dialogWidth, dialogHeight)
+            // The window background is transparent, so the card is what is visible. Paint the leash
+            // with the same colour as the card and give it a shadow: SurfaceFlinger only draws a
+            // shadow for a layer that has a colour, and the shadow makes the dialog stand out from
+            // the window behind it.
+            .setColor(leash, floatArrayOf(cardRed, cardGreen, cardBlue))
+            .setShadowRadius(leash, dp(SHADOW_RADIUS_DP).toFloat())
             .show(leash)
             .apply()
     }
@@ -137,6 +159,7 @@ class ParallelWorldConfigureDialog(
                 setText(R.string.parallel_world_configure_message)
                 setTextColor(textColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_SIZE_SP)
+                setLineSpacing(0f, LINE_SPACING_MULTIPLIER)
             }
         val hint =
             TextView(context).apply {
@@ -146,6 +169,7 @@ class ParallelWorldConfigureDialog(
                 setText(R.string.parallel_world_configure_hint)
                 setTextColor(accentColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_SIZE_SP)
+                setLineSpacing(0f, LINE_SPACING_MULTIPLIER)
             }
         val buttons =
             LinearLayout(context).apply {
@@ -154,13 +178,15 @@ class ParallelWorldConfigureDialog(
                 addView(
                     actionView(R.string.parallel_world_configure_cancel, accentColor) {
                         dismiss()
-                    }
+                    },
+                    actionParams(0),
                 )
                 addView(
                     actionView(R.string.parallel_world_configure_enable, accentColor) {
                         onConfirm()
                         dismiss()
-                    }
+                    },
+                    actionParams(ACTION_SPACING_DP),
                 )
             }
         val padding = dp(PADDING_DP)
@@ -169,13 +195,15 @@ class ParallelWorldConfigureDialog(
             background =
                 GradientDrawable().apply {
                     cornerRadius = dp(CORNER_RADIUS_DP).toFloat()
-                    setColor(backgroundColor)
+                    setColor(cardBackgroundColor)
+                    // A border so that the card is visible even on a window of a similar colour.
+                    setStroke(dp(STROKE_WIDTH_DP), borderColor)
                 }
             setPadding(padding, padding, padding, padding)
             addView(title)
-            addView(message)
-            addView(hint)
-            addView(buttons)
+            addView(message, blockParams(BLOCK_SPACING_DP))
+            addView(hint, blockParams(BLOCK_SPACING_DP))
+            addView(buttons, blockParams(BUTTONS_SPACING_DP))
             setOnTouchListener { _, event ->
                 if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) {
                     dismiss()
@@ -184,6 +212,20 @@ class ParallelWorldConfigureDialog(
             }
         }
     }
+
+    private fun blockParams(topMarginDp: Int): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        )
+            .apply { topMargin = dp(topMarginDp) }
+
+    private fun actionParams(startMarginDp: Int): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        )
+            .apply { marginStart = dp(startMarginDp) }
 
     private fun actionView(textRes: Int, color: Int, onClick: () -> Unit): TextView =
         TextView(context).apply {
@@ -218,13 +260,19 @@ class ParallelWorldConfigureDialog(
 
     private companion object {
         const val TAG = "ParallelWorld"
-        const val DIALOG_WIDTH_DP = 320
+        const val DIALOG_WIDTH_DP = 340
         const val DIALOG_MIN_HEIGHT_DP = 190
-        const val CORNER_RADIUS_DP = 10
-        const val PADDING_DP = 16
-        const val ACTION_PADDING_DP = 8
-        const val TITLE_TEXT_SIZE_SP = 14f
-        const val TEXT_SIZE_SP = 12f
-        const val ACTION_TEXT_SIZE_SP = 13f
+        const val CORNER_RADIUS_DP = 14
+        const val PADDING_DP = 20
+        const val STROKE_WIDTH_DP = 1
+        const val SHADOW_RADIUS_DP = 12
+        const val BLOCK_SPACING_DP = 10
+        const val BUTTONS_SPACING_DP = 16
+        const val ACTION_SPACING_DP = 12
+        const val ACTION_PADDING_DP = 10
+        const val TITLE_TEXT_SIZE_SP = 16f
+        const val TEXT_SIZE_SP = 13f
+        const val ACTION_TEXT_SIZE_SP = 14f
+        const val LINE_SPACING_MULTIPLIER = 1.3f
     }
 }
