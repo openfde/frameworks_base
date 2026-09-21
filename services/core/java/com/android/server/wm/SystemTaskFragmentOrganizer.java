@@ -721,10 +721,20 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             return;
         }
         if (!taskFragmentInfo.hasRunningActivity()) {
-            Slog.d(TAG, "onTaskFragmentInfoChanged: fragment has no activity, delete it. task="
-                    + taskId + " token=" + taskFragmentInfo.getFragmentToken());
-            deleteTaskFragment(wct, taskFragmentInfo);
-            mFragmentInfos.remove(taskFragmentInfo.getFragmentToken());
+            final IBinder token = taskFragmentInfo.getFragmentToken();
+            // Only the additional window is deleted: it is empty once its activities were
+            // reparented into the main window, and deleting it makes the framework call
+            // onTaskFragmentVanished, which contracts the task. Other fragments of the task (the
+            // main window, or a fragment an activity created for activity embedding) are left
+            // alone: an activity in a fragment that is being removed is not destroyed anymore, the
+            // task could not be removed (the close button of the window would stop working) and
+            // the window could not be brought to the front again.
+            if (token.equals(mRightFragments.get(taskId))) {
+                Slog.d(TAG, "onTaskFragmentInfoChanged: additional window is empty, delete it."
+                        + " task=" + taskId + " token=" + token);
+                deleteTaskFragment(wct, taskFragmentInfo);
+                mFragmentInfos.remove(token);
+            }
             return;
         }
         pauseLeftIfNeed(taskFragmentInfo, taskId);
