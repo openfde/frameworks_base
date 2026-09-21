@@ -404,9 +404,7 @@ constructor(
         if (!applyTransactionOnDraw) {
             t.apply()
         }
-        // fde start MAGIC WINDOW -> parallel world
-        updateParallelWorldDivider(taskInfo)
-        // fde end
+        // The divider is updated by the relayout above (see the parallel world part there).
     }
 
     // fde start MAGIC WINDOW -> parallel world
@@ -658,6 +656,12 @@ constructor(
                 }
             }
             updateOpenByDefaultFirstRunPromptIfNeeded(configChanged, taskInfo)
+            // fde start MAGIC WINDOW -> parallel world
+            // This relayout is also the one used by the transitions (maximize, fullscreen, ...):
+            // the divider has to follow the task bounds here as well, otherwise it would keep the
+            // geometry of the previous window mode.
+            updateParallelWorldDivider(taskInfo)
+            // fde end
         }
 
     /**
