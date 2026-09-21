@@ -277,7 +277,9 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         // otherwise the main window would stretch over the whole expanded task and the expansion
         // would be visible twice.
         final IBinder existingLeftToken = mLeftFragments.get(taskId);
-        if (existingLeftToken != null && mFragmentInfos.get(existingLeftToken) != null) {
+        final TaskFragmentInfo existingLeftInfo = existingLeftToken != null
+                ? mFragmentInfos.get(existingLeftToken) : null;
+        if (existingLeftInfo != null) {
             final WindowContainerTransaction pinWct = new WindowContainerTransaction();
             resizeTaskFragment(pinWct, existingLeftToken, new Rect(0, 0, leftWidth, height));
             if (!pinWct.isEmpty()) {
@@ -307,8 +309,30 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
                             .setInitialRelativeBounds(leftBounds)
                             .build();
             wct.createTaskFragment(primaryParams);
+            final List<IBinder> movedActivities = new ArrayList<>(leftActivities.size() + 1);
             for (ActivityRecord activity : leftActivities) {
+                movedActivities.add(activity.token);
                 wct.reparentActivityToTaskFragment(primaryTfToken, activity.token);
+            }
+            final TaskFragmentInfo previousLeftInfo = existingLeftToken != null
+                    ? mFragmentInfos.get(existingLeftToken) : null;
+            if (previousLeftInfo != null) {
+                // The main fragment of the previous split is replaced by the new one: move the
+                // activities it still has into the new main fragment and delete it in the same
+                // transaction. A fragment created by an organizer is not removed by the framework
+                // when it loses its last activity, so without this it would stay in the task
+                // forever: it would keep the task from being removed (the window could not be
+                // closed) and, while it is empty, it would block the transitions of the task until
+                // their sync timeout (see TaskFragment#isReadyToTransit).
+                final List<IBinder> previousActivities = previousLeftInfo.getActivities();
+                if (previousActivities != null) {
+                    for (IBinder activityToken : previousActivities) {
+                        if (!movedActivities.contains(activityToken)) {
+                            wct.reparentActivityToTaskFragment(primaryTfToken, activityToken);
+                        }
+                    }
+                }
+                wct.deleteTaskFragment(existingLeftToken);
             }
 
             final TaskFragmentCreationParams secondaryParams =
@@ -734,9 +758,12 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             // reparented into the main window. The main window is deleted only when it has no
             // activity at all: as long as an activity is in it (even a finishing one) it is the
             // content of the single window and must be kept.
-            // Fragments that are not part of the split belong to the activity (activity embedding)
-            // and are managed by its own organizer, they are left alone.
-            if (isAdditionalWindow || (isMainWindow && noActivityAtAll)) {
+            // Any other fragment of this organizer without activity is the main fragment of a
+            // previous split that was replaced by a new one (the main fragment is kept after a
+            // merge, and it becomes empty when the split is created again): it does not show
+            // anything anymore, delete it as well, otherwise it would stay in the task and keep
+            // the task from being removed.
+            if (isAdditionalWindow || noActivityAtAll) {
                 Slog.d(TAG, "onTaskFragmentInfoChanged: empty split fragment, delete it. task="
                         + taskId + " token=" + token + " additional=" + isAdditionalWindow);
                 deleteTaskFragment(wct, taskFragmentInfo);
@@ -810,7 +837,7 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         final IBinder token = taskFragmentInfo.getFragmentToken();
         Slog.d(TAG, "onTaskFragmentVanished: task=" + taskId + " token=" + token);
         if (token.equals(mRightFragments.get(taskId))) {
-            contractTask(taskId);
+            contractTask(taskId, token);
         } else if (token.equals(mLeftFragments.get(taskId))) {
             // The main window is gone, finish the additional window as well.
             final TaskFragmentInfo rightInfo = mFragmentInfos.get(mRightFragments.get(taskId));
@@ -830,7 +857,7 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
     }
 
     /** Shrinks the task back to the main window width and clears the split state. */
-    private void contractTask(int taskId) {
+    private void contractTask(int taskId, IBinder vanishedRightToken) {
         final Rect taskBounds = mTaskBounds.get(taskId);
         final Float ratio = mSplitRatios.get(taskId);
         mAtmService.mH.post(() -> {
@@ -838,6 +865,14 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             // info dispatch below would otherwise race with the dispatch of the pending task events
             // on the animation thread (TaskOrganizerController#dispatchPendingEvents).
             synchronized (mAtmService.mGlobalLock) {
+                final IBinder currentRight = mRightFragments.get(taskId);
+                if (currentRight != null && currentRight != vanishedRightToken) {
+                    // A new split was created before this task was contracted (the additional
+                    // window was opened again right after it was closed): the task bounds and the
+                    // split state belong to the new split now, leave them alone.
+                    Slog.d(TAG, "contractTask: task=" + taskId + " has a new split, skip");
+                    return;
+                }
                 contractTaskLocked(taskId, taskBounds, ratio);
             }
         });

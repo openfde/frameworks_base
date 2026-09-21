@@ -226,6 +226,7 @@ import static com.android.server.wm.ActivityTaskManagerService.DUMP_ACTIVITIES_S
 import static com.android.server.wm.ActivityTaskManagerService.DUMP_CONTAINERS_CMD;
 import static com.android.server.wm.ActivityTaskManagerService.DUMP_LASTANR_CMD;
 import static com.android.server.wm.ActivityTaskManagerService.DUMP_LASTANR_TRACES_CMD;
+import static com.android.server.wm.ActivityTaskManagerService.DUMP_PARALLEL_WORLD_CMD;
 import static com.android.server.wm.ActivityTaskManagerService.DUMP_RECENTS_CMD;
 import static com.android.server.wm.ActivityTaskManagerService.DUMP_RECENTS_SHORT_CMD;
 import static com.android.server.wm.ActivityTaskManagerService.DUMP_STARTER_CMD;
@@ -11607,7 +11608,8 @@ public class ActivityManagerService extends IActivityManager.Stub
                     || DUMP_STARTER_CMD.equals(cmd) || DUMP_CONTAINERS_CMD.equals(cmd)
                     || DUMP_RECENTS_CMD.equals(cmd) || DUMP_RECENTS_SHORT_CMD.equals(cmd)
                     || DUMP_TOP_RESUMED_ACTIVITY.equals(cmd)
-                    || DUMP_VISIBLE_ACTIVITIES.equals(cmd)) {
+                    || DUMP_VISIBLE_ACTIVITIES.equals(cmd)
+                    || DUMP_PARALLEL_WORLD_CMD.equals(cmd)) {
                 mAtmInternal.dump(cmd, fd, pw, args, opti, /* dumpAll= */ true, dumpClient,
                         dumpPackage, dumpDisplayId);
             } else if ("binder-proxies".equals(cmd)) {
