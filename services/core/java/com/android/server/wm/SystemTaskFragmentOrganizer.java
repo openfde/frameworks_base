@@ -82,6 +82,11 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
     private static final long EXPAND_TRANSITION_TIMEOUT_MS = 3000;
     /** Delay before pausing the main activity, to let the additional window settle down. */
     private static final long PAUSE_LEFT_DELAY_MS = 1000;
+    /**
+     * Time a fragment whose removal was requested may stay before it is removed by force, see
+     * {@link #scheduleForceRemove}.
+     */
+    private static final long FORCE_REMOVE_TIMEOUT_MS = 3000;
     private static final float DEFAULT_SPLIT_RATIO = 0.5f;
     /** Reason used when pausing the main window through the TaskFragment. */
     private static final String PAUSE_REASON = "parallel-world";
@@ -390,6 +395,7 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             final WindowContainerTransaction wct = new WindowContainerTransaction();
             deleteTaskFragment(wct, rightInfo);
             applyTransaction(wct, 0, false);
+            scheduleForceRemove(rightInfo, taskId);
             return;
         }
         Slog.d(TAG, "exitSplit: task=" + taskId + " merge " + activities.size()
@@ -406,6 +412,7 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
         // No transition: the additional window should just disappear and the task contract
         // immediately, without a merge animation.
         applyTransaction(wct, 0, false);
+        scheduleForceRemove(rightInfo, taskId);
     }
 
     /**
@@ -771,6 +778,13 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
                 if (isMainWindow) {
                     mLeftFragments.remove(taskId);
                 }
+                // The fragment can still have activities that are finishing: the framework removes
+                // it once they are gone, but a lifecycle race (a finish that races with a resume,
+                // e.g. when the additional window delivers a result while the task is closed) can
+                // leave one of them in the finishing state forever. Watch the fragment and remove
+                // it by force in that case, otherwise it would keep the task from being removed
+                // (the window could not be closed).
+                scheduleForceRemove(taskFragmentInfo, taskId);
             }
             return;
         }
@@ -827,6 +841,45 @@ public class SystemTaskFragmentOrganizer extends TaskFragmentOrganizer {
             return;
         }
         wct.deleteTaskFragment(taskFragmentInfo.getFragmentToken());
+    }
+
+    /**
+     * Removes a fragment by force when the framework never removes it.
+     *
+     * <p>A fragment whose removal was requested is removed once its last activity is removed, but
+     * an activity can stay in the finishing state forever when its finish races with a resume (for
+     * example when the additional window delivers a result while the task is being closed). The
+     * fragment would then keep the task from being removed, the window could not be closed
+     * anymore. When the fragment still has no live activity after the timeout, it is removed
+     * directly, which also destroys the finishing activities left in it.
+     */
+    private void scheduleForceRemove(@NonNull TaskFragmentInfo taskFragmentInfo, int taskId) {
+        final IBinder token = taskFragmentInfo.getFragmentToken();
+        mAtmService.mH.postDelayed(() -> {
+            synchronized (mAtmService.mGlobalLock) {
+                final TaskFragment taskFragment = getTaskFragment(taskFragmentInfo);
+                if (taskFragment == null || !taskFragment.isAttached()) {
+                    // The fragment is gone, nothing to do.
+                    return;
+                }
+                if (taskFragment.getNonFinishingActivityCount() > 0) {
+                    // The fragment still has live activities: its removal is legitimate, the
+                    // framework removes it once they are gone, do not force anything.
+                    return;
+                }
+                Slog.w(TAG, "scheduleForceRemove: task=" + taskId + " token=" + token
+                        + " still has finishing activities, remove it by force");
+                taskFragment.removeImmediately("parallel-world-stuck");
+            }
+        }, FORCE_REMOVE_TIMEOUT_MS);
+    }
+
+    /** The {@link TaskFragment} of the given info, or {@code null} when it is already removed. */
+    @Nullable
+    private static TaskFragment getTaskFragment(@NonNull TaskFragmentInfo taskFragmentInfo) {
+        final WindowContainer container =
+                WindowContainer.fromBinder(taskFragmentInfo.getToken().asBinder());
+        return container != null ? container.asTaskFragment() : null;
     }
 
     void onTaskFragmentVanished(WindowContainerTransaction wct,
