@@ -1017,7 +1017,13 @@ public class Toolbar extends ViewGroup {
      */
     public void setNavigationOnClickListener(OnClickListener listener) {
         ensureNavButtonView();
-        mNavButtonView.setOnClickListener(listener);
+//        mNavButtonView.setOnClickListener(listener);
+        mNavButtonView.setOnTouchListener((v, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                listener.onClick(v);
+            }
+            return true;
+        });
     }
 
     /**
@@ -1509,11 +1515,18 @@ public class Toolbar extends ViewGroup {
             lp.gravity = Gravity.START | (mButtonGravity & Gravity.VERTICAL_GRAVITY_MASK);
             lp.mViewType = LayoutParams.EXPANDED;
             mCollapseButtonView.setLayoutParams(lp);
-            mCollapseButtonView.setOnClickListener(new OnClickListener() {
-                @Override
-                public void onClick(View v) {
+//            mCollapseButtonView.setOnClickListener(new OnClickListener() {
+//                @Override
+//                public void onClick(View v) {
+//                    collapseActionView();
+//                }
+//            });
+
+            mCollapseButtonView.setOnTouchListener((v, event) -> {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                     collapseActionView();
                 }
+                return true;
             });
         }
     }

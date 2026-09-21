@@ -24,7 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.window.embedding.ActivityEmbeddingController
 import com.android.settingslib.spa.framework.compose.localActivity
-
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsTopAppBar(
@@ -35,6 +37,7 @@ internal fun SettingsTopAppBar(
 ) {
     CustomizedLargeTopAppBar(
         title = title,
+        modifier = Modifier.padding(end = 160.dp),
         navigationIcon = { NavigationIcon(isFirstLayerPageWhenEmbedded) },
         actions = actions,
         scrollBehavior = scrollBehavior,

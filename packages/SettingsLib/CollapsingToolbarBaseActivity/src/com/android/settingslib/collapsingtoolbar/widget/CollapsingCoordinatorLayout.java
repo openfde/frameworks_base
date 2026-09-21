@@ -43,6 +43,7 @@ import com.android.settingslib.widget.SettingsThemeHelper;
 
 import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.appbar.CollapsingToolbarLayout;
+import android.view.MotionEvent;
 
 /**
  * This widget is wrapping the collapsing toolbar and can be directly used by the

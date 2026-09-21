@@ -29,10 +29,17 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
+import android.util.Log
 import androidx.compose.ui.tooling.preview.Preview
 import com.android.settingslib.spa.framework.compose.LocalNavController
 import com.android.settingslib.spa.framework.theme.SettingsTheme
 import com.android.settingslib.spa.framework.theme.isSpaExpressiveEnabled
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import android.view.MotionEvent;
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 
 /** Action that navigates back to last page. */
 @Composable
@@ -49,20 +56,65 @@ internal fun CollapseAction(onClick: () -> Unit) {
     BackAction(contentDescription, onClick)
 }
 
+// @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+// @Composable
+// private fun BackAction(contentDescription: String, onTouch: () -> Unit) {
+//     if (isSpaExpressiveEnabled) {
+//         FilledTonalIconButton(
+//             onClick = onTouch, shape = IconButtonDefaults.smallRoundShape,
+//             colors = IconButtonDefaults.filledTonalIconButtonColors(
+//                 containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+//             )
+//         ) {
+//             ArrowBack(contentDescription)
+//         }
+//     } else {
+//         IconButton(onClick = onTouch) { ArrowBack(contentDescription) }
+//     }
+// }
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun BackAction(contentDescription: String, onClick: () -> Unit) {
+private fun BackAction(
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    val touchModifier = Modifier.pointerInteropFilter { event ->
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                onClick()
+                true
+            }
+
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> {
+                true
+            }
+
+            else -> {
+                true
+            }
+        }
+    }
+
     if (isSpaExpressiveEnabled) {
         FilledTonalIconButton(
-            onClick = onClick, shape = IconButtonDefaults.smallRoundShape,
+            onClick = {},
+            shape = IconButtonDefaults.smallRoundShape,
             colors = IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            )
+            ),
+            modifier = touchModifier
         ) {
             ArrowBack(contentDescription)
         }
     } else {
-        IconButton(onClick = onClick) { ArrowBack(contentDescription) }
+        IconButton(
+            onClick = {},
+            modifier = touchModifier
+        ) {
+            ArrowBack(contentDescription)
+        }
     }
 }
 
