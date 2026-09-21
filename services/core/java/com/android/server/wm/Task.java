@@ -2277,12 +2277,17 @@ class Task extends TaskFragment {
 
         // If the configuration supports persistent bounds (eg. Freeform), keep track of the
         // current (non-fullscreen) bounds for persistence.
-        if (persistTaskBounds(getWindowConfiguration())) {
+        // fde start MAGIC WINDOW -> parallel world
+        // A task in the parallel world is expanded to fit both panes: its current bounds are not
+        // the bounds of the single window the user sees, they must not be remembered for
+        // persistence, otherwise the window comes back with the expanded size (main + additional).
+        if (persistTaskBounds(getWindowConfiguration()) && type != IN_PARALLEL_WINDOW) {
             final Rect currentBounds = getRequestedOverrideBounds();
             if (!currentBounds.isEmpty()) {
                 setLastNonFullscreenBounds(currentBounds);
             }
         }
+        // fde end
 
         if (pipChanging && wasInPictureInPicture
                 && !mTransitionController.isShellTransitionsEnabled()) {
