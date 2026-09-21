@@ -90,6 +90,7 @@ import com.android.settingslib.spa.framework.theme.settingsBackground
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import androidx.compose.ui.unit.sp
 
 private val safeDrawingWindowInsets: WindowInsets
     @Composable
@@ -138,6 +139,7 @@ internal fun CustomizedLargeTopAppBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
     scrollBehavior: TopAppBarScrollBehavior? = null,
+
 ) {
     TwoRowsTopAppBar(
         title = {
@@ -149,11 +151,13 @@ internal fun CustomizedLargeTopAppBar(
             )
         },
         titleTextStyle =
-            if (isSpaExpressiveEnabled) MaterialTheme.typography.displaySmallEmphasized
-            else MaterialTheme.typography.displaySmall,
+           MaterialTheme.typography.headlineSmall.copy(
+            fontSize = 16.sp
+        ),
         smallTitleTextStyle =
-            if (isSpaExpressiveEnabled) MaterialTheme.typography.titleLargeEmphasized
-            else MaterialTheme.typography.titleLarge,
+            MaterialTheme.typography.headlineSmall.copy(
+            fontSize = 16.sp
+        ),
         titleBottomPadding = LargeTitleBottomPadding,
         smallTitle = {
             Title(

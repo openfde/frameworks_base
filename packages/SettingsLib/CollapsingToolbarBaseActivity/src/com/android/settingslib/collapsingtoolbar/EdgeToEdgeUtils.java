@@ -100,9 +100,9 @@ public class EdgeToEdgeUtils {
                     Insets insets = windowInsets.getInsets(
                             WindowInsetsCompat.Type.systemBars()
                                     | WindowInsetsCompat.Type.ime()
-                                    | WindowInsetsCompat.Type.displayCutout());
+                                    | WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.captionBar());
                     int statusBarHeight = activity.getWindow().getDecorView().getRootWindowInsets()
-                            .getInsets(WindowInsetsCompat.Type.statusBars()).top;
+                            .getInsets(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.captionBar()).top;
                     // Apply the insets paddings to the view.
                     v.setPadding(insets.left, statusBarHeight, insets.right, insets.bottom);
                     ((ViewGroup)v).setClipToPadding(false);

@@ -48,6 +48,7 @@
                 android:theme="?android:attr/actionBarTheme"
                 android:transitionName="shared_element_view"
                 android:nextFocusForward="@+id/content_frame"
+                android:paddingEnd="160dp"
                 android:touchscreenBlocksFocus="false"
                 app:layout_collapseMode="pin">
 

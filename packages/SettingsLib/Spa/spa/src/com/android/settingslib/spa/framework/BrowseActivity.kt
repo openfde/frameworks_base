@@ -83,7 +83,7 @@ open class BrowseActivity : ComponentActivity() {
         setTheme(R.style.Theme_SpaLib)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        spaEnvironment.logger.message(TAG, "onCreate", category = LogCategory.FRAMEWORK)
+        spaEnvironment.logger.message(TAG, "onCelreate", category = LogCategory.FRAMEWORK)
 
         setContent {
             SettingsTheme {
@@ -111,6 +111,7 @@ internal fun BrowseContent(
     CompositionLocalProvider(navController.localNavController()) {
         val controller = LocalNavController.current as NavControllerWrapperImpl
         controller.NavContent(sppRepository.getAllProviders()) { page ->
+                Log.d(TAG, "Launching 1111111111111 page ${page.sppName}")
             if (remember { isPageEnabled(page) }) {
                 LaunchedEffect(Unit) {
                     Log.d(TAG, "Launching page ${page.sppName}")
