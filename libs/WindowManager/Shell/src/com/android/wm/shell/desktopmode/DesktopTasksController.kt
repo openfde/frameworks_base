@@ -2766,6 +2766,17 @@ class DesktopTasksController(
             )
             return null
         }
+        if (taskInfo?.magicWindowType == TaskInfo.MAGIC_WINDOW_TYPE_IN_PARALLEL) {
+            // The task is split into the main and the additional window (parallel world): its
+            // bounds are the expanded bounds, replacing them with the remembered bounds of the
+            // single window mode would shrink the task back to the main window width.
+            logV(
+                "calculateRememberedBounds: Not using remembered bounds for task#%d because it " +
+                    "is in the parallel world.",
+                taskInfo.taskId,
+            )
+            return null
+        }
         val packageName = componentName?.packageName ?: return null
         if (
             shellTaskOrganizer.runningTasks.any {
