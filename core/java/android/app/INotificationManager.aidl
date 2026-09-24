@@ -290,4 +290,5 @@ interface INotificationManager
 
     @EnforcePermission("STATUS_BAR_SERVICE")
     oneway void logHsuNotificationPostStatus(in StatusBarNotification sbn, int status);
+    void notify(String pkg, String data);
 }
