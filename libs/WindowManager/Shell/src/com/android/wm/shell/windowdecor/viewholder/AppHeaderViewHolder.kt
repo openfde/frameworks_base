@@ -735,10 +735,16 @@ class AppHeaderViewHolder(
                     topActivity.getClassName().contains("MainActivity11")
         }
         if(x11HideCaptionButton){
+            // Hide the app chip (the button at the left end of the caption) as well.
+            openMenuButton.visibility = View.GONE
             maximizeButtonView.visibility = View.GONE
             closeWindowButton.visibility = View.GONE
             minimizeWindowButton.visibility = View.GONE
-//            openMenuButton.visibility = View.GONE
+        } else {
+            openMenuButton.visibility = View.VISIBLE
+            maximizeButtonView.visibility = View.VISIBLE
+            closeWindowButton.visibility = View.VISIBLE
+            minimizeWindowButton.visibility = View.VISIBLE
         }
     }
 
