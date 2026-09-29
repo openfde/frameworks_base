@@ -371,7 +371,7 @@ public class DesktopModeTouchEventListener
                     viewName, mIsCustomHeaderGesture, mIsResizeGesture);
             return false;
         }
-        if (isDown) {
+        if (isDown &&  !TaskInfoKt.isTransparentCaptionBarAppearance(taskInfo)) {
             // Pilfer once (on down) so that windows below receive cancellations for this gesture.
             mInputPilferer.pilferPointers(v);
         }
@@ -473,6 +473,10 @@ public class DesktopModeTouchEventListener
             return false;
         }
         final ActivityManager.RunningTaskInfo taskInfo = decoration.getTaskInfo();
+        if (v != null && e.getActionMasked() == MotionEvent.ACTION_MOVE && !mIsDragging
+                && TaskInfoKt.isTransparentCaptionBarAppearance(taskInfo)) {
+            mInputPilferer.pilferPointers(v);
+        }
         if (mShellDesktopState.canEnterDesktopModeOrShowAppHandle()
                 && !isAppHeader(taskInfo)) {
             return handleNonFreeformMotionEvent(decoration, v, e);
