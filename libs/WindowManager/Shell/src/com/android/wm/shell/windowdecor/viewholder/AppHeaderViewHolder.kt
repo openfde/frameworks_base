@@ -117,6 +117,7 @@ class AppHeaderViewHolder(
     private val titleBarColorPackages = setOf(
         "com.android.settings",
         "com.fde.gallery3d",
+        "com.fde.taskmanager",
         "com.android.documentsui",
         "com.android.wallpaper",
         "com.android.permissioncontroller",
