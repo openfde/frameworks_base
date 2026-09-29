@@ -1436,6 +1436,11 @@ public final class InputManager {
     }
 
     /** @hide */
+    public void setCustomPointerIcon(PointerIcon icon) {
+        mGlobal.setCustomPointerIcon(icon);
+    }
+
+    /** @hide */
     public boolean setPointerIcon(PointerIcon icon, int displayId, int deviceId, int pointerId,
             IBinder inputToken) {
         return mGlobal.setPointerIcon(icon, displayId, deviceId, pointerId, inputToken);

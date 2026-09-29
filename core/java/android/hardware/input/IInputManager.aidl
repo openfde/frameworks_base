@@ -237,6 +237,8 @@ interface IInputManager {
 
     IInputDeviceBatteryState getBatteryState(int deviceId);
 
+    void setCustomPointerIcon(in PointerIcon icon);
+
     boolean setPointerIcon(in PointerIcon icon, int displayId, int deviceId, int pointerId,
             in IBinder inputToken);
 

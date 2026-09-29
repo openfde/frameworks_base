@@ -1835,6 +1835,13 @@ public class InputManagerService extends IInputManager.Stub
         return mNative.setPointerIcon(icon, displayId, deviceId, pointerId, inputToken);
     }
 
+    // Binder call
+    @Override
+    public void setCustomPointerIcon(@NonNull PointerIcon icon) {
+        Objects.requireNonNull(icon);
+        mNative.setCustomPointerIcon(icon);
+    }
+
     /**
      * Add a runtime association between the input port and the display port. This overrides any
      * static associations.
