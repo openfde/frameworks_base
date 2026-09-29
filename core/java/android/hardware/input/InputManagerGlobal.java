@@ -1784,6 +1784,17 @@ public final class InputManagerGlobal {
     }
 
     /**
+     * @see InputManager#setCustomPointerIcon(PointerIcon)
+     */
+    public void setCustomPointerIcon(PointerIcon icon) {
+        try {
+            mIm.setCustomPointerIcon(icon);
+        } catch (RemoteException ex) {
+            throw ex.rethrowFromSystemServer();
+        }
+    }
+
+    /**
      * @see InputManager#setPointerIcon(PointerIcon, int, int, int, IBinder)
      */
     public boolean setPointerIcon(PointerIcon icon, int displayId, int deviceId, int pointerId,

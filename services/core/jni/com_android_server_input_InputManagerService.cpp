@@ -401,6 +401,7 @@ public:
     bool setPointerIcon(std::variant<std::unique_ptr<SpriteIcon>, PointerIconStyle> icon,
                         ui::LogicalDisplayId displayId, DeviceId deviceId, int32_t pointerId,
                         const sp<IBinder>& inputToken);
+    void setCustomPointerIcon(const SpriteIcon& icon);
     void setPointerIconVisibility(ui::LogicalDisplayId displayId, bool visible);
     void setMotionClassifierEnabled(bool enabled);
     std::optional<std::string> getBluetoothAddress(int32_t deviceId);
@@ -1882,6 +1883,10 @@ bool NativeInputManager::setPointerIcon(
     return mInputManager->getChoreographer().setPointerIcon(std::move(icon), displayId, deviceId);
 }
 
+void NativeInputManager::setCustomPointerIcon(const SpriteIcon& icon) {
+    mInputManager->getChoreographer().setCustomPointerIcon(icon);
+}
+
 void NativeInputManager::setPointerIconVisibility(ui::LogicalDisplayId displayId, bool visible) {
     mInputManager->getChoreographer().setPointerIconVisibility(displayId, visible);
 }
@@ -3310,6 +3315,20 @@ static bool nativeSetPointerIcon(JNIEnv* env, jobject nativeImplObj, jobject ico
                               ibinderForJavaObject(env, inputTokenObj));
 }
 
+static void nativeSetCustomPointerIcon(JNIEnv* env, jobject nativeImplObj, jobject iconObj) {
+    NativeInputManager* im = getNativeInputManager(env, nativeImplObj);
+
+    PointerIcon pointerIcon = android_view_PointerIcon_toNative(env, iconObj);
+    if (pointerIcon.style != PointerIconStyle::TYPE_CUSTOM) {
+        LOG(WARNING) << "setCustomPointerIcon: only custom pointer icons are supported.";
+        return;
+    }
+    SpriteIcon icon(pointerIcon.bitmap.copy(SpriteController::getBitmapFormat()),
+                    pointerIcon.style, pointerIcon.hotSpotX, pointerIcon.hotSpotY,
+                    pointerIcon.drawNativeDropShadow);
+    im->setCustomPointerIcon(icon);
+}
+
 static void nativeSetPointerIconVisibility(JNIEnv* env, jobject nativeImplObj, jint displayId,
                                            jboolean visible) {
     NativeInputManager* im = getNativeInputManager(env, nativeImplObj);
@@ -3741,6 +3760,8 @@ static const JNINativeMethod gInputManagerMethods[] = {
         {"reloadPointerIcons", "()V", (void*)nativeReloadPointerIcons},
         {"setPointerIcon", "(Landroid/view/PointerIcon;IIILandroid/os/IBinder;)Z",
          (void*)nativeSetPointerIcon},
+        {"setCustomPointerIcon", "(Landroid/view/PointerIcon;)V",
+         (void*)nativeSetCustomPointerIcon},
         {"setPointerIconVisibility", "(IZ)V", (void*)nativeSetPointerIconVisibility},
         {"canDispatchToDisplay", "(II)Z", (void*)nativeCanDispatchToDisplay},
         {"notifyPortAssociationsChanged", "()V", (void*)nativeNotifyPortAssociationsChanged},
