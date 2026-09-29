@@ -354,6 +354,26 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
     private final ArraySet<OverlayPlugin> mPendingOverlayPlugins = new ArraySet<>();
     /** Overlay plugins currently holding the status bar open. */
     private final ArraySet<OverlayPlugin> mOverlayPlugins = new ArraySet<>();
+    // fde start: forward the framework status bar icon tint to overlay plugins.
+    /** Overlay plugins that want to be notified of the status bar icon tint. */
+    private final ArraySet<OverlayPlugin> mFdeOverlayPlugins = new ArraySet<>();
+    private boolean mFdeDarkIntensityListenerRegistered;
+    private volatile float mFdeDarkIntensity = 1f;
+    private volatile int mFdeDarkIntensityDisplayId = Display.DEFAULT_DISPLAY;
+    private final LightBarTransitionsController.FdeDarkIntensityListener mFdeDarkIntensityListener =
+            new LightBarTransitionsController.FdeDarkIntensityListener() {
+                @Override
+                public void onDarkIntensityChanged(int displayId, float darkIntensity) {
+                    mFdeDarkIntensity = darkIntensity;
+                    mFdeDarkIntensityDisplayId = displayId;
+                    mMainExecutor.execute(() -> {
+                        for (OverlayPlugin plugin : mFdeOverlayPlugins) {
+                            plugin.onDarkIntensityChanged(displayId, darkIntensity);
+                        }
+                    });
+                }
+            };
+    // fde end
     /** Message code for plugin-triggered screen recording dialog. */
     private static final int MSG_SHOW_SCREEN_RECORD_DIALOG = 1001;
     /** Message code for plugin-triggered screen recording stop. */
@@ -864,6 +884,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
                     @Override
                     public void onPluginConnected(OverlayPlugin plugin, Context pluginContext) {
                         Log.d(TAG, "onPluginConnected: " + mPhoneStatusBarView + " " + mScreenRecordHandler);
+                        mFdeOverlayPlugins.add(plugin); // fde: follow the status bar icon tint.
                         if (mPhoneStatusBarView == null) {
                             Log.d(TAG, "onPluginConnected: status bar view not ready, deferring setup");
                             synchronized (mPendingOverlayPlugins) {
@@ -876,6 +897,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
 
                     @Override
                     public void onPluginDisconnected(OverlayPlugin plugin) {
+                        mFdeOverlayPlugins.remove(plugin); // fde: stop following the icon tint.
                         synchronized (mPendingOverlayPlugins) {
                             mPendingOverlayPlugins.remove(plugin);
                         }
@@ -886,6 +908,13 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
                         });
                     }
                 }, OverlayPlugin.class, true /* Allow multiple plugins */);
+
+        // fde start: feed the framework's status bar icon tint to the overlay plugins.
+        if (!mFdeDarkIntensityListenerRegistered) {
+            mFdeDarkIntensityListenerRegistered = true;
+            LightBarTransitionsController.addFdeDarkIntensityListener(mFdeDarkIntensityListener);
+        }
+        // fde end
 
         mStartingSurfaceOptional.ifPresent(startingSurface -> startingSurface.setSysuiProxy(
                 (requestTopUi, componentTag) -> mMainExecutor.execute(
@@ -2844,10 +2873,16 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
         }
         mPhoneStatusBarView.setTag(mScreenRecordHandler);
         mMainExecutor.execute(
-                () -> plugin.setup(
-                        mPhoneStatusBarView,
-                        getNavigationBarView(),
-                        new OverlayPluginCallback(plugin), mDozeParameters));
+                () -> {
+                    plugin.setup(
+                            mPhoneStatusBarView,
+                            getNavigationBarView(),
+                            new OverlayPluginCallback(plugin), mDozeParameters);
+                    // fde start: hand the current status bar icon tint to the plugin.
+                    plugin.onDarkIntensityChanged(
+                            mFdeDarkIntensityDisplayId, mFdeDarkIntensity);
+                    // fde end
+                });
     }
 
     private class OverlayPluginCallback implements OverlayPlugin.Callback {

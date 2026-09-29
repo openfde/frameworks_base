@@ -43,6 +43,7 @@ import dagger.assisted.AssistedInject;
 
 import java.io.PrintWriter;
 import java.lang.ref.WeakReference;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Class to control all aspects about light bar changes.
@@ -51,6 +52,31 @@ public class LightBarTransitionsController implements Dumpable {
 
     public static final int DEFAULT_TINT_ANIMATION_DURATION = 120;
     private static final String EXTRA_DARK_INTENSITY = "dark_intensity";
+
+    // fde start: let the FDE overlay plugins follow the status bar icon tint.
+    /** Receives the status bar icon tint (dark intensity) computed by the framework. */
+    public interface FdeDarkIntensityListener {
+        /**
+         * @param displayId the display the status bar belongs to.
+         * @param darkIntensity 1 = dark icons (light background), 0 = light icons (dark
+         *         background).
+         */
+        void onDarkIntensityChanged(int displayId, float darkIntensity);
+    }
+
+    private static final CopyOnWriteArrayList<FdeDarkIntensityListener> sFdeDarkIntensityListeners =
+            new CopyOnWriteArrayList<>();
+
+    public static void addFdeDarkIntensityListener(FdeDarkIntensityListener listener) {
+        if (!sFdeDarkIntensityListeners.contains(listener)) {
+            sFdeDarkIntensityListeners.add(listener);
+        }
+    }
+
+    public static void removeFdeDarkIntensityListener(FdeDarkIntensityListener listener) {
+        sFdeDarkIntensityListeners.remove(listener);
+    }
+    // fde end
 
     private static class Callback implements Callbacks, StatusBarStateController.StateListener {
         private final WeakReference<LightBarTransitionsController> mSelf;
@@ -306,7 +332,13 @@ public class LightBarTransitionsController implements Dumpable {
     }
 
     private void dispatchDark() {
-        mApplier.applyDarkIntensity(MathUtils.lerp(mDarkIntensity, 0f, mDozeAmount));
+        final float darkIntensity = MathUtils.lerp(mDarkIntensity, 0f, mDozeAmount);
+        mApplier.applyDarkIntensity(darkIntensity);
+        // fde start: keep the FDE overlay plugins in sync with the status bar icon tint.
+        for (FdeDarkIntensityListener listener : sFdeDarkIntensityListeners) {
+            listener.onDarkIntensityChanged(mDisplayId, darkIntensity);
+        }
+        // fde end
     }
 
     public void onDozeAmountChanged(float linear, float eased) {

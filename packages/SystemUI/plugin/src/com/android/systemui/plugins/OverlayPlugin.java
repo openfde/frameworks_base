@@ -37,6 +37,18 @@ public interface OverlayPlugin extends Plugin {
         setup(statusBar, navBar);
     }
 
+    /**
+     * fde: called when the system bar icon tint computed by the framework changes.
+     *
+     * <p>Plugins that draw their own status bar content should use it to keep their foreground
+     * readable against whatever is behind the bar.
+     *
+     * @param displayId the display the status bar lives on.
+     * @param darkIntensity 1 = dark icons (light background), 0 = light icons (dark background).
+     */
+    default void onDarkIntensityChanged(int displayId, float darkIntensity) {
+    }
+
     default boolean holdStatusBarOpen() {
         return false;
     }
