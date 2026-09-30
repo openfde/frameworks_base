@@ -1764,7 +1764,14 @@ public class InputMethodService extends AbstractInputMethodService {
                 lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
                 lp.gravity = Gravity.BOTTOM;
                 lp.setFitInsetsTypes(statusBars() | navigationBars());
-                lp.setFitInsetsSides(Side.all() & ~Side.BOTTOM);
+                // region @openfde
+                // Desktop (PC) mode: keep the IME above the navigation bar (the taskbar) instead
+                // of drawing behind it. AOSP lets the IME extend under the navigation bar so it
+                // can paint the bar area itself, but on this desktop the navigation bar is a
+                // transparent taskbar, so anything the IME draws there changes the taskbar's
+                // perceived background color while typing.
+                lp.setFitInsetsSides(Side.all());
+                // endregion
                 lp.receiveInsetsIgnoringZOrder = true;
                 window.setAttributes(lp);
             }
