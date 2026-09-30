@@ -10,10 +10,10 @@
 
     <!-- 第二层 -->
     <item
-        android:left="1dp"
-        android:top="1dp"
-        android:right="1dp"
-        android:bottom="1dp">
+        android:left="2dp"
+        android:top="2dp"
+        android:right="2dp"
+        android:bottom="2dp">
 
         <shape android:shape="rectangle">
             <solid android:color="#F4F1FC" />
@@ -23,10 +23,10 @@
 
     <!-- 第三层：支持鼠标 Hover -->
     <item
-        android:left="3dp"
-        android:top="3dp"
-        android:right="3dp"
-        android:bottom="3dp"
+        android:left="4dp"
+        android:top="4dp"
+        android:right="4dp"
+        android:bottom="4dp"
         android:drawable="@drawable/bg_fullscreen_inner" />
 
     <!-- 图标 -->

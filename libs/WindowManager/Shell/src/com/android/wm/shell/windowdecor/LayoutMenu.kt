@@ -373,8 +373,12 @@ class LayoutMenu(
             requireViewById(R.id.layout_menu_fullscreen_toggle_button) as Button
         private val sizeToggleContainer =
             requireViewById(R.id.layout_menu_size_toggle_container) as View
+        private val sizeToggleFullscreenContainer =
+            requireViewById(R.id.layout_menu_fullscreen_toggle_container) as View
         private val sizeToggleButtonText =
             requireViewById(R.id.layout_menu_size_toggle_button_text) as TextView
+        private val sizeToggleFullscreenButtonText =
+            requireViewById(R.id.layout_menu_fullscreen_toggle_button_text) as TextView
         private val sizeToggleButton =
             requireViewById(R.id.layout_menu_size_toggle_button) as Button
         private val snapContainer = requireViewById(R.id.layout_menu_snap_container) as View
@@ -539,6 +543,7 @@ class LayoutMenu(
 
             immersiveToggleContainer.isGone = immersiveConfig is ImmersiveConfig.Hidden
             sizeToggleContainer.isVisible = true
+            sizeToggleFullscreenContainer.isVisible = true
             snapContainer.isGone = !showSnapOptions
 
             menuButtons.forEach {
@@ -718,6 +723,8 @@ class LayoutMenu(
             // To prevent aliasing.
             sizeToggleButton.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             sizeToggleButtonText.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            sizeToggleFullscreenButtonText.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            parallelWorldText.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             immersiveToggleButton.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             immersiveToggleButtonText.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             fullscreenToggleButton.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
@@ -805,13 +812,14 @@ class LayoutMenu(
             // Maximize option.
             sizeToggleButton.background = style.maximizeOption.drawable
             sizeToggleButtonText.setTextColor(style.textColor)
+            sizeToggleFullscreenButtonText.setTextColor(style.textColor)
+            parallelWorldText.setTextColor(style.textColor)
 
             // Immersive option.
             immersiveToggleButton.background = style.immersiveOption.drawable
             immersiveToggleButtonText.setTextColor(style.textColor)
 
 //            fullscreenToggleButton.background = style.fullscreenOption.drawable
-
 
             // Snap options.
             snapWindowText.setTextColor(style.textColor)
@@ -849,6 +857,8 @@ class LayoutMenu(
                 mutableListOf<View>(
                     sizeToggleButton,
                     sizeToggleButtonText,
+                    sizeToggleFullscreenButtonText,
+                    parallelWorldText,
                     immersiveToggleButton,
                     immersiveToggleButtonText,
                     fullscreenToggleButton,
@@ -955,6 +965,8 @@ class LayoutMenu(
                 mutableListOf<View>(
                     sizeToggleButton,
                     sizeToggleButtonText,
+                    sizeToggleFullscreenButtonText,
+                    parallelWorldText,
                     immersiveToggleButton,
                     immersiveToggleButtonText,
                     fullscreenToggleButton,

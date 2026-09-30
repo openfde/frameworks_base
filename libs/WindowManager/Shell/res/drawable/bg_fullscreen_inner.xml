@@ -3,7 +3,7 @@
     <!-- Hover -->
     <item android:state_hovered="true">
         <shape android:shape="rectangle">
-            <solid android:color="#8F8D98" />
+            <solid android:color="#505D87" />
             <corners android:radius="6dp" />
         </shape>
     </item>
@@ -11,7 +11,7 @@
     <!-- Pressed -->
     <item android:state_pressed="true">
         <shape android:shape="rectangle">
-            <solid android:color="#77757F" />
+            <solid android:color="#505D87" />
             <corners android:radius="6dp" />
         </shape>
     </item>

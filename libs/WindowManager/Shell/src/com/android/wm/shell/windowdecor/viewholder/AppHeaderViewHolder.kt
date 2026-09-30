@@ -126,6 +126,7 @@ class AppHeaderViewHolder(
 
     override val rootView =
         appHeaderView
+
             ?: if (DesktopExperienceFlags.ENABLE_WINDOW_DECORATION_REFACTOR.isTrue) {
                 LayoutInflater.from(context).inflate(R.layout.desktop_mode_app_header, null)
                     as WindowDecorLinearLayout

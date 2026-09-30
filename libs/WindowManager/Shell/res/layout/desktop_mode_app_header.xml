@@ -20,7 +20,8 @@
     android:id="@+id/desktop_mode_caption"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="center_horizontal"
+    android:gravity="center"
+    android:layout_gravity="center_vertical"
     android:orientation="horizontal">
 
     <LinearLayout
@@ -101,21 +102,22 @@
         android:layout_width="44dp"
         android:layout_height="40dp"
         android:paddingHorizontal="10dp"
-        android:paddingVertical="8dp"
         android:layout_marginEnd="8dp"
         android:contentDescription="@string/minimize_button_text"
         android:src="@drawable/desktop_mode_header_ic_minimize"
         android:scaleType="centerCrop"
-        android:gravity="end"/>
+        android:layout_gravity="center_vertical"
+        android:gravity="end|center"/>
 
     <com.android.wm.shell.windowdecor.MaximizeButtonView
         android:id="@+id/maximize_button_view"
         android:importantForAccessibility="no"
         android:layout_width="44dp"
         android:layout_height="40dp"
-        android:layout_gravity="end"
         android:layout_marginEnd="8dp"
         android:clickable="true"
+        android:layout_gravity="end|center_vertical"
+        android:gravity="end|center"
         android:focusable="true"/>
 
     <ImageButton
@@ -123,10 +125,10 @@
         android:layout_width="44dp"
         android:layout_height="40dp"
         android:paddingHorizontal="10dp"
-        android:paddingVertical="8dp"
         android:layout_marginEnd="8dp"
         android:contentDescription="@string/close_button_text"
         android:src="@drawable/desktop_mode_header_ic_close"
         android:scaleType="centerCrop"
-        android:gravity="end"/>
+        android:layout_gravity="center_vertical"
+        android:gravity="end|center"/>
 </com.android.wm.shell.windowdecor.WindowDecorLinearLayout>

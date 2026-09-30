@@ -87,93 +87,43 @@
             android:alpha="0"/>
     </LinearLayout>
 
+
+
     <LinearLayout
-        android:id="@+id/layout_menu_snap_container"
+        android:id="@+id/layout_menu_fullscreen_toggle_container"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical"
         android:gravity="center_horizontal"
         android:layout_marginHorizontal="4dp">
-        <LinearLayout
-            android:id="@+id/layout_menu_snap_menu_layout"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layoutDirection="ltr"
-            android:orientation="horizontal"
-            android:padding="4dp"
-            android:background="@drawable/desktop_mode_layout_menu_layout_background"
-            android:layout_marginBottom="4dp"
-            android:alpha="0">
-            <Button
-                android:id="@+id/layout_menu_snap_left_button"
-                style="?android:attr/buttonBarButtonStyle"
-                android:layout_width="48dp"
-                android:layout_height="@dimen/desktop_mode_layout_menu_button_height"
-                android:layout_marginEnd="4dp"
-                android:background="@drawable/desktop_mode_layout_menu_button_background"
-                android:importantForAccessibility="yes"
-                android:contentDescription="@string/desktop_mode_layout_menu_snap_left_button_text"
-                android:stateListAnimator="@null"/>
-
-            <Button
-                android:id="@+id/layout_menu_snap_right_button"
-                style="?android:attr/buttonBarButtonStyle"
-                android:layout_width="48dp"
-                android:layout_height="@dimen/desktop_mode_layout_menu_button_height"
-                android:background="@drawable/desktop_mode_layout_menu_button_background"
-                android:importantForAccessibility="yes"
-                android:contentDescription="@string/desktop_mode_layout_menu_snap_right_button_text"
-                android:stateListAnimator="@null"/>
-        </LinearLayout>
-        <TextView
-            android:id="@+id/layout_menu_snap_window_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:lineHeight="16sp"
-            android:gravity="center"
-            android:importantForAccessibility="no"
-            android:fontFamily="@*android:string/config_headlineFontFamilyMedium"
-            android:text="@string/desktop_mode_layout_menu_snap_text"
-            android:textColor="@color/materialColorOnSurface"
-            android:singleLine="true"
-            android:alpha="0"/>
-    </LinearLayout>
-
-    <!-- fde start MAGIC WINDOW -> parallel world -->
-    <LinearLayout
-        android:id="@+id/layout_menu_parallel_world_container"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center_horizontal"
-        android:layout_marginHorizontal="4dp"
-        android:visibility="gone">
 
         <Button
-            android:id="@+id/layout_menu_parallel_world_button"
+            android:layout_width="108dp"
+            android:layout_height="60dp"
+            android:id="@+id/layout_menu_fullscreen_toggle_button"
             style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="@dimen/parallel_world_button_width"
-            android:layout_height="@dimen/parallel_world_button_height"
-            android:layout_marginBottom="4dp"
             android:stateListAnimator="@null"
+            android:padding="6dp"
+            android:background="@drawable/desktop_mode_layout_menu_fullscreen_button_background"
             android:importantForAccessibility="yes"
-            android:contentDescription="@string/parallel_world_text"/>
+            android:contentDescription="@string/fullscreen_text"
+            android:layout_marginBottom="4dp"
+            android:alpha="0"/>
 
         <TextView
-            android:id="@+id/layout_menu_parallel_world_text"
+            android:id="@+id/layout_menu_fullscreen_toggle_button_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="11sp"
             android:lineHeight="16sp"
             android:gravity="center"
-            android:importantForAccessibility="no"
             android:fontFamily="@*android:string/config_headlineFontFamilyMedium"
-            android:text="@string/parallel_world_enter_text"
+            android:importantForAccessibility="no"
+            android:text="@string/fullscreen_text"
             android:textColor="@color/materialColorOnSurface"
-            android:singleLine="true"/>
+            android:singleLine="true"
+            android:alpha="1"/>
     </LinearLayout>
-    <!-- fde end -->
+
 </merge>
