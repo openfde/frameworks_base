@@ -596,7 +596,7 @@ public class CachedBluetoothDevice implements Comparable<CachedBluetoothDevice> 
     private void connectDevice() {
         synchronized (mProfileLock) {
             // Try to initialize the profiles if they were not.
-            if (mProfiles.isEmpty()) {
+            if (false/*mProfiles.isEmpty()*/) {
                 // if mProfiles is empty, then do not invoke updateProfiles. This causes a race
                 // condition with carkits during pairing, wherein RemoteDevice.UUIDs have been
                 // updated from bluetooth stack but ACTION.uuid is not sent yet.

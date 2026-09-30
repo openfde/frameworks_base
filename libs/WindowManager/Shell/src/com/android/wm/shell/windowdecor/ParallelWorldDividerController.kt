@@ -124,6 +124,11 @@ constructor(
     private var highlightColor: Int = DEFAULT_HIGHLIGHT_COLOR
     /** Whether the pointer is hovering the divider. */
     private var isHovered = false
+    /**
+     * Whether a window that is not part of the split covers the task (e.g. the system permission
+     * dialog). The divider is an overlay of the whole task, so it would be drawn over it.
+     */
+    private var isCovered = false
 
     /** Input channel of the divider, granted on the task leash. */
     private val inputChannel: InputChannel?
@@ -224,12 +229,43 @@ constructor(
     }
 
     /**
+     * Keeps the divider hidden while a window that is not part of the split covers the task, for
+     * example the system permission dialog: such a dialog is shown above the two panes and the
+     * divider, which is an overlay of the whole task, would be drawn over it. The divider is
+     * shown again by the next [update] once the window is gone.
+     */
+    fun setCovered(covered: Boolean) {
+        if (isCovered == covered) {
+            return
+        }
+        isCovered = covered
+        Log.d(TAG, "divider covered=" + covered)
+        if (covered) {
+            hide()
+            dragVeil?.hide()
+            // Do not take input while covered either: the input channel is granted on the divider
+            // surface, it has to be emptied explicitly (updateInputRegion() is only called when
+            // the geometry changes).
+            updateInputRegion(0, 0)
+        } else {
+            // Force the next update to apply the geometry and the input region again.
+            lastViewWidth = -1
+            lastViewHeight = -1
+        }
+    }
+
+    /**
      * Updates the divider position and size from the latest task info.
      *
      * @param parentLeash the task leash the divider is attached to; the divider follows the task
      *                    visibility, crop and z-order.
      */
     fun update(info: RunningTaskInfo, captionHeight: Int, parentLeash: SurfaceControl) {
+        if (isCovered) {
+            // A window that is not part of the split covers the task (see setCovered): the
+            // divider has to stay hidden until it is gone.
+            return
+        }
         taskInfo = info
         updateDividerColors(info)
         // The panes reached their final size once the task reports the ratio that was applied when
