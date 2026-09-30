@@ -484,6 +484,25 @@ constructor(
                     guideFlag = GUIDE_FLAG_ENTER,
             )
         }
+        // A dialog like the system permission dialog is an activity shown in the task above the
+        // two panes: it does not fill the task (isTopActivityTransparent) and it covers the whole
+        // task instead of being confined to one of the panes. The divider is an overlay of the
+        // whole task, so it would be drawn over such a dialog: hide it while the dialog is there.
+        // A dialog that is shown inside one pane (an activity of the pane) keeps the divider, it
+        // is only shown over a single activity.
+        val taskBounds = taskInfo.configuration.windowConfiguration.bounds
+        val topBounds = taskInfo.appCompatTaskInfo.topActivityAppBounds
+        val isCovered = taskInfo.isTopActivityTransparent
+                && !topBounds.isEmpty
+                && topBounds.width() >= taskBounds.width()
+        if (isCovered) {
+            Log.d(TAG, "parallel world: task=" + taskInfo.taskId + " is covered by "
+                    + taskInfo.topActivity + " bounds=" + topBounds)
+        }
+        parallelWorldDivider?.setCovered(isCovered)
+        if (isCovered) {
+            return
+        }
         parallelWorldDivider?.update(taskInfo, captionHeight, leash)
     }
 
