@@ -1764,7 +1764,14 @@ public class InputMethodService extends AbstractInputMethodService {
                 lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
                 lp.gravity = Gravity.BOTTOM;
                 lp.setFitInsetsTypes(statusBars() | navigationBars());
-                lp.setFitInsetsSides(Side.all() & ~Side.BOTTOM);
+                // region @openfde
+                // Desktop (PC) mode: keep the IME above the navigation bar (the taskbar) instead
+                // of drawing behind it. AOSP lets the IME extend under the navigation bar so it
+                // can paint the bar area itself, but on this desktop the navigation bar is a
+                // transparent taskbar, so anything the IME draws there changes the taskbar's
+                // perceived background color while typing.
+                lp.setFitInsetsSides(Side.all());
+                // endregion
                 lp.receiveInsetsIgnoringZOrder = true;
                 window.setAttributes(lp);
             }
@@ -2365,12 +2372,10 @@ public class InputMethodService extends AbstractInputMethodService {
         if (mIsInputViewShown != isShown && mDecorViewVisible) {
             mIsInputViewShown = isShown;
             // region @openfde
-            // Desktop (PC) mode: never draw the soft keyboard panel. mInputFrame
-            // (android.R.id.inputArea) and mCandidatesFrame (android.R.id.candidatesArea) are
-            // siblings, and mIsInputViewShown is intentionally left untouched, so the IME keeps
-            // its normal input view session: candidates/suggestions still show and hardware key
-            // input keeps working while the keyboard panel stays hidden. (Same approach as
-            // fde_14 91748665 "force hide soft input keyboard", plus our runtime switch.)
+            // Desktop (PC) mode: never draw the soft keyboard panel. While the soft keyboard is
+            // suppressed, dispatchOnShowInputRequested() already forces the candidates-only path,
+            // so isShown is false here and the frame below is just a safety net for the case the
+            // setting is toggled while an input view session is still active.
             if (isFdeSoftKeyboardAllowed()) {
                 Log.i(TAG, "updateInputViewShown[fde]: keyboard panel shown");
                 mInputFrame.setVisibility(isShown ? View.VISIBLE : View.GONE);
@@ -3114,16 +3119,26 @@ public class InputMethodService extends AbstractInputMethodService {
     private boolean dispatchOnShowInputRequested(int flags, boolean configChange) {
         final boolean result = onShowInputRequested(flags, configChange);
         // region @openfde
+        // Desktop (PC) mode: while the soft keyboard is suppressed, always fall back to the
+        // candidates-only path (the path a hardware-keyboard device takes when "Show virtual
+        // keyboard" is off). This keeps mShowInputRequested == false, so the IME never starts
+        // an input view session: no fullscreen IME window, no IME insets and therefore no
+        // application window resize. IMEs that use the legacy candidates API can still show
+        // android.R.id.candidatesArea through setCandidatesViewShown().
+        final boolean allowed = isFdeSoftKeyboardAllowed();
+        final boolean effectiveResult = result && allowed;
         Log.i(TAG, "dispatchOnShowInputRequested[fde]: flags=" + flags
-                + " configChange=" + configChange + " result=" + result);
+                + " configChange=" + configChange + " result=" + result
+                + " softKeyboardAllowed=" + allowed
+                + " effectiveResult=" + effectiveResult);
         // endregion
-        mInlineSuggestionSessionController.notifyOnShowInputRequested(result);
-        if (result) {
+        mInlineSuggestionSessionController.notifyOnShowInputRequested(effectiveResult);
+        if (effectiveResult) {
             mShowInputFlags = flags;
         } else {
             mShowInputFlags = 0;
         }
-        return result;
+        return effectiveResult;
     }
 
     /**
