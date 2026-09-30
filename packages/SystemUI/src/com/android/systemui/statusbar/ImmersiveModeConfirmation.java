@@ -92,6 +92,7 @@ public class ImmersiveModeConfirmation implements CoreStartable, CommandQueue.Ca
     private static final String TAG = "ImmersiveModeConfirm";
     private static final boolean DEBUG = false;
     private static final boolean DEBUG_SHOW_EVERY_TIME = false; // super annoying, use with caution
+    private static final boolean SHOW_IMMERSIVE_MODE_CONFIRMATION = false;
     private static final String CONFIRMED = "confirmed";
     private static final int IMMERSIVE_MODE_CONFIRMATION_WINDOW_TYPE =
             WindowManager.LayoutParams.TYPE_STATUS_BAR_SUB_PANEL;
@@ -210,7 +211,8 @@ public class ImmersiveModeConfirmation implements CoreStartable, CommandQueue.Ca
             boolean userSetupComplete = (mSecureSettings.getIntForUser(
                     Settings.Secure.USER_SETUP_COMPLETE, 0, UserHandle.USER_CURRENT) != 0);
 
-            if ((DEBUG_SHOW_EVERY_TIME || !sConfirmed)
+            if (SHOW_IMMERSIVE_MODE_CONFIRMATION
+                    && (DEBUG_SHOW_EVERY_TIME || !sConfirmed)
                     && userSetupComplete
                     && !mVrModeEnabled
                     && mCanSystemBarsBeShownByUser
