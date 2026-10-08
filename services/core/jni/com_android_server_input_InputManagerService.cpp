@@ -43,7 +43,9 @@
 #include <android_view_VerifiedMotionEvent.h>
 #include <batteryservice/include/batteryservice/BatteryServiceConstants.h>
 #include <binder/IServiceManager.h>
+#include <binder/IPCThreadState.h>
 #include <com_android_input_flags.h>
+#include <cutils/properties.h>
 #include <dispatcher/Entry.h>
 #include <ftl/enum.h>
 #include <include/gestures.h>
@@ -51,6 +53,7 @@
 #include <input/PointerController.h>
 #include <input/PrintTools.h>
 #include <input/SpriteController.h>
+#include <inputflinger/include/InputReaderBase.h>
 #include <inputflinger/InputManager.h>
 #include <jni.h>
 #include <limits.h>
@@ -58,9 +61,11 @@
 #include <nativehelper/ScopedLocalRef.h>
 #include <nativehelper/ScopedPrimitiveArray.h>
 #include <nativehelper/ScopedUtfChars.h>
+#include <private/android_filesystem_config.h>
 #include <server_configurable_flags/get_flags.h>
 #include <ui/LogicalDisplayId.h>
 #include <ui/Region.h>
+#include <unistd.h>
 #include <utils/Log.h>
 #include <utils/Looper.h>
 #include <utils/Trace.h>
@@ -2712,9 +2717,33 @@ static void nativeSetMaximumObscuringOpacityForTouch(JNIEnv* env, jobject native
     im->getInputManager()->getDispatcher().setMaximumObscuringOpacityForTouch(opacity);
 }
 
+// FDE KeyAssist: decides whether an injected MotionEvent may be fed into the input reader as raw
+// touchscreen events (see InputReader::injectMotionEvent) instead of being injected into the input
+// dispatcher.
+//
+// Only injections issued by applications may take that path. Motion events injected from
+// system_server itself - the accessibility input filter re-sending every event it processes,
+// magnification, gesture detection, auto-click - must keep going through the dispatcher: once such
+// an event has been laundered into a genuine looking touchscreen event of the same device, the
+// accessibility input filter processes and re-sends it again (it only allows one active pointer
+// device at a time, and injected events normally do not match the active device), which turns into
+// an endless event loop that hangs the whole framework.
+static bool shouldInjectMotionEventAsTouch(jint callerPid) {
+    if (!property_get_bool("fde.inject_as_touch", false)) {
+        return false;
+    }
+    // Injections issued by system_server itself - the accessibility input filter re-sending every
+    // event it processes, magnification, gesture detection - must keep going through the
+    // dispatcher. Note that InputManagerService clears the Binder calling identity before calling
+    // in here, so the caller is passed from the Java layer; comparing its pid with our own pid is
+    // what separates "system_server injecting internally" from "an application injecting".
+    return callerPid != getpid();
+}
+
 static jint nativeInjectInputEvent(JNIEnv* env, jobject nativeImplObj, jobject inputEventObj,
                                    jboolean injectIntoUid, jint uid, jint syncMode,
-                                   jint timeoutMillis, jint policyFlags) {
+                                   jint timeoutMillis, jint policyFlags, jint callerPid,
+                                   jint callerUid) {
     NativeInputManager* im = getNativeInputManager(env, nativeImplObj);
 
     const auto targetUid = injectIntoUid ? std::make_optional<gui::Uid>(uid) : std::nullopt;
@@ -2730,10 +2759,21 @@ static jint nativeInjectInputEvent(JNIEnv* env, jobject nativeImplObj, jobject i
                                                                         uint32_t(policyFlags));
         return static_cast<jint>(result);
     } else if (env->IsInstanceOf(inputEventObj, gMotionEventClassInfo.clazz)) {
-        const MotionEvent* motionEvent = android_view_MotionEvent_getNativePtr(env, inputEventObj);
+        MotionEvent* motionEvent = android_view_MotionEvent_getNativePtr(env, inputEventObj);
         if (!motionEvent) {
             jniThrowRuntimeException(env, "Could not read contents of MotionEvent object.");
             return static_cast<jint>(InputEventInjectionResult::FAILED);
+        }
+
+        // FDE KeyAssist: when fde.inject_as_touch is enabled, feed application injections into the
+        // input reader's EventHub pipe so that they are processed like raw touchscreen events
+        // instead of being injected into the dispatcher. This lets a privileged app simulate extra
+        // fingers. Injections coming from system_server keep using the dispatcher below.
+        if (shouldInjectMotionEventAsTouch(callerPid)) {
+            im->getInputManager()->getReader().injectMotionEvent(motionEvent, syncMode,
+                                                                 timeoutMillis,
+                                                                 uint32_t(policyFlags));
+            return static_cast<jint>(InputEventInjectionResult::SUCCEEDED);
         }
 
         const InputEventInjectionResult result =
@@ -3693,7 +3733,7 @@ static const JNINativeMethod gInputManagerMethods[] = {
         {"setInTouchMode", "(ZIIZI)Z", (void*)nativeSetInTouchMode},
         {"setMaximumObscuringOpacityForTouch", "(F)V",
          (void*)nativeSetMaximumObscuringOpacityForTouch},
-        {"injectInputEvent", "(Landroid/view/InputEvent;ZIIII)I", (void*)nativeInjectInputEvent},
+        {"injectInputEvent", "(Landroid/view/InputEvent;ZIIIIII)I", (void*)nativeInjectInputEvent},
         {"verifyInputEvent", "(Landroid/view/InputEvent;)Landroid/view/VerifiedInputEvent;",
          (void*)nativeVerifyInputEvent},
         {"toggleCapsLock", "(I)V", (void*)nativeToggleCapsLock},

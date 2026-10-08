@@ -1051,13 +1051,19 @@ public class InputManagerService extends IInputManager.Stub
         }
 
         final int pid = Binder.getCallingPid();
+        // FDE: the calling identity is cleared below, so the real caller has to be captured here and
+        // passed to native. The input reader routing decision (fde.inject_as_touch) needs to know
+        // whether the injection comes from system_server itself (the accessibility input filter
+        // re-sending the events it processes, magnification, gesture detection, ...) or from an
+        // application.
+        final int uid = Binder.getCallingUid();
         final long ident = Binder.clearCallingIdentity();
         final boolean injectIntoUid = targetUid != Process.INVALID_UID;
         final int result;
         try {
             result = mNative.injectInputEvent(event, injectIntoUid,
                     targetUid, mode, INJECTION_TIMEOUT_MILLIS,
-                    WindowManagerPolicy.FLAG_DISABLE_KEY_REPEAT);
+                    WindowManagerPolicy.FLAG_DISABLE_KEY_REPEAT, pid, uid);
         } finally {
             Binder.restoreCallingIdentity(ident);
         }
@@ -3863,7 +3869,11 @@ public class InputManagerService extends IInputManager.Stub
                     @InputEventInjectionResult int result = mNative.injectInputEvent(
                             event, false /* injectIntoUid */, -1 /* uid */,
                             InputManager.INJECT_INPUT_EVENT_MODE_ASYNC, 0 /* timeout */,
-                            policyFlags | WindowManagerPolicy.FLAG_FILTERED);
+                            policyFlags | WindowManagerPolicy.FLAG_FILTERED,
+                            // FDE: this is the system's own input filter (e.g. the accessibility
+                            // input filter re-sending the events it processed) injecting in-process,
+                            // so the event must keep going through the dispatcher.
+                            Process.myPid(), Process.myUid());
                     if (result != InputEventInjectionResult.SUCCEEDED) {
                         throw new RemoteException(
                                 "Injection did not succeed, result= " + result + ".");

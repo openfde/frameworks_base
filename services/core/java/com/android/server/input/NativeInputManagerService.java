@@ -105,7 +105,7 @@ interface NativeInputManagerService {
      * @return {@link android.os.InputEventInjectionResult}
      */
     int injectInputEvent(InputEvent event, boolean injectIntoUid, int uid, int syncMode,
-            int timeoutMillis, int policyFlags);
+            int timeoutMillis, int policyFlags, int callerPid, int callerUid);
 
     VerifiedInputEvent verifyInputEvent(InputEvent event);
 
@@ -443,7 +443,7 @@ interface NativeInputManagerService {
 
         @Override
         public native int injectInputEvent(InputEvent event, boolean injectIntoUid, int uid,
-                int syncMode, int timeoutMillis, int policyFlags);
+                int syncMode, int timeoutMillis, int policyFlags, int callerPid, int callerUid);
 
         @Override
         public native VerifiedInputEvent verifyInputEvent(InputEvent event);
