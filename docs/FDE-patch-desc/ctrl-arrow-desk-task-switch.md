@@ -2,11 +2,10 @@
 
 > 项目：OpenFDE Android（AOSP 17 fork，工作区根 D:\android17）
 > 涉及仓库：`base`（framework/base，含 SystemUI / wm-shell / services / core res）
-> **合入提交：`fb253d60`（分支 `fde_17_switchdeskfullscreen`，squash 自 `e98141e8` 等开发提交）**
-> 说明：本文档描述的就是已 squash 合入的实现；`e98141e8` 之后的实验性提交
-> （F→D 横向滑动尝试、`startTransaction.hide` 等）**不包含在内**，仅在"历史尝试"一节记录。
-> 注意：开发过程中某个后续提交（7b2ef77）曾把 `META_META_MASK` 误写成 `META_META_MASKA`
-> （无法编译），合入版本中是正确的 `META_META_MASK`。
+> 对应分支：`fde_17_keyassist`（本文档随 FDE 桌面补丁集一起维护）
+> 内容范围：Ctrl+←/→ 桌面任务切换 + 最近任务"只显示运行中应用"过滤 + 切换 desk 的 Toast +
+> 任务/desk 切换动画时长与调试参数。
+> 说明：早期实验（F→D 横滑尝试、独立 `TaskSwitchService` 等）记录在"历史尝试"一节，勿重复踩坑。
 
 ---
 
@@ -57,10 +56,15 @@ wm-shell (SystemUI 进程) DesktopTasksController
 | 文件 | 类型 | 说明 |
 | --- | --- | --- |
 | `base/core/java/com/android/internal/policy/ITaskSwitchService.aidl` | 新增 | PwM→wm-shell 的 binder：`void performTaskSwitch(int displayId, int direction)`（-1=左/前，+1=右/后） |
-| `base/core/res/res/anim/task_open_enter_from_left.xml` | 新增 | `task_open_enter` 水平镜像：目标从**左侧**滑入（-105% → 0，500ms `fast_out_extra_slow_in`） |
-| `base/core/res/res/anim/task_open_exit_to_right.xml` | 新增 | `task_open_exit` 水平镜像：当前任务向**右侧**滑出（0 → +105%） |
+| `base/core/res/res/anim/task_open_enter_from_left.xml` | 新增 | 目标从**左侧**滑入（-105% → 0，800ms `fast_out_extra_slow_in`） |
+| `base/core/res/res/anim/task_open_exit_to_right.xml` | 新增 | 当前任务向**右侧**滑出（0 → +105%，800ms） |
+| `base/core/res/res/anim/task_open_enter_from_right.xml` | 新增 | 右向专用：目标从**右侧**滑入（105% → 0，800ms） |
+| `base/core/res/res/anim/task_open_exit_to_left.xml` | 新增 | 右向专用：当前任务向**左侧**滑出（0 → -105%，800ms） |
+| `base/libs/WindowManager/Shell/res/values/fde_strings.xml`（及 `values-zh-rCN/-rHK/-rTW`） | 新增 | desk 切换 Toast 文案 `desk_switch_toast`（`Desktop %1$d` / `桌面%1$d`） |
 | `base/services/core/java/com/android/server/policy/PhoneWindowManager.java` | 修改 | `interceptKeyBeforeQueueing()` 增加 `KEYCODE_DPAD_LEFT/RIGHT` 分支；新增 `performTaskSwitch(displayId, direction)`、`isBareCtrlShortcut(event)` |
-| `base/libs/WindowManager/Shell/src/com/android/wm/shell/desktopmode/DesktopTasksController.kt` | 修改 | 核心逻辑：binder stub 与注册、环会话、锚点判定、目标分派、`startRunningTaskFromRecentsNative()`、`switchDeskWithAnimation()`、`activateDesk(forceDefaultTransition)` |
+| `base/libs/WindowManager/Shell/src/com/android/wm/shell/desktopmode/DesktopTasksController.kt` | 修改 | 核心逻辑：binder stub 与注册、环会话、锚点判定、目标分派、`startRunningTaskFromRecentsNative()`、`switchDeskWithAnimation()`、`activateDesk(forceDefaultTransition)`；desk 切换 Toast `maybeShowDeskSwitchToast()`；取消冷窗口自动恢复（去掉两处 `wct.startTask`） |
+| `base/libs/WindowManager/Shell/src/com/android/wm/shell/recents/RecentTasksController.java` | 修改 | desktop 模式下 recents（overview/taskbar）过滤未运行任务（`isRunning == false`） |
+| `base/libs/WindowManager/Shell/src/com/android/wm/shell/desktopmode/multidesks/animation/DeskSwitchAnimationUtils.kt` | 修改 | desk 切换弹簧/位移默认值调优：lateral 200、fade_in 400、fade_out 1900、位移 0.33 屏宽 |
 
 > 早期曾新增独立类 `TaskSwitchService.kt`（Dagger `@Provides` 提供、WMShellModule 注册），
 > 因 `@Provides` 是惰性的、无人注入就不会实例化，导致 binder 永远没注册；已删除，改为注册在
@@ -158,17 +162,20 @@ target = ring[Math.floorMod(anchorIndex + direction, ring.size)]  // 两端回�
 ### 6.1 全屏↔全屏、desk→全屏：原生 task-open 横向滑动（两个方向都强制）
 
 - 参照效果：点击任务条上另一个运行中全屏任务图标 = wm 原生 `task_open` 过渡
-  （目标从右滑入、当前向左滑出，500ms + `fast_out_extra_slow_in`）。
+  （目标从右滑入、当前向左滑出，`fast_out_extra_slow_in`）。
 - 实现：`startRunningTaskFromRecentsNative()` 对**两个方向都显式**调用
-  `ActivityOptions.makeCustomTaskAnimation(...)`，anim id 运行时解析：
+  `ActivityOptions.makeCustomTaskAnimation(...)`，anim id 运行时解析；时长统一 **800ms**
+  （FDE 自有资源，右向不再使用 AOSP `task_open_enter/exit`）：
 
   ```kotlin
   val resources = context.resources
   enterResId = resources.getIdentifier(
-      if (direction == DIRECTION_NEXT) "task_open_enter" else "task_open_enter_from_left",
+      if (direction == DIRECTION_NEXT) "task_open_enter_from_right"
+      else "task_open_enter_from_left",
       "anim", "android")
   exitResId  = resources.getIdentifier(
-      if (direction == DIRECTION_NEXT) "task_open_exit" else "task_open_exit_to_right",
+      if (direction == DIRECTION_NEXT) "task_open_exit_to_left"
+      else "task_open_exit_to_right",
       "anim", "android")
   ActivityOptions.makeCustomTaskAnimation(context, enterResId, exitResId, ...).toBundle()
   ```
@@ -223,6 +230,14 @@ target = ring[Math.floorMod(anchorIndex + direction, ring.size)]  // 两端回�
    `moveToFullscreen()` 也有同名参数，但基线内没有调用方传 true（预留）。
 8. **多用户/多显示**：环会话按 displayId+userId 区分，但主要在单显示桌面场景验证。
 9. **性能**：每次按键会调用 `getTasks` 并打全量 dump 日志（debug 用，量大时可降级为 Log.v）。
+10. **recents 过滤**：desktop 模式下 overview/taskbar 只显示运行中应用（未运行的冷任务被过滤，见第 11 节）；
+    在 `RecentTasksController` 里**不要新增 ProtoLog 消息**（pb 不同步会直接导致进程崩溃）。
+11. **desk 切换 Toast**：仅多 desk 时弹 "桌面N"，自定义视图（灰底白字/更宽/位于 dock 上方），
+    快速切换时替换旧 toast、约 1.2s 自动消失（见第 12 节）。
+12. **动画默认值与调试**：任务横滑 800ms；desk 弹簧默认 lateral 200 / fade_in 400 / fade_out 1900、
+    位移 0.33 屏宽；调试参数见第 13 节（stiffness 属性为 ×1000 存储）。
+13. **冷窗口不自动恢复**：进入 desk 只显示当前运行中的窗口，不再 `wct.startTask` 上次会话的
+    持久化任务（预期行为，勿当 bug 回退）。
 
 ---
 
@@ -255,6 +270,8 @@ target = ring[Math.floorMod(anchorIndex + direction, ring.size)]  // 两端回�
 - 全屏→desk：默认引擎过渡（淡出/淡入，非横滑）—— 已知折中，可接受。
 - 环形导航：顺序稳定、两端回绕、不漏项；Home 首次直跳、之后继续走环 —— 已验证。
 - 回归：T↔T / D→F / desk↔desk 正常。
+- 相关补丁（第 11-13 节）：recents 只显示运行中应用、desk 切换 Toast、动画时长/手感调优、
+  冷窗口不再自动恢复 —— 均已实机验证。
 
 ---
 
@@ -279,3 +296,70 @@ target = ring[Math.floorMod(anchorIndex + direction, ring.size)]  // 两端回�
   `RemoteTransition` runner（TaskSlideRemoteTransition）→ 分别出现拖影、无效或闪屏，
   均未采用。
 - 后续提交中的 `META_META_MASKA` 拼写错误（7b2ef77）——基线 `e98141e8` 无此问题。
+
+---
+
+## 11. 相关补丁 A：最近任务只显示运行中的应用（desktop mode）
+
+- 背景：AOSP 用 `TaskPersister` 持久化最近任务记录，开机后恢复为"冷任务"（无 Activity/进程，
+  `TaskInfo.isRunning == false`），导致 recents（overview / taskbar）里出现"并没有真正启动过"的应用。
+- 实现：`base/libs/WindowManager/Shell/src/com/android/wm/shell/recents/RecentTasksController.java`
+  的 `generateList()` Phase 1 中过滤：
+
+  ```java
+  if (mDesktopState.canEnterDesktopMode() && !taskInfo.isRunning) {
+      mTmpRemaining.remove(taskId);
+      continue;
+  }
+  ```
+
+  - 仅 desktop 模式（`canEnterDesktopMode()`）生效；desk 条目（含空 desk）保留，后台运行中的应用保留；
+  - `isRunning` 来自 `Task.fillTaskInfo`（有顶层未结束 Activity 才为 true）。
+- ⚠️ 坑：**不要在该文件新增 ProtoLog 消息**。新增消息 hash 需要同步重新生成并刷入
+  `/system_ext/etc/wmshell.protolog.pb`；只更新 SystemUI.apk 而 pb 未同步时，运行到新消息会抛
+  `Failed to decode message for logcat logging ... viewerConfig file`，wmshell.main 直接崩溃。
+
+## 12. 相关补丁 B：切换 desk 的 Toast（"桌面N"）
+
+- 触发：`activateDesk()` / `switchDeskWithAnimation()` / `activatePreviousDesk()` /
+  `activateNextDesk()`（覆盖 Ctrl+方向、原生 next/prev desk 手势、recents/KQS 点 desk 卡片、全屏→desk）。
+- 条件：目标 desk 存在；该 display 的 desk 数 ≥ 2（单 desk 静默）；`activateDesk` 里额外要求
+  `activeDeskId != deskId`（避免同一 desk 重复激活也弹）。
+- 编号：`DesktopRepository.getDeskPosition(deskId) + 1`（按 orderedDesks 顺序）。
+- 实现：`DesktopTasksController.maybeShowDeskSwitchToast()`：
+  - 自定义视图：`TextView` minWidth 260dp、padding 32/12dp、圆角 20dp、
+    **不透明灰底 `0xFF757575` + 白字 16sp**、`Gravity.BOTTOM|CENTER_HORIZONTAL` 上移 140dp（不挡 dock）；
+  - 每次切换先 `cancel()` 旧 toast 再 `show()` 新的（`deskSwitchToast` + `hideDeskSwitchToast`），
+    并在 `DESK_SWITCH_TOAST_DURATION_MS = 1200ms` 后主动取消（`Toast.LENGTH_SHORT` 仅作上限），
+    保证快速连按时内容立即更新、不残留旧文案；
+  - 系统依据：NMS 中 `isSystemToast = isCallerSystemOrSystemUi()`，SystemUI 的自定义 toast 不受
+    "后台自定义 toast"限制，且系统 toast 会插入队首。
+- 文案资源：`Shell/res/values/fde_strings.xml`（`Desktop %1$d`）与 zh-rCN/zh-rHK/zh-rTW
+  （`桌面%1$d`）；独立文件避免被 AOSP 翻译同步覆盖。
+
+## 13. 相关补丁 C：切换动画时长/手感与调试参数
+
+- 任务横滑（全屏↔全屏、desk→全屏）：`task_open_*` 4 个资源统一 **800ms**（原 500ms）；
+  右向不再使用 AOSP `task_open_enter/exit`，改用 `task_open_enter_from_right` /
+  `task_open_exit_to_left`，两个方向对称、时长完全由 FDE 自控。
+- desk↔desk 弹簧（`DeskSwitchAnimationUtils`）：
+  - `LATERAL_MOTION_SCREEN_PCT` 0.25 → **0.33**（位移更明显）；
+  - 默认 stiffness：`lateral 200`、`fade_in 400`、`fade_out 1900`（越小越慢）；
+    `wallpaper_translation_duration` 默认 250ms。
+- 调试参数：
+  1) **任务横滑时长**：全局 `transition_animation_scale`（wm 的 `Transitions` 会对自定义动画
+     执行 `scaleCurrentDuration`，立即生效，影响所有 transition 动画）：
+     ```
+     adb shell settings put global transition_animation_scale 1.5   # 1.5x 慢
+     adb shell settings put global transition_animation_scale 1     # 恢复
+     ```
+  2) **desk 弹簧**：`persist.wm.debug.desktop_transitions.desk_switch.*`（改后需重启 SystemUI）：
+     - `lateral_stiffness` / `fade_in_stiffness` / `fade_out_stiffness`：内部 **×1000 缩放**
+       （setprop 写"真实值×1000"，如 `200000` = 200）；
+     - `wallpaper_translation_duration`：毫秒原始值；
+     - `*_damping_ratio`：默认 1.0（no bouncy，整数读取）。
+     - 恢复默认 = 把属性设回默认数值（`setprop` 不支持空值，`persist.*` 重启也不会清除）。
+- 配套补丁：**desk 激活不再自动恢复上次会话窗口**（`addDeskActivationChanges()` /
+  `bringDesktopAppsToFront()` 删除了对未运行持久化任务的 `wct.startTask()`），
+  任何方式进入 desk 都只显示当前运行中的窗口；与第 11 节共同保证"没启动过的应用既不显示、
+  也不会被自动拉起"。

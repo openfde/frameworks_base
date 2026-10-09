@@ -25,11 +25,14 @@ import com.android.internal.annotations.VisibleForTesting
 import com.android.wm.shell.shared.animation.PhysicsAnimator
 
 object DeskSwitchAnimationUtils {
-    /** The percentage of the screen that tasks will slide before/after fading. */
-    const val LATERAL_MOTION_SCREEN_PCT = 0.25f
+    /**
+     * The percentage of the screen that tasks will slide before/after fading.
+     * OpenFDE: increased from 0.25 to 0.33 so the desk switch motion is more visible.
+     */
+    const val LATERAL_MOTION_SCREEN_PCT = 0.33f
 
     private val LATERAL_MOVEMENT_SPRING_STIFFNESS =
-        propertyValue("lateral_stiffness", scale = 1000f, default = 800f)
+        propertyValue("lateral_stiffness", scale = 1000f, default = 200f)
     private val LATERAL_MOVEMENT_SPRING_DAMPING_RATIO =
         propertyValue("lateral_damping_ratio", default = SpringForce.DAMPING_RATIO_NO_BOUNCY)
     /** The spring to use for lateral movement of desk windows. */
@@ -40,7 +43,7 @@ object DeskSwitchAnimationUtils {
         )
 
     private val FADE_OUT_SPRING_STIFFNESS =
-        propertyValue("fade_out_stiffness", scale = 1000f, default = 3800f)
+        propertyValue("fade_out_stiffness", scale = 1000f, default = 1900f)
     private val FADE_OUT_SPRING_DAMPING_RATIO =
         propertyValue("fade_out_damping_ratio", default = SpringForce.DAMPING_RATIO_NO_BOUNCY)
     /** The spring to use for fading out desk windows. */
@@ -55,7 +58,7 @@ object DeskSwitchAnimationUtils {
     val FADE_OUT_VISIBILITY_THRESHOLD = propertyValue("fade_out_start_fraction", default = 0.1f)
 
     private val FADE_IN_SPRING_STIFFNESS =
-        propertyValue("fade_in_stiffness", scale = 1000f, default = 800f)
+        propertyValue("fade_in_stiffness", scale = 1000f, default = 400f)
     private val FADE_IN_SPRING_DAMPING_RATIO =
         propertyValue("fade_in_damping_ratio", default = SpringForce.DAMPING_RATIO_NO_BOUNCY)
     /** The spring to use for fading in desk windows. */

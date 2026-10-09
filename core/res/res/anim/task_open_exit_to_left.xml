@@ -15,15 +15,14 @@
 ** limitations under the License.
 */
 -->
-<!-- Mirrored version of task_open_enter: the incoming task slides in from the LEFT. -->
+<!-- FDE task switch: outgoing task slides out to the LEFT (mirror of to_right). -->
 <set xmlns:android="http://schemas.android.com/apk/res/android"
      android:shareInterpolator="false"
-     android:zAdjustment="top"
      android:hasRoundedCorners="true">
 
     <translate
-        android:fromXDelta="-105%"
-        android:toXDelta="0"
+        android:fromXDelta="0"
+        android:toXDelta="-105%"
         android:fillEnabled="true"
         android:fillBefore="true"
         android:fillAfter="true"
