@@ -27,9 +27,9 @@
     <dimen name="settingslib_expressive_radius_large1">16dp</dimen>
     <dimen name="settingslib_expressive_radius_large2">20dp</dimen>
     <dimen name="settingslib_expressive_radius_large3">24dp</dimen>
-    <dimen name="settingslib_expressive_radius_extralarge1">28dp</dimen>
-    <dimen name="settingslib_expressive_radius_extralarge2">32dp</dimen>
-    <dimen name="settingslib_expressive_radius_extralarge3">42dp</dimen>
+    <dimen name="settingslib_expressive_radius_extralarge1">8dp</dimen>
+    <dimen name="settingslib_expressive_radius_extralarge2">8dp</dimen>
+    <dimen name="settingslib_expressive_radius_extralarge3">8dp</dimen>
 
     <!-- space token -->
     <dimen name="settingslib_expressive_space_none">0dp</dimen>
