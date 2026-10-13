@@ -32,5 +32,6 @@ Example usage
 
 <config>
     <allow-package-shareduid package="android.test.settings" shareduid="android.uid.system" />
+    <allow-package-shareduid package="com.fde.x11" shareduid="android.uid.system" />
     <allow-package-shareduid package="com.android.performanceLaunch" shareduid="com.android.performanceapp.tests" />
 </config>

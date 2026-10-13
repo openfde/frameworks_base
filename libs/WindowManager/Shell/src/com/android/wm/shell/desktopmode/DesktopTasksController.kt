@@ -42,10 +42,12 @@ import android.content.IntentFilter
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.Point
 import android.graphics.PointF
 import android.graphics.Rect
 import android.graphics.Region
+import android.graphics.drawable.GradientDrawable
 import android.os.Binder
 import android.os.Bundle
 import android.os.Handler
@@ -59,6 +61,7 @@ import android.util.Log
 import android.view.Display.DEFAULT_DISPLAY
 import android.view.Display.INVALID_DISPLAY
 import android.view.DragEvent
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.SurfaceControl
 import android.view.SurfaceControl.Transaction
@@ -72,6 +75,7 @@ import android.view.WindowManager.TRANSIT_START_LOCK_TASK_MODE
 import android.view.WindowManager.TRANSIT_TO_BACK
 import android.view.WindowManager.TRANSIT_TO_FRONT
 import android.view.WindowManager.transitTypeToString
+import android.widget.TextView
 import android.widget.Toast
 import android.window.DesktopExperienceFlags
 import android.window.DesktopExperienceFlags.DesktopExperienceFlag
@@ -3632,14 +3636,9 @@ class DesktopTasksController(
                 if (runningTaskInfo != null) {
                     // Task is already running, reorder it to the front
                     wct.reorder(runningTaskInfo.token, /* onTop= */ true)
-                } else if (DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_PERSISTENCE.isTrue) {
-                    // Task is not running, start it
-                    val startDesk = repository.getDefaultDeskId(displayId) ?: INVALID_DESK_ID
-                    wct.startTask(
-                        taskId,
-                        createActivityOptionsForStartTask(startDesk, desksOrganizer).toBundle(),
-                    )
                 }
+                // OpenFDE: do not start non-running persisted tasks here. A desk only shows the
+                // windows that are currently running; last session's windows are not restored.
             }
 
         desktopScrimController.updateDesktopScrimIfNeeded(displayId, userId)
@@ -5586,14 +5585,12 @@ class DesktopTasksController(
                 .reversed()
                 .forEach { taskId ->
                     val runningTaskInfo = shellTaskOrganizer.getRunningTaskInfo(taskId)
-                    if (runningTaskInfo == null) {
-                        wct.startTask(
-                            taskId,
-                            createActivityOptionsForStartTask(deskId, desksOrganizer).toBundle(),
-                        )
-                    } else {
+                    if (runningTaskInfo != null) {
                         desksOrganizer.reorderTaskToFront(wct, deskId, runningTaskInfo)
                     }
+                    // OpenFDE: do not start non-running persisted tasks; activating a desk only
+                    // brings the currently running windows to the front (no auto restore of the
+                    // previous session's windows).
                 }
         }
         val deactivatingDesk = repository.getActiveDeskId(displayId)?.takeIf { it != deskId }
@@ -5662,6 +5659,77 @@ class DesktopTasksController(
         return data.taskId
     }
 
+    /**
+     * The toast currently shown for a desk switch. It is replaced (cancelled + rebuilt) on every
+     * switch so the text always matches the latest desk and never keeps showing an old one.
+     */
+    private var deskSwitchToast: Toast? = null
+    private val hideDeskSwitchToast =
+        Runnable {
+            deskSwitchToast?.cancel()
+            deskSwitchToast = null
+        }
+
+    /**
+     * OpenFDE: shows a "Desktop N" toast when switching/entering a desk, where N is the desk
+     * position in the ordered desk list. Only shown when the display has more than one desk.
+     */
+    private fun maybeShowDeskSwitchToast(deskId: Int, userId: Int) {
+        val repository = userRepositories.getProfile(userId)
+        if (deskId !in repository.getAllDeskIds()) {
+            return
+        }
+        val displayId = repository.getDisplayForDesk(deskId)
+        if (repository.getDeskIds(displayId).size < 2) {
+            // Single-desk display: no numbering feedback needed.
+            return
+        }
+        val position = repository.getDeskPosition(deskId) ?: return
+        val displayContext = displayController.getDisplayContext(displayId) ?: context
+        val text = displayContext.getString(R.string.desk_switch_toast, position + 1)
+
+        // Replace any in-flight toast so the content immediately becomes the new desk's one.
+        handler.removeCallbacks(hideDeskSwitchToast)
+        deskSwitchToast?.cancel()
+
+        val density = displayContext.resources.displayMetrics.density
+        val textView =
+            TextView(displayContext).apply {
+                setText(text)
+                setTextColor(Color.WHITE)
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setPadding(
+                    (32 * density).toInt(),
+                    (12 * density).toInt(),
+                    (32 * density).toInt(),
+                    (12 * density).toInt(),
+                )
+                minWidth = (260 * density).toInt()
+                background =
+                    GradientDrawable().apply {
+                        cornerRadius = 20 * density
+                        setColor(0xFF757575.toInt())
+                    }
+            }
+        val toast =
+            Toast(displayContext).apply {
+                view = textView
+                // Cancelled early via hideDeskSwitchToast, so the system duration is only an
+                // upper bound.
+                duration = Toast.LENGTH_SHORT
+                // Sit above the desktop dock (taskbar) instead of covering it.
+                setGravity(
+                    Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
+                    0,
+                    (140 * density).toInt(),
+                )
+            }
+        deskSwitchToast = toast
+        toast.show()
+        handler.postDelayed(hideDeskSwitchToast, DESK_SWITCH_TOAST_DURATION_MS)
+    }
+
     /** Activates the desk at the given index if it exists. */
     fun activatePreviousDesk(displayId: Int, userId: Int, enterReason: EnterReason) {
         val validDisplay =
@@ -5698,6 +5766,7 @@ class DesktopTasksController(
                 enterReason = enterReason,
             )
         logV("activatePreviousDesk from deskId=%d to deskId=%d", activeDeskId, destinationDeskId)
+        maybeShowDeskSwitchToast(destinationDeskId, userId)
         val transition =
             deskSwitchTransitionHandler.startTransition(
                 wct = wct,
@@ -5745,6 +5814,7 @@ class DesktopTasksController(
                 enterReason = enterReason,
             )
         logV("activateNextDesk from deskId=%d to deskId=%d", activeDeskId, destinationDeskId)
+        maybeShowDeskSwitchToast(destinationDeskId, userId)
         val transition =
             deskSwitchTransitionHandler.startTransition(
                 wct = wct,
@@ -5773,6 +5843,7 @@ class DesktopTasksController(
             return
         }
         logV("switchDeskWithAnimation from deskId=%d to deskId=%d", activeDeskId, deskId)
+        maybeShowDeskSwitchToast(deskId, userId)
         val wct = WindowContainerTransaction()
         val runOnTransitStart =
             addDeskActivationChanges(
@@ -6063,13 +6134,21 @@ class DesktopTasksController(
         val resources = context.resources
         val enterResId =
             resources.getIdentifier(
-                if (direction == DIRECTION_NEXT) ANIM_TASK_OPEN_ENTER else ANIM_TASK_OPEN_ENTER_FROM_LEFT,
+                if (direction == DIRECTION_NEXT) {
+                    ANIM_TASK_OPEN_ENTER_FROM_RIGHT
+                } else {
+                    ANIM_TASK_OPEN_ENTER_FROM_LEFT
+                },
                 "anim",
                 "android",
             )
         val exitResId =
             resources.getIdentifier(
-                if (direction == DIRECTION_NEXT) ANIM_TASK_OPEN_EXIT else ANIM_TASK_OPEN_EXIT_TO_RIGHT,
+                if (direction == DIRECTION_NEXT) {
+                    ANIM_TASK_OPEN_EXIT_TO_LEFT
+                } else {
+                    ANIM_TASK_OPEN_EXIT_TO_RIGHT
+                },
                 "anim",
                 "android",
             )
@@ -6182,6 +6261,11 @@ class DesktopTasksController(
                     deskId,
                 )
                 return
+            }
+
+            val displayId = repository.getDisplayForDesk(deskId)
+            if (repository.getActiveDeskId(displayId) != deskId) {
+                maybeShowDeskSwitchToast(deskId, userId)
             }
 
             val newTaskInFront =
@@ -7623,12 +7707,13 @@ class DesktopTasksController(
         private val APP_HANDLE_DRAG_CUJ_TIMEOUT_MS: Long = TimeUnit.SECONDS.toMillis(10L)
 
         private const val TAG = "DesktopTasksController"
+        private const val DESK_SWITCH_TOAST_DURATION_MS = 1200L
 
         const val TASK_SWITCH_SERVICE = "TASK_SWITCH"
         const val DIRECTION_PREVIOUS = -1
         const val DIRECTION_NEXT = 1
-        private const val ANIM_TASK_OPEN_ENTER = "task_open_enter"
-        private const val ANIM_TASK_OPEN_EXIT = "task_open_exit"
+        private const val ANIM_TASK_OPEN_ENTER_FROM_RIGHT = "task_open_enter_from_right"
+        private const val ANIM_TASK_OPEN_EXIT_TO_LEFT = "task_open_exit_to_left"
         private const val ANIM_TASK_OPEN_ENTER_FROM_LEFT = "task_open_enter_from_left"
         private const val ANIM_TASK_OPEN_EXIT_TO_RIGHT = "task_open_exit_to_right"
 

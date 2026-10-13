@@ -683,6 +683,17 @@ public class RecentTasksController implements TaskStackListenerCallback,
                 continue;
             }
 
+            // OpenFDE: in desktop mode the overview/taskbar recents should only contain apps that
+            // are actually running. Drop restored/stale recent-task records (isRunning == false,
+            // e.g. TaskPersister entries restored on reboot, or cold tasks that were never
+            // launched in this session). No new ProtoLog message here on purpose: adding one
+            // requires regenerating/flashing /system_ext/etc/wmshell.protolog.pb, otherwise
+            // ProtoLog throws at runtime when the on-device viewer config is stale.
+            if (mDesktopState.canEnterDesktopMode() && !taskInfo.isRunning) {
+                mTmpRemaining.remove(taskId);
+                continue;
+            }
+
             // Desktop tasks
             if (mDesktopState.canEnterDesktopMode()
                     && mDesktopUserRepositories.isPresent()) {
