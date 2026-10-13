@@ -26,6 +26,8 @@ import android.app.TaskInfo
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Resources
+import android.graphics.Canvas
+import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Point
@@ -457,6 +459,7 @@ class LayoutMenu(
                 maximizeFillPaddingDefault,
                 maximizeFillPaddingDefault,
             )
+
         private val maximizeRestoreFillPaddingRect =
             Rect(
                 maximizeRestoreFillPaddingHorizontal,
@@ -470,6 +473,17 @@ class LayoutMenu(
                 immersiveFillPadding,
                 immersiveFillPadding,
                 immersiveFillPadding,
+            )
+
+        // 全屏按钮沿用 desktop_mode_layout_menu_fullscreen_button_background.xml 的分层结构：
+        // 外框 -> 背景 -> 内层底板 -> 全屏图标，各层之间的内缩。
+        private val fullscreenFramePadding =
+            context.resources.getDimensionPixelSize(
+                R.dimen.desktop_mode_layout_menu_fullscreen_frame_padding
+            )
+        private val fullscreenIconPadding =
+            context.resources.getDimensionPixelSize(
+                R.dimen.desktop_mode_layout_menu_fullscreen_icon_padding
             )
 
         // fde start MAGIC WINDOW -> parallel world
@@ -819,7 +833,9 @@ class LayoutMenu(
             immersiveToggleButton.background = style.immersiveOption.drawable
             immersiveToggleButtonText.setTextColor(style.textColor)
 
-//            fullscreenToggleButton.background = style.fullscreenOption.drawable
+            // Fullscreen option. 完全由代码按 DecorThemeUtil 解析出的主题生成边框、背景与
+            // 激活态颜色，和最大化/沉浸按钮共用同一套绘制逻辑（见 createFullscreenDrawable）。
+            fullscreenToggleButton.background = style.fullscreenOption.drawable
 
             // Snap options.
             snapWindowText.setTextColor(style.textColor)
@@ -1125,10 +1141,10 @@ class LayoutMenu(
                 fullscreenOption =
                     MenuStyle.FullscreenOption(
                         drawable =
-                            createMaximizeOrImmersiveDrawable(
+                            createFullscreenDrawable(
                                 menuBackgroundColor,
                                 colorScheme,
-                                fillPadding = immersiveFillPaddingRect,
+                                platePadding = maximizeFillPaddingDefault,
                             )
                     ),
                 snapOptions =
@@ -1314,44 +1330,6 @@ class LayoutMenu(
             }
         }
 
-        private fun createFullscreenDrawable(
-            @ColorInt menuBackgroundColor: Int,
-            colorScheme: ColorScheme,
-            fillPadding: Rect,
-        ): StateListDrawable {
-            val activeStrokeAndFill = colorScheme.primary.toArgb()
-            val activeBackground = colorScheme.primary.toArgb().withAlpha(OPACITY_12)
-            val activeDrawable =
-                createFullscreenButtonDrawable(
-                    strokeColor = activeStrokeAndFill,
-                    fillColor = activeStrokeAndFill,
-                    backgroundColor = activeBackground,
-                    backgroundMask = menuBackgroundColor,
-                    fillPadding = fillPadding,
-                )
-            return StateListDrawable().apply {
-                addState(intArrayOf(android.R.attr.state_pressed), activeDrawable)
-                addState(intArrayOf(android.R.attr.state_focused), activeDrawable)
-                addState(intArrayOf(android.R.attr.state_selected), activeDrawable)
-                addState(intArrayOf(android.R.attr.state_hovered), activeDrawable)
-                // Inactive drawable.
-                addState(
-                    StateSet.WILD_CARD,
-                    createFullscreenButtonDrawable(
-                        strokeColor =
-                            colorScheme.outlineVariant
-                                .toArgb()
-                                .withAlpha(OPACITY_60),
-                        fillColor = colorScheme.outlineVariant.toArgb(),
-                        backgroundColor =
-                            colorScheme.surfaceContainerLow.toArgb(),
-                        backgroundMask = null,
-                        fillPadding = fillPadding,
-                    ),
-                )
-            }
-        }
-
         private fun createMaximizeOrImmersiveDrawable(
             @ColorInt menuBackgroundColor: Int,
             colorScheme: ColorScheme,
@@ -1391,102 +1369,167 @@ class LayoutMenu(
             }
         }
 
-        private fun createFullscreenButtonDrawable(
-            @ColorInt strokeColor: Int,
-            @ColorInt fillColor: Int,
-            @ColorInt backgroundColor: Int,
-            @ColorInt backgroundMask: Int?,
-            fillPadding: Rect,
-        ): LayerDrawable {
-
-            val layers = mutableListOf<Drawable>()
-
-            // 1. 最底层：按钮背景
-            backgroundMask?.let { color ->
-                layers.add(
-                    ShapeDrawable().apply {
-                        shape =
-                            RoundRectShape(
-                                FloatArray(8) { outlineRadius.toFloat() },
-                                null,
-                                null,
-                            )
-                        paint.color = color
-                        paint.style = Paint.Style.FILL
-                    }
+        /**
+         * 全屏按钮的完整样式。
+         *
+         * 分层结构与 desktop_mode_layout_menu_fullscreen_button_background.xml 保持一致：
+         * 外框 -> 背景 -> 内层底板 -> 全屏图标；但每一层的颜色都换成最大化/沉浸按钮使用的那套
+         * 主题色（来自 [DecorThemeUtil.getColorScheme]），因此会跟随深/浅色主题与应用主题变化。
+         */
+        private fun createFullscreenDrawable(
+            @ColorInt menuBackgroundColor: Int,
+            colorScheme: ColorScheme,
+            platePadding: Int,
+        ): StateListDrawable {
+            val activeColor = colorScheme.primary.toArgb()
+            val activeDrawable =
+                createFullscreenButtonDrawable(
+                    frameColor = activeColor,
+                    backgroundColor = activeColor.withAlpha(OPACITY_12),
+                    plateColor = activeColor,
+                    iconColor = menuBackgroundColor,
+                    // 激活态背景是半透明的，加一层菜单底色的遮罩，避免透出下面的外框颜色。
+                    backgroundMask = menuBackgroundColor,
+                    platePadding = platePadding,
+                )
+            return StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_pressed), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_focused), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_selected), activeDrawable)
+                addState(intArrayOf(android.R.attr.state_hovered), activeDrawable)
+                // Inactive drawable.
+                addState(
+                    StateSet.WILD_CARD,
+                    createFullscreenButtonDrawable(
+                        frameColor =
+                            colorScheme.outlineVariant
+                                .toArgb()
+                                .withAlpha(OPACITY_60),
+                        backgroundColor = colorScheme.surfaceContainerLow.toArgb(),
+                        plateColor = colorScheme.outlineVariant.toArgb(),
+                        iconColor = menuBackgroundColor,
+                        backgroundMask = null,
+                        platePadding = platePadding,
+                    ),
                 )
             }
+        }
 
-            // 2. 实际背景
-            layers.add(
-                ShapeDrawable().apply {
-                    shape =
-                        RoundRectShape(
-                            FloatArray(8) { outlineRadius.toFloat() },
-                            null,
-                            null,
-                        )
-                    paint.color = backgroundColor
-                    paint.style = Paint.Style.FILL
-                }
-            )
+        /**
+         * [createFullscreenDrawable] 的单层实现，自下而上依次是：外框、遮罩（可选）、背景、
+         * 内层底板、全屏图标，层级与内缩和
+         * desktop_mode_layout_menu_fullscreen_button_background.xml 一一对应
+         * （外框铺满，背景内缩 [fullscreenFramePadding]，底板内缩 [platePadding]，
+         * 图标内缩 [fullscreenIconPadding]）。
+         */
+        private fun createFullscreenButtonDrawable(
+            @ColorInt frameColor: Int,
+            @ColorInt backgroundColor: Int,
+            @ColorInt plateColor: Int,
+            @ColorInt iconColor: Int,
+            @ColorInt backgroundMask: Int?,
+            platePadding: Int,
+        ): LayerDrawable {
+            val layers = mutableListOf<Drawable>()
+            val insets = mutableListOf<Int>()
+            fun addLayer(drawable: Drawable, inset: Int) {
+                layers.add(drawable)
+                insets.add(inset)
+            }
 
-            // 3. 全屏图标
-            layers.add(
-                createFullscreenIconDrawable(fillColor)
-            )
+            // fullscreen_outsize：外框铺满整个按钮。
+            addLayer(createFullscreenRoundRect(frameColor), 0)
+            // 激活态半透明背景的遮罩。
+            backgroundMask?.let {
+                addLayer(createFullscreenRoundRect(it), fullscreenFramePadding)
+            }
+            // fullscreen_second：背景。
+            addLayer(createFullscreenRoundRect(backgroundColor), fullscreenFramePadding)
+            // fullscreen_inner_bg：内层底板。
+            addLayer(createFullscreenRoundRect(plateColor), platePadding)
+            // fullscreen_inner_icon：全屏图标。
+            addLayer(createFullscreenIconDrawable(iconColor), fullscreenIconPadding)
 
             return LayerDrawable(layers.toTypedArray()).apply {
-                // 给全屏图标增加 padding
-                setLayerInset(
-                    numberOfLayers - 1,
-                    fillPadding.left,
-                    fillPadding.top,
-                    fillPadding.right,
-                    fillPadding.bottom,
-                )
+                insets.forEachIndexed { index, inset ->
+                    if (inset > 0) setLayerInset(index, inset)
+                }
             }
         }
 
-        private fun createFullscreenIconDrawable(
-            @ColorInt color: Int,
-        ): Drawable {
-            return ShapeDrawable().apply {
+        private fun createFullscreenRoundRect(@ColorInt color: Int): ShapeDrawable =
+            ShapeDrawable().apply {
+                shape = RoundRectShape(FloatArray(8) { outlineRadius.toFloat() }, null, null)
                 paint.color = color
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth =  (outlineStroke * 10f).toFloat()
-
-                shape =
-                    PathShape(
-                        Path().apply {
-                            val size = 100f
-                            val length = 35f
-
-                            // 左上角
-                            moveTo(0f, length)
-                            lineTo(0f, 0f)
-                            lineTo(length, 0f)
-
-                            // 右上角
-                            moveTo(size - length, 0f)
-                            lineTo(size, 0f)
-                            lineTo(size, length)
-
-                            // 右下角
-                            moveTo(size, size - length)
-                            lineTo(size, size)
-                            lineTo(size - length, size)
-
-                            // 左下角
-                            moveTo(length, size)
-                            lineTo(0f, size)
-                            lineTo(0f, size - length)
-                        },
-                        100f,
-                        100f,
-                    )
+                paint.style = Paint.Style.FILL
             }
-        }
+
+        /**
+         * 全屏图标（四角括号），对应 XML 里的 fullscreen_inner_icon。
+         *
+         * 直接按 [Drawable.getBounds] 绘制，描边粗细固定为 2dp，不会被按钮的宽高比拉伸。
+         * 颜色由调用方按主题传入，这里用菜单底色，使其在 primary / outlineVariant 的内层
+         * 底板上都能看清（作用等同于 XML 里的白色图标）。
+         */
+        private fun createFullscreenIconDrawable(@ColorInt iconColor: Int): Drawable =
+            object : Drawable() {
+                private val iconPaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = iconColor
+                        style = Paint.Style.STROKE
+                        strokeCap = Paint.Cap.BUTT
+                        strokeJoin = Paint.Join.MITER
+                        // 与系统全屏图标一致的描边粗细。
+                        strokeWidth = outlineStroke * 2f
+                    }
+                private val iconPath = Path()
+
+                override fun draw(canvas: Canvas) {
+                    val b = bounds
+                    if (b.isEmpty) return
+                    // 描边以路径为中心，向内收半个描边宽度，避免边缘被裁掉。
+                    val halfStroke = iconPaint.strokeWidth / 2f
+                    val left = b.left + halfStroke
+                    val top = b.top + halfStroke
+                    val right = b.right - halfStroke
+                    val bottom = b.bottom - halfStroke
+                    // 角标长度：横向约占 13%、纵向约占 27%，与 ic_fullscreen 观感一致。
+                    val legX = (right - left) * 0.13f
+                    val legY = (bottom - top) * 0.27f
+
+                    iconPath.reset()
+                    // 左上
+                    iconPath.moveTo(left, top + legY)
+                    iconPath.lineTo(left, top)
+                    iconPath.lineTo(left + legX, top)
+                    // 右上
+                    iconPath.moveTo(right - legX, top)
+                    iconPath.lineTo(right, top)
+                    iconPath.lineTo(right, top + legY)
+                    // 右下
+                    iconPath.moveTo(right, bottom - legY)
+                    iconPath.lineTo(right, bottom)
+                    iconPath.lineTo(right - legX, bottom)
+                    // 左下
+                    iconPath.moveTo(left + legX, bottom)
+                    iconPath.lineTo(left, bottom)
+                    iconPath.lineTo(left, bottom - legY)
+
+                    canvas.drawPath(iconPath, iconPaint)
+                }
+
+                override fun setAlpha(alpha: Int) {
+                    iconPaint.alpha = alpha
+                    invalidateSelf()
+                }
+
+                override fun setColorFilter(colorFilter: ColorFilter?) {
+                    iconPaint.colorFilter = colorFilter
+                    invalidateSelf()
+                }
+
+                override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+            }
 
         private fun createMaximizeOrImmersiveButtonDrawable(
             @ColorInt strokeColor: Int,

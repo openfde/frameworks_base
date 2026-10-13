@@ -568,6 +568,12 @@
     <dimen name="desktop_mode_layout_menu_restore_button_fill_horizontal_padding">15dp</dimen>
     <!-- The padding between the outline and fill of the layout menu immersive button. -->
     <dimen name="desktop_mode_layout_menu_immersive_button_fill_padding">0dp</dimen>
+    <!-- The padding between the outer frame and the background of the layout menu fullscreen
+         button, matching desktop_mode_layout_menu_fullscreen_button_background.xml. -->
+    <dimen name="desktop_mode_layout_menu_fullscreen_frame_padding">2dp</dimen>
+    <!-- The padding between the inner plate and the fullscreen icon of the layout menu
+         fullscreen button, matching desktop_mode_layout_menu_fullscreen_button_background.xml. -->
+    <dimen name="desktop_mode_layout_menu_fullscreen_icon_padding">10dp</dimen>
 
     <!-- The corner radius of the layout menu. -->
     <dimen name="desktop_mode_layout_menu_corner_radius">16dp</dimen>
