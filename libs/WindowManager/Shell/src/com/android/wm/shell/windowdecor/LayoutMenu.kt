@@ -542,7 +542,7 @@ class LayoutMenu(
                 }
             }
 
-            immersiveToggleContainer.isGone = immersiveConfig is ImmersiveConfig.Hidden
+//            immersiveToggleContainer.isGone = immersiveConfig is ImmersiveConfig.Hidden
             sizeToggleContainer.isVisible = true
             sizeToggleFullscreenContainer.isVisible = true
             snapContainer.isGone = !showSnapOptions
@@ -1293,16 +1293,38 @@ class LayoutMenu(
                     // 内部双面板（矢量图半径 20）：两块在中间重叠，接缝处留下矢量图里的小缺口。
                     val panelRx = 20f / 672f * width
                     val panelRy = 20f / 448f * height
-                    fillRoundedRect(platePaint, x(224f), y(380f), x(520f), y(656f), panelRx, panelRy)
-                    fillRoundedRect(platePaint, x(504f), y(380f), x(800f), y(656f), panelRx, panelRy)
 
-                    // 双面板顶部标题栏：只有上面两个角是圆角。
-                    fillTopRoundedRect(detailPaint, x(224f), y(380f), x(520f), y(416f), panelRx, panelRy)
-                    fillTopRoundedRect(detailPaint, x(504f), y(380f), x(800f), y(416f), panelRx, panelRy)
+                    fillRoundedRect(
+                        platePaint,
+                        x(244f), y(380f),
+                        x(500f), y(656f),
+                        panelRx, panelRy
+                    )
+                    fillRoundedRect(
+                        platePaint,
+                        x(508f), y(380f),
+                        x(780f), y(656f),
+                        panelRx, panelRy
+                    )
 
-                    // 中间分隔线。
+                    // 双面板顶部标题栏：左右同步缩进，只有上面两个角是圆角。
+                    fillTopRoundedRect(
+                        detailPaint,
+                        x(244f), y(380f),
+                        x(500f), y(416f),
+                        panelRx, panelRy
+                    )
+                    fillTopRoundedRect(
+                        detailPaint,
+                        x(508f), y(380f),
+                        x(780f), y(416f),
+                        panelRx, panelRy
+                    )
+
+                    // 中间分隔线：保持原来的中心位置不变。
                     val dividerHalfWidth = width * 0.007f
                     val centerX = x(504f)
+
                     iconPath.reset()
                     iconPath.addRect(
                         centerX - dividerHalfWidth,
