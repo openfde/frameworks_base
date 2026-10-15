@@ -99,7 +99,6 @@ import com.android.wm.shell.windowdecor.common.OPACITY_60
 import com.android.wm.shell.windowdecor.common.withAlpha
 import java.util.function.Supplier
 import android.graphics.Path
-import android.graphics.drawable.shapes.PathShape
 /**
  * Menu that appears when user long clicks the layout button. Gives the user the option to maximize
  * the task or restore previous task bounds from the maximized state and to snap the task to the
@@ -487,18 +486,6 @@ class LayoutMenu(
             )
 
         // fde start MAGIC WINDOW -> parallel world
-        private val parallelWorldFillPadding =
-            context.resources.getDimensionPixelSize(
-                R.dimen.parallel_world_button_fill_padding
-            )
-        private val parallelWorldPaneGap =
-            context.resources.getDimensionPixelSize(
-                R.dimen.parallel_world_button_pane_gap
-            )
-        private val parallelWorldButtonWidth =
-            context.resources.getDimensionPixelSize(R.dimen.parallel_world_button_width)
-        private val parallelWorldButtonHeight =
-            context.resources.getDimensionPixelSize(R.dimen.parallel_world_button_height)
         private val parallelWorldText =
             requireViewById(R.id.layout_menu_parallel_world_text) as TextView
         // fde end
@@ -555,7 +542,7 @@ class LayoutMenu(
                 }
             }
 
-            immersiveToggleContainer.isGone = immersiveConfig is ImmersiveConfig.Hidden
+//            immersiveToggleContainer.isGone = immersiveConfig is ImmersiveConfig.Hidden
             sizeToggleContainer.isVisible = true
             sizeToggleFullscreenContainer.isVisible = true
             snapContainer.isGone = !showSnapOptions
@@ -1127,6 +1114,8 @@ class LayoutMenu(
                                         SizeToggleDirection.RESTORE ->
                                             maximizeRestoreFillPaddingRect
                                     },
+                                // 最大化/恢复的最内层换成代码绘制的显示器图标。
+                                iconDirection = sizeToggleDirection,
                             )
                     ),
                 immersiveOption =
@@ -1169,94 +1158,202 @@ class LayoutMenu(
         }
 
         // fde start MAGIC WINDOW -> parallel world
-        /** Draws the parallel world toggle: two panes, the main (left) one is the smaller one. */
-        private fun createParallelWorldOptionDrawable(
-            colorScheme: ColorScheme,
-        ): StateListDrawable {
-            val activeColor = colorScheme.primary.toArgb()
-            val activeDrawable =
-                createParallelWorldButtonDrawable(
-                    backgroundColor = activeColor.withAlpha(OPACITY_12),
-                    iconColor = activeColor,
+        /**
+         * 平行视界开关的样式：按钮本身就是 ic_embedded 那台"双面板"图标，铺满整个按钮、不留
+         * 外边距，外面也不再画外框和背景。配色参考全屏按钮、随主题变化：
+         * 外框描边 = outlineVariant@60% / primary，双面板 = outlineVariant / primary，
+         * 标题栏与分隔线 = 菜单底色（即全屏图标的颜色）。
+         *
+         * 外框填充取比菜单底色深一档的 surfaceContainerHighest（激活态仍是 primary@12%）：
+         * 全屏按钮用的 surfaceContainerLow 和菜单背景是同一个颜色，直接照搬的话外框那一圈
+         * 看起来就是空的、图标显得没铺满。
+         */
+        private fun createParallelWorldOptionDrawable(colorScheme: ColorScheme): StateListDrawable {
+            val primary = colorScheme.primary.toArgb()
+            val outlineVariant = colorScheme.outlineVariant.toArgb()
+            val menuBackgroundColor = colorScheme.surfaceContainerLow.toArgb()
+            val activeIcon =
+                createParallelWorldIconDrawable(
+                    frameColor = primary,
+                    backgroundColor = primary.withAlpha(OPACITY_12),
+                    plateColor = primary,
+                    detailColor = menuBackgroundColor,
+                )
+            val inactiveIcon =
+                createParallelWorldIconDrawable(
+                    frameColor = outlineVariant.withAlpha(OPACITY_60),
+                    // 比菜单底色深一档，保证外框是"填满的"而不是和背景融成一片。
+                    backgroundColor = colorScheme.surfaceContainerHighest.toArgb(),
+                    plateColor = outlineVariant,
+                    detailColor = menuBackgroundColor,
                 )
             return StateListDrawable().apply {
-                addState(intArrayOf(android.R.attr.state_pressed), activeDrawable)
-                addState(intArrayOf(android.R.attr.state_focused), activeDrawable)
-                addState(intArrayOf(android.R.attr.state_selected), activeDrawable)
-                addState(intArrayOf(android.R.attr.state_hovered), activeDrawable)
-                addState(
-                    StateSet.WILD_CARD,
-                    createParallelWorldButtonDrawable(
-                        backgroundColor = colorScheme.surfaceContainerLow.toArgb(),
-                        iconColor = colorScheme.outlineVariant.toArgb(),
-                    ),
-                )
+                addState(intArrayOf(android.R.attr.state_pressed), activeIcon)
+                addState(intArrayOf(android.R.attr.state_focused), activeIcon)
+                addState(intArrayOf(android.R.attr.state_selected), activeIcon)
+                addState(intArrayOf(android.R.attr.state_hovered), activeIcon)
+                addState(StateSet.WILD_CARD, inactiveIcon)
             }
         }
 
-        private fun createParallelWorldButtonDrawable(
+        /**
+         * 平行视界图标，形状完全按 ic_embedded.xml 用代码绘制（不引用该资源）：
+         * 外部圆角边框 + 两块内部面板（中间略微重叠，接缝处留下矢量图里的小缺口）
+         * + 两条顶部标题栏 + 中间分隔线。
+         *
+         * 矢量图 1024 视口里画面本体是 x[176,848] × y[296,744]，这里整体映射到按钮区域，
+         * 所以图标铺满按钮；各处的圆角半径也按矢量图的比例换算，按钮宽高比不同时会等比拉伸。
+         *
+         * 配色参考全屏按钮、随主题变化：外框填充 = 背景色，外框描边 = 外框色，
+         * 内部面板 = 底板色，标题栏 / 分隔线 = 全屏图标色（菜单底色，叠在底板上才看得见）。
+         *
+         * @param frameColor 外框描边色，对应全屏按钮的外框色。
+         * @param backgroundColor 外框填充色，对应全屏按钮的背景色。
+         * @param plateColor 内部面板颜色，对应全屏按钮的内层底板色。
+         * @param detailColor 标题栏与分隔线颜色，对应全屏按钮的图标色。
+         */
+        private fun createParallelWorldIconDrawable(
+            @ColorInt frameColor: Int,
             @ColorInt backgroundColor: Int,
-            @ColorInt iconColor: Int,
-        ): LayerDrawable {
-            val layers = mutableListOf<Drawable>()
-            layers.add(
-                ShapeDrawable().apply {
-                    shape =
-                        RoundRectShape(
-                            FloatArray(8) { outlineRadius.toFloat() },
-                            null /* inset */,
-                            null, /* innerRadii */
-                        )
-                    paint.color = backgroundColor
-                    paint.style = Paint.Style.FILL
-                }
-            )
-            layers.add(createParallelWorldIconDrawable(iconColor))
-            return LayerDrawable(layers.toTypedArray()).apply {
-                setLayerInset(
-                    numberOfLayers - 1,
-                    parallelWorldFillPadding,
-                    parallelWorldFillPadding,
-                    parallelWorldFillPadding,
-                    parallelWorldFillPadding,
-                )
-            }
-        }
+            @ColorInt plateColor: Int,
+            @ColorInt detailColor: Int,
+        ): Drawable =
+            object : Drawable() {
+                private val bodyFillPaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = backgroundColor
+                        style = Paint.Style.FILL
+                    }
+                private val bodyStrokePaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = frameColor
+                        style = Paint.Style.STROKE
+                        strokeWidth = outlineStroke * 2f
+                        strokeJoin = Paint.Join.ROUND
+                    }
+                private val platePaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = plateColor
+                        style = Paint.Style.FILL
+                    }
+                private val detailPaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = detailColor
+                        style = Paint.Style.FILL
+                    }
+                private val iconPath = Path()
 
-        private fun createParallelWorldIconDrawable(@ColorInt color: Int): Drawable {
-            val width =
-                (parallelWorldButtonWidth - 2 * parallelWorldFillPadding).toFloat()
-            val height =
-                (parallelWorldButtonHeight - 2 * parallelWorldFillPadding).toFloat()
-            // The panes share the space left by the gap with the default 4:5 ratio: the main
-            // (left) window is the smaller one.
-            val panesWidth = width - parallelWorldPaneGap
-            val leftPaneWidth = panesWidth * 4f / 9f
-            val radius = fillRadius.toFloat()
-            return ShapeDrawable().apply {
-                paint.color = color
-                paint.style = Paint.Style.FILL
-                shape =
-                    PathShape(
-                        Path().apply {
-                            addRoundRect(
-                                RectF(0f, 0f, leftPaneWidth, height),
-                                radius,
-                                radius,
-                                Path.Direction.CCW,
-                            )
-                            addRoundRect(
-                                RectF(leftPaneWidth + parallelWorldPaneGap, 0f, width, height),
-                                radius,
-                                radius,
-                                Path.Direction.CCW,
-                            )
-                        },
-                        width,
-                        height,
+                override fun draw(canvas: Canvas) {
+                    val b = bounds
+                    if (b.isEmpty) return
+                    val width = b.width().toFloat()
+                    val height = b.height().toFloat()
+                    // ic_embedded.xml 画面本体：x[176,848]（宽 672）、y[296,744]（高 448）。
+                    fun x(v: Float) = b.left + (v - 176f) / 672f * width
+                    fun y(v: Float) = b.top + (v - 296f) / 448f * height
+
+                    fun fillRoundedRect(
+                        paint: Paint,
+                        l: Float,
+                        t: Float,
+                        r: Float,
+                        bo: Float,
+                        rx: Float,
+                        ry: Float,
+                    ) {
+                        iconPath.reset()
+                        iconPath.addRoundRect(RectF(l, t, r, bo), rx, ry, Path.Direction.CW)
+                        canvas.drawPath(iconPath, paint)
+                    }
+
+                    fun fillTopRoundedRect(
+                        paint: Paint,
+                        l: Float,
+                        t: Float,
+                        r: Float,
+                        bo: Float,
+                        rx: Float,
+                        ry: Float,
+                    ) {
+                        iconPath.reset()
+                        iconPath.addRoundRect(
+                            RectF(l, t, r, bo),
+                            floatArrayOf(rx, ry, rx, ry, 0f, 0f, 0f, 0f),
+                            Path.Direction.CW,
+                        )
+                        canvas.drawPath(iconPath, paint)
+                    }
+
+                    // 外部圆角边框（矢量图半径 48）：填充 + 描边。
+                    val frameRx = 48f / 672f * width
+                    val frameRy = 48f / 448f * height
+                    fillRoundedRect(bodyFillPaint, x(176f), y(296f), x(848f), y(744f), frameRx, frameRy)
+                    fillRoundedRect(bodyStrokePaint, x(176f), y(296f), x(848f), y(744f), frameRx, frameRy)
+
+                    // 内部双面板（矢量图半径 20）：两块在中间重叠，接缝处留下矢量图里的小缺口。
+                    val panelRx = 20f / 672f * width
+                    val panelRy = 20f / 448f * height
+
+                    fillRoundedRect(
+                        platePaint,
+                        x(244f), y(380f),
+                        x(500f), y(656f),
+                        panelRx, panelRy
                     )
+                    fillRoundedRect(
+                        platePaint,
+                        x(508f), y(380f),
+                        x(780f), y(656f),
+                        panelRx, panelRy
+                    )
+
+                    // 双面板顶部标题栏：左右同步缩进，只有上面两个角是圆角。
+                    fillTopRoundedRect(
+                        detailPaint,
+                        x(244f), y(380f),
+                        x(500f), y(416f),
+                        panelRx, panelRy
+                    )
+                    fillTopRoundedRect(
+                        detailPaint,
+                        x(508f), y(380f),
+                        x(780f), y(416f),
+                        panelRx, panelRy
+                    )
+
+                    // 中间分隔线：保持原来的中心位置不变。
+                    val dividerHalfWidth = width * 0.007f
+                    val centerX = x(504f)
+
+                    iconPath.reset()
+                    iconPath.addRect(
+                        centerX - dividerHalfWidth,
+                        y(470f),
+                        centerX + dividerHalfWidth,
+                        y(562f),
+                        Path.Direction.CW,
+                    )
+                    canvas.drawPath(iconPath, detailPaint)
+                }
+
+                override fun setAlpha(alpha: Int) {
+                    bodyFillPaint.alpha = alpha
+                    bodyStrokePaint.alpha = alpha
+                    platePaint.alpha = alpha
+                    detailPaint.alpha = alpha
+                    invalidateSelf()
+                }
+
+                override fun setColorFilter(colorFilter: ColorFilter?) {
+                    bodyFillPaint.colorFilter = colorFilter
+                    bodyStrokePaint.colorFilter = colorFilter
+                    platePaint.colorFilter = colorFilter
+                    detailPaint.colorFilter = colorFilter
+                    invalidateSelf()
+                }
+
+                override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
             }
-        }
         // fde end
 
         /** Measure width of the root view of this menu. */
@@ -1330,11 +1427,49 @@ class LayoutMenu(
             }
         }
 
+        /**
+         * 最大化/恢复/沉浸按钮的完整样式（状态列表）。
+         *
+         * @param iconDirection 不为空时（最大化/恢复）按钮本身就是 ic_maximize /
+         *   ic_free_window 那台显示器：铺满整个按钮、不留外边距，外面也不再画外框和背景，
+         *   但配色沿用全屏按钮那一套主题色（外框 / 背景 / 底板三层，随主题变化）；
+         *   为空时（沉浸按钮）沿用原来的边框 + 背景 + 圆角矩形填充样式。
+         */
         private fun createMaximizeOrImmersiveDrawable(
             @ColorInt menuBackgroundColor: Int,
             colorScheme: ColorScheme,
             fillPadding: Rect,
+            iconDirection: SizeToggleDirection? = null,
         ): StateListDrawable {
+            if (iconDirection != null) {
+                val isRestore = iconDirection == SizeToggleDirection.RESTORE
+                val primary = colorScheme.primary.toArgb()
+                val outlineVariant = colorScheme.outlineVariant.toArgb()
+                // 和 createFullscreenDrawable 用同一组颜色值：
+                // 外框 = outlineVariant@60% / primary，背景 = surfaceContainerLow / primary@12%，
+                // 底板 = outlineVariant / primary。
+                val activeIcon =
+                    createWindowIconDrawable(
+                        isRestore = isRestore,
+                        frameColor = primary,
+                        backgroundColor = primary.withAlpha(OPACITY_12),
+                        plateColor = primary,
+                    )
+                val inactiveIcon =
+                    createWindowIconDrawable(
+                        isRestore = isRestore,
+                        frameColor = outlineVariant.withAlpha(OPACITY_60),
+                        backgroundColor = colorScheme.surfaceContainerLow.toArgb(),
+                        plateColor = outlineVariant,
+                    )
+                return StateListDrawable().apply {
+                    addState(intArrayOf(android.R.attr.state_pressed), activeIcon)
+                    addState(intArrayOf(android.R.attr.state_focused), activeIcon)
+                    addState(intArrayOf(android.R.attr.state_selected), activeIcon)
+                    addState(intArrayOf(android.R.attr.state_hovered), activeIcon)
+                    addState(StateSet.WILD_CARD, inactiveIcon)
+                }
+            }
             val activeStrokeAndFill = colorScheme.primary.toArgb()
             val activeBackground = colorScheme.primary.toArgb().withAlpha(OPACITY_12)
             val activeDrawable =
@@ -1525,6 +1660,118 @@ class LayoutMenu(
 
                 override fun setColorFilter(colorFilter: ColorFilter?) {
                     iconPaint.colorFilter = colorFilter
+                    invalidateSelf()
+                }
+
+                override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+            }
+
+        /**
+         * 最大化/恢复按钮的显示器图标。形状照 ic_maximize.xml / ic_free_window.xml，但完全在
+         * 代码里按 [Drawable.getBounds] 绘制（写法同 [createFullscreenIconDrawable]），不引用
+         * 那两个资源。
+         *
+         * 配色参考全屏按钮、随主题变化，取值与全屏按钮逐层一致：显示器本体填充 = 背景色，
+         * 本体描边 = 外框色，屏幕 / 底座 = 底板色（见 [createFullscreenDrawable]）。
+         *
+         * 图标铺满整个按钮，不留外边距；按钮本身不再画外框和背景。
+         *
+         * @param isRestore true 时屏幕区域明显更小（对应 ic_free_window），false 时屏幕几乎
+         *   铺满显示器（对应 ic_maximize）。
+         * @param frameColor 显示器本体描边色，对应全屏按钮的外框色。
+         * @param backgroundColor 显示器本体填充色，对应全屏按钮的背景色。
+         * @param plateColor 屏幕与底座颜色，对应全屏按钮的内层底板色。
+         */
+        private fun createWindowIconDrawable(
+            isRestore: Boolean,
+            @ColorInt frameColor: Int,
+            @ColorInt backgroundColor: Int,
+            @ColorInt plateColor: Int,
+        ): Drawable =
+            object : Drawable() {
+                private val bodyFillPaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = backgroundColor
+                        style = Paint.Style.FILL
+                    }
+                private val bodyStrokePaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = frameColor
+                        style = Paint.Style.STROKE
+                        strokeWidth = outlineStroke * 2f
+                        strokeJoin = Paint.Join.ROUND
+                    }
+                private val platePaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = plateColor
+                        style = Paint.Style.FILL
+                    }
+                private val iconPath = Path()
+
+                override fun draw(canvas: Canvas) {
+                    val b = bounds
+                    if (b.isEmpty) return
+                    // 铺满整个按钮，不留任何留白；描边以按钮边缘为中心，外缘会被裁掉一半。
+                    val left = b.left.toFloat()
+                    val top = b.top.toFloat()
+                    val right = b.right.toFloat()
+                    val bottom = b.bottom.toFloat()
+                    val width = right - left
+                    val height = bottom - top
+                    val minSide = minOf(width, height)
+
+                    // 显示器本体：填充 + 描边。
+                    val bodyRadius = minSide * (if (isRestore) 0.054f else 0.107f)
+                    iconPath.reset()
+                    iconPath.addRoundRect(
+                        RectF(left, top, right, bottom),
+                        bodyRadius,
+                        bodyRadius,
+                        Path.Direction.CW,
+                    )
+                    canvas.drawPath(iconPath, bodyFillPaint)
+                    canvas.drawPath(iconPath, bodyStrokePaint)
+
+                    // 屏幕区域：恢复态明显更小，这是和最大化图标的主要区别。
+                    val screenInsetX = width * (if (isRestore) 0.217f else 0.048f)
+                    val screenTop = top + height * (if (isRestore) 0.179f else 0.063f)
+                    val screenBottom = top + height * (if (isRestore) 0.714f else 0.893f)
+                    val screenRadius = minSide * (if (isRestore) 0.027f else 0.080f)
+                    iconPath.reset()
+                    iconPath.addRoundRect(
+                        RectF(left + screenInsetX, screenTop, right - screenInsetX, screenBottom),
+                        screenRadius,
+                        screenRadius,
+                        Path.Direction.CW,
+                    )
+                    canvas.drawPath(iconPath, platePaint)
+
+                    // 底座。
+                    val standHalfWidth = width * (if (isRestore) 0.131f else 0.179f)
+                    val standTop = top + height * (if (isRestore) 0.839f else 0.893f)
+                    val standRadius = minSide * (if (isRestore) 0.027f else 0.049f)
+                    val centerX = (left + right) / 2f
+                    iconPath.reset()
+                    iconPath.addRoundRect(
+                        RectF(centerX - standHalfWidth, standTop, centerX + standHalfWidth, bottom),
+                        standRadius,
+                        standRadius,
+                        Path.Direction.CW,
+                    )
+                    canvas.drawPath(iconPath, platePaint)
+                }
+
+                override fun setAlpha(alpha: Int) {
+                    bodyFillPaint.alpha = alpha
+                    bodyStrokePaint.alpha = alpha
+                    platePaint.alpha = alpha
+                    invalidateSelf()
+                }
+
+                override fun setColorFilter(colorFilter: ColorFilter?) {
+                    bodyFillPaint.colorFilter = colorFilter
+                    bodyStrokePaint.colorFilter = colorFilter
+                    platePaint.colorFilter = colorFilter
                     invalidateSelf()
                 }
 
