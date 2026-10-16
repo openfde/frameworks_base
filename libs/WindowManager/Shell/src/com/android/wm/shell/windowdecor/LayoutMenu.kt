@@ -1667,17 +1667,19 @@ class LayoutMenu(
             }
 
         /**
-         * 最大化/恢复按钮的显示器图标。形状照 ic_maximize.xml / ic_free_window.xml，但完全在
-         * 代码里按 [Drawable.getBounds] 绘制（写法同 [createFullscreenIconDrawable]），不引用
-         * 那两个资源。
+         * 最大化/恢复按钮的显示器图标。形状完全照 ic_maximize.xml / ic_free_window.xml 用代码
+         * 绘制（不引用那两个资源），写法同 [createParallelWorldIconDrawable]。
+         *
+         * 两张矢量图里显示器本体都在 x[176,848] × y[296,744]（宽 672、高 448），这里把这块
+         * 区域整体映射到按钮区域，因此图标铺满按钮；外框、屏幕、底部支撑块各处的圆角半径也按
+         * 矢量图的比例换算。
          *
          * 配色参考全屏按钮、随主题变化，取值与全屏按钮逐层一致：显示器本体填充 = 背景色，
          * 本体描边 = 外框色，屏幕 / 底座 = 底板色（见 [createFullscreenDrawable]）。
          *
-         * 图标铺满整个按钮，不留外边距；按钮本身不再画外框和背景。
-         *
-         * @param isRestore true 时屏幕区域明显更小（对应 ic_free_window），false 时屏幕几乎
-         *   铺满显示器（对应 ic_maximize）。
+         * @param isRestore true 时对应 ic_free_window.xml：屏幕区域明显更小
+         *   （x[322,702] × y[376,616]，半径 12）；false 时对应 ic_maximize.xml：屏幕几乎
+         *   铺满显示器（x[208,816] × y[324,676]，半径 36）。
          * @param frameColor 显示器本体描边色，对应全屏按钮的外框色。
          * @param backgroundColor 显示器本体填充色，对应全屏按钮的背景色。
          * @param plateColor 屏幕与底座颜色，对应全屏按钮的内层底板色。
@@ -1711,54 +1713,63 @@ class LayoutMenu(
                 override fun draw(canvas: Canvas) {
                     val b = bounds
                     if (b.isEmpty) return
-                    // 铺满整个按钮，不留任何留白；描边以按钮边缘为中心，外缘会被裁掉一半。
-                    val left = b.left.toFloat()
-                    val top = b.top.toFloat()
-                    val right = b.right.toFloat()
-                    val bottom = b.bottom.toFloat()
-                    val width = right - left
-                    val height = bottom - top
-                    val minSide = minOf(width, height)
+                    val width = b.width().toFloat()
+                    val height = b.height().toFloat()
+                    // ic_maximize.xml / ic_free_window.xml 画面本体：x[176,848]（宽 672）、
+                    // y[296,744]（高 448），整体映射到按钮区域。
+                    fun x(v: Float) = b.left + (v - 176f) / 672f * width
+                    fun y(v: Float) = b.top + (v - 296f) / 448f * height
 
-                    // 显示器本体：填充 + 描边。
-                    val bodyRadius = minSide * (if (isRestore) 0.054f else 0.107f)
-                    iconPath.reset()
-                    iconPath.addRoundRect(
-                        RectF(left, top, right, bottom),
-                        bodyRadius,
-                        bodyRadius,
-                        Path.Direction.CW,
-                    )
-                    canvas.drawPath(iconPath, bodyFillPaint)
-                    canvas.drawPath(iconPath, bodyStrokePaint)
+                    fun fillRoundedRect(
+                        paint: Paint,
+                        l: Float,
+                        t: Float,
+                        r: Float,
+                        bo: Float,
+                        rx: Float,
+                        ry: Float,
+                    ) {
+                        iconPath.reset()
+                        iconPath.addRoundRect(RectF(l, t, r, bo), rx, ry, Path.Direction.CW)
+                        canvas.drawPath(iconPath, paint)
+                    }
 
-                    // 屏幕区域：恢复态明显更小，这是和最大化图标的主要区别。
-                    val screenInsetX = width * (if (isRestore) 0.217f else 0.048f)
-                    val screenTop = top + height * (if (isRestore) 0.179f else 0.063f)
-                    val screenBottom = top + height * (if (isRestore) 0.714f else 0.893f)
-                    val screenRadius = minSide * (if (isRestore) 0.027f else 0.080f)
-                    iconPath.reset()
-                    iconPath.addRoundRect(
-                        RectF(left + screenInsetX, screenTop, right - screenInsetX, screenBottom),
-                        screenRadius,
-                        screenRadius,
-                        Path.Direction.CW,
-                    )
-                    canvas.drawPath(iconPath, platePaint)
+                    // 显示器外框（矢量图半径 48）：填充 + 描边。描边以按钮边缘为中心，
+                    // 外缘会被裁掉一半。
+                    val bodyRx = 48f / 672f * width
+                    val bodyRy = 48f / 448f * height
+                    fillRoundedRect(bodyFillPaint, x(176f), y(296f), x(848f), y(744f), bodyRx, bodyRy)
+                    fillRoundedRect(bodyStrokePaint, x(176f), y(296f), x(848f), y(744f), bodyRx, bodyRy)
 
-                    // 底座。
-                    val standHalfWidth = width * (if (isRestore) 0.131f else 0.179f)
-                    val standTop = top + height * (if (isRestore) 0.839f else 0.893f)
-                    val standRadius = minSide * (if (isRestore) 0.027f else 0.049f)
-                    val centerX = (left + right) / 2f
-                    iconPath.reset()
-                    iconPath.addRoundRect(
-                        RectF(centerX - standHalfWidth, standTop, centerX + standHalfWidth, bottom),
-                        standRadius,
-                        standRadius,
-                        Path.Direction.CW,
+                    // 屏幕区域：恢复态对应 ic_free_window.xml（x[322,702] × y[376,616]，
+                    // 半径 12，明显更小），最大化对应 ic_maximize.xml（x[208,816] × y[324,676]，
+                    // 半径 36，几乎铺满显示器）。
+                    val screenLeft = x(if (isRestore) 322f else 208f)
+                    val screenRight = x(if (isRestore) 702f else 816f)
+                    val screenTop = y(if (isRestore) 376f else 324f)
+                    val screenBottom = y(if (isRestore) 616f else 676f)
+                    val screenRadiusX = (if (isRestore) 12f else 36f) / 672f * width
+                    val screenRadiusY = (if (isRestore) 12f else 36f) / 448f * height
+                    fillRoundedRect(
+                        platePaint,
+                        screenLeft,
+                        screenTop,
+                        screenRight,
+                        screenBottom,
+                        screenRadiusX,
+                        screenRadiusY,
                     )
-                    canvas.drawPath(iconPath, platePaint)
+
+                    // 底部支撑块（两个状态相同）：x[404,620] × y[672,736]，半径 20。
+                    val standRx = 20f / 672f * width
+                    val standRy = 20f / 448f * height
+                    fillRoundedRect(
+                        platePaint,
+                        x(404f), y(672f),
+                        x(620f), y(736f),
+                        standRx,
+                        standRy,
+                    )
                 }
 
                 override fun setAlpha(alpha: Int) {
