@@ -36,7 +36,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.StrictMode;
 import android.os.SystemClock;
-
+import android.util.Log;
 import com.android.internal.util.FrameworkStatsLog;
 
 /**
@@ -57,6 +57,8 @@ import com.android.internal.util.FrameworkStatsLog;
  * </ul>
  */
 public class GestureDetector {
+    private static final String TAG = GestureDetector.class.getSimpleName();
+
     /**
      * The listener that is used to notify when gestures occur.
      * If you want to listen for all the different gestures then implement
@@ -923,8 +925,15 @@ public class GestureDetector {
             return false;
         }
 
+//        final long deltaTime = secondDown.getEventTime() - firstUp.getEventTime();
+//        if (deltaTime > mDoubleTapTimeout || deltaTime < mDoubleTapMinTime) {
+//            return false;
+//        }
+
+
         final long deltaTime = secondDown.getEventTime() - firstUp.getEventTime();
-        if (deltaTime > mDoubleTapTimeout || deltaTime < mDoubleTapMinTime) {
+        Log.d(TAG, "isConsideredDoubleTap: deltaTime=" + deltaTime + " firstDown=" + firstUp.getEventTime()  + " secondDown=" + secondDown.getEventTime());
+        if (deltaTime > mDoubleTapTimeout || (deltaTime < mDoubleTapMinTime &&  deltaTime > 5)){
             return false;
         }
 
