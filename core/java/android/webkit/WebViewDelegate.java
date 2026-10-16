@@ -16,6 +16,7 @@
 
 package android.webkit;
 
+import android.text.TextUtils;
 import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -215,7 +216,7 @@ public final class WebViewDelegate {
      * Returns whether WebView should run in multiprocess mode.
      */
     public boolean isMultiProcessEnabled() {
-        return true;
+        return !TextUtils.equals(SystemProperties.get("ro.hardware.egl", "default"), "FTG340");
     }
 
     /**
