@@ -22,6 +22,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Rect
 import android.os.Handler
+import android.util.Log
 import android.view.Choreographer
 import android.view.SurfaceControl.Transaction
 import android.view.animation.LinearInterpolator
@@ -34,6 +35,7 @@ import kotlin.math.pow
 
 /** Creates minimization animation */
 object MinimizeAnimator {
+    private const val TAG = "MinimizeAnimator"
 
     private const val MINIMIZE_ANIM_ALPHA_DURATION_MS = 100L
 
@@ -198,9 +200,14 @@ object MinimizeAnimator {
         val endAnchorY = targetBounds.exactCenterY() + startHeight * endScaleY / 2f
         val scaleYBase = SCALE_Y_BREAK_FRACTION.pow(SCALE_Y_EARLY_POWER)
         val leash = change.leash
+        val durationMs = MinimizeAnimationTuning.scaleDuration(MINIMIZE_TO_DOCK_DURATION_MS)
+        Log.d(
+            TAG,
+            "dock minimize speed=${MinimizeAnimationTuning.speed()} duration=${durationMs}ms",
+        )
 
         return ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = MINIMIZE_TO_DOCK_DURATION_MS
+            duration = durationMs
             // All the easing is done manually below so that translation, X/Y scale and alpha can
             // use different curves.
             interpolator = LinearInterpolator()

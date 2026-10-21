@@ -40,6 +40,7 @@ import android.window.ScreenCaptureInternal
 import android.window.TransitionInfo.Change
 import com.android.internal.jank.Cuj.CUJ_DESKTOP_MODE_MINIMIZE_WINDOW
 import com.android.internal.jank.InteractionJankMonitor
+import com.android.wm.shell.shared.animation.MinimizeAnimationTuning
 import java.time.Duration
 import java.util.concurrent.Executor
 import kotlin.math.max
@@ -98,6 +99,7 @@ object GenieMinimizeAnimator {
     ): Animator? {
         val startBounds = change.startAbsBounds
         if (startBounds.isEmpty || targetBounds.isEmpty) return null
+        val durationMs = MinimizeAnimationTuning.scaleDuration(DURATION_MS)
 
         val metrics = context.resources.displayMetrics
         val displayWidth = metrics.widthPixels
@@ -108,7 +110,8 @@ object GenieMinimizeAnimator {
         val bitmap = snapshot.bitmap
         Log.d(
             TAG,
-            "snapshot ${bitmap.width}x${bitmap.height} start=$startBounds target=$targetBounds",
+            "snapshot ${bitmap.width}x${bitmap.height} start=$startBounds target=$targetBounds " +
+                "speed=${MinimizeAnimationTuning.speed()} duration=${durationMs}ms",
         )
         val renderBounds =
             calculateRenderBounds(startBounds, targetBounds, displayWidth, displayHeight)
@@ -197,7 +200,7 @@ object GenieMinimizeAnimator {
 
         val animator =
             ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = DURATION_MS
+                duration = durationMs
                 interpolator = LinearInterpolator()
                 this.startDelay = startAnimDelay.toMillis()
                 addUpdateListener { animation ->
