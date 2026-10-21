@@ -152,18 +152,25 @@ class DesktopMinimizationTransitionHandler(
             )
             return null
         }
+        val animationMode = MinimizeToDockAnimationMode.current()
         val targetBounds =
-            if (animateToDock && change.taskInfo?.windowingMode == WINDOWING_MODE_FREEFORM) {
+            if (animateToDock &&
+                animationMode != MinimizeToDockAnimationMode.OFF &&
+                change.taskInfo?.windowingMode == WINDOWING_MODE_FREEFORM
+            ) {
                 MinimizeAnimationTargets.findTarget(change)
             } else {
                 null
             }
         Log.d(
             "DockMinimizeTargets",
-            "minimize task=${change.taskInfo?.taskId} target=$targetBounds",
+            "minimize task=${change.taskInfo?.taskId} mode=$animationMode target=$targetBounds",
         )
         val taskInfo = change.taskInfo
-        if (targetBounds != null && taskInfo != null) {
+        if (animationMode == MinimizeToDockAnimationMode.MESH &&
+            targetBounds != null &&
+            taskInfo != null
+        ) {
             val displayAreaLeash =
                 rootTaskDisplayAreaOrganizer.getDisplayAreaLeash(taskInfo.displayId)
             if (displayAreaLeash != null) {

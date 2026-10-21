@@ -550,6 +550,8 @@ class DesktopMixedTransitionHandler(
             return false
         }
         logV("Animating mixed minimize transition task#%d", minimizeChange.taskInfo?.taskId)
+        val dockAnimationEnabled =
+            MinimizeToDockAnimationMode.current() != MinimizeToDockAnimationMode.OFF
         val shouldDispatchAnimation =
             if (Flags.desktopMinimizeLastTaskBugfix()) {
                 // We never exit Desktop mode by minimizing a task
@@ -560,6 +562,7 @@ class DesktopMixedTransitionHandler(
                 // generic minimize animation and the dock effect would be lost.
                 pending.isLastTask &&
                     (minimizeChange.taskInfo?.windowingMode != WINDOWING_MODE_FREEFORM ||
+                        !dockAnimationEnabled ||
                         !MinimizeAnimationTargets.hasTarget(minimizeChange))
             }
         if (shouldDispatchAnimation) {

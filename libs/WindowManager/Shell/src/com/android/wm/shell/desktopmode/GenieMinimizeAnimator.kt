@@ -33,6 +33,7 @@ import android.view.Choreographer
 import android.view.Surface
 import android.view.SurfaceControl
 import android.view.SurfaceControl.Transaction
+import android.view.SurfaceControl.TransactionCommittedListener
 import android.view.animation.LinearInterpolator
 import android.window.ScreenCapture.ScreenCaptureParams
 import android.window.ScreenCaptureInternal
@@ -40,6 +41,7 @@ import android.window.TransitionInfo.Change
 import com.android.internal.jank.Cuj.CUJ_DESKTOP_MODE_MINIMIZE_WINDOW
 import com.android.internal.jank.InteractionJankMonitor
 import java.time.Duration
+import java.util.concurrent.Executor
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sin
@@ -61,7 +63,12 @@ object GenieMinimizeAnimator {
     private const val DURATION_MS = 480L
     private const val MESH_COLS = 20
     private const val MESH_ROWS = 24
-    private const val TOP_LAG = 0.45f
+
+    // The top edge should move down fairly early so it does not become a long stretched tail,
+    // while it keeps its width longer to preserve the funnel shape.
+    private const val TOP_Y_LAG = 0.15f
+    private const val TOP_X_LAG = 0.25f
+    private const val TOP_WIDTH_LAG = 0.45f
     private const val TARGET_WIDTH_FACTOR = 0.20f
     private const val TARGET_HEIGHT_FACTOR = 0.20f
     private const val MAX_SNAPSHOT_SIZE = 1920f
@@ -142,6 +149,9 @@ object GenieMinimizeAnimator {
 
         try {
             computeVertices(startBounds, targetBounds, renderBounds, 1f, vertices)
+            // Prime the hardware renderer and queue a fully rendered first buffer before the
+            // layer is shown. The first lockHardwareCanvas() can otherwise produce a blank frame.
+            drawFrame(surface, bitmap, vertices, paint)
             drawFrame(surface, bitmap, vertices, paint)
         } catch (e: Exception) {
             Log.w(TAG, "Unable to draw initial snapshot frame", e)
@@ -155,7 +165,20 @@ object GenieMinimizeAnimator {
                 .setPosition(renderLayer, renderBounds.left.toFloat(), renderBounds.top.toFloat())
                 .setAlpha(renderLayer, 1f)
                 .show(renderLayer)
-                .hide(change.leash)
+            // Keep the original task visible underneath until the first render-layer buffer has
+            // been committed. Hiding it in the same transaction can produce a one-frame flash
+            // when the render layer's buffer has not been latched yet.
+            startTransaction.addTransactionCommittedListener(
+                Executor { command -> animationHandler.post(command) },
+                TransactionCommittedListener {
+                    // Give the first buffer one more vsync to be presented. At this point the
+                    // snapshot still covers the original window, so the overlap is invisible.
+                    animationHandler.postDelayed(
+                        { Transaction().hide(change.leash).apply() },
+                        16L,
+                    )
+                },
+            )
         } catch (e: Exception) {
             Log.w(TAG, "Unable to show genie render layer", e)
             cleanup(renderLayer, surface, bitmap, snapshot)
@@ -339,13 +362,15 @@ object GenieMinimizeAnimator {
         var index = 0
         for (row in 0..MESH_ROWS) {
             val v = row.toFloat() / MESH_ROWS
-            // Bottom rows start immediately; top rows wait and then catch up.
-            val delay = (1f - v) * TOP_LAG
-            val rowT = ((t - delay) / (1f - delay)).coerceIn(0f, 1f)
+            // Bottom rows lead; the top edge moves down earlier than it narrows, avoiding a long
+            // vertical image stretch while keeping the wide-top/narrow-bottom funnel.
+            val yT = delayedProgress(t, (1f - v) * TOP_Y_LAG)
+            val xT = delayedProgress(t, (1f - v) * TOP_X_LAG)
+            val widthT = delayedProgress(t, (1f - v) * TOP_WIDTH_LAG)
 
-            val xProgress = rowT.pow(0.70f)
-            val yProgress = rowT.pow(0.80f)
-            val widthProgress = easeOutCubic(rowT)
+            val xProgress = xT.pow(0.75f)
+            val yProgress = yT.pow(0.90f)
+            val widthProgress = easeOutCubic(widthT)
             val centerX = quadratic(startCenterX, controlX, targetCenterX, xProgress)
             val startRowY = startBounds.top + v * startHeight
             val targetRowY = targetCenterY + (v - 0.5f) * targetHeight
@@ -355,7 +380,7 @@ object GenieMinimizeAnimator {
             for (col in 0..MESH_COLS) {
                 val u = col.toFloat() / MESH_COLS
                 val arc =
-                    (1f - rowT) * (2f * u - 1f).pow(2f) * startHeight * 0.025f *
+                    (1f - yT) * (2f * u - 1f).pow(2f) * startHeight * 0.025f *
                         sin(Math.PI.toFloat() * t)
                 outVertices[index++] = centerX + (u - 0.5f) * rowWidth - originX
                 outVertices[index++] = centerY + arc - originY
@@ -416,6 +441,9 @@ object GenieMinimizeAnimator {
             Log.w(TAG, "Unable to close snapshot buffer", e)
         }
     }
+
+    private fun delayedProgress(fraction: Float, delay: Float): Float =
+        ((fraction - delay) / (1f - delay)).coerceIn(0f, 1f)
 
     private fun lerp(start: Float, end: Float, fraction: Float): Float =
         start + (end - start) * fraction

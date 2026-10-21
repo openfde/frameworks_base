@@ -62,13 +62,30 @@ APK would otherwise need to be rebuilt.
   intended to use the cached snapshot when possible and a bounded snapshot size for
   high-resolution displays.
 
+## Runtime switch
+
+The animation can be selected without rebuilding:
+
+```bash
+# 0: disabled (stock minimize animation)
+# 1: affine animation
+# 2: snapshot + mesh genie animation (default)
+adb shell setprop persist.wm.debug.minimize_to_dock.mode 2
+```
+
+The property is read for every minimize transition, so changing it does not require a
+SystemUI restart.
+
 ## Tuning
 
 The mesh animation is defined in `GenieMinimizeAnimator`:
 
 - `DURATION_MS` (default `480`)
 - `MESH_COLS` / `MESH_ROWS` (default `20` / `24`)
-- `TOP_LAG` (default `0.45`)
+- `TOP_Y_LAG`, `TOP_X_LAG`, `TOP_WIDTH_LAG` (default `0.15`, `0.25`, `0.45`)
 - `TARGET_WIDTH_FACTOR` / `TARGET_HEIGHT_FACTOR` (default `0.20`)
 - `ALPHA_START` (default `0.86`)
 - `MAX_SNAPSHOT_SIZE` (default `1920` px on the longest side)
+
+The separate Y/X/width lags let the top edge move down early (avoiding a long
+stretched tail) while keeping its width longer to preserve the funnel.

@@ -43,6 +43,7 @@ import androidx.annotation.Nullable;
 import com.android.internal.jank.InteractionJankMonitor;
 import com.android.wm.shell.common.DisplayController;
 import com.android.wm.shell.common.ShellExecutor;
+import com.android.wm.shell.desktopmode.MinimizeToDockAnimationMode;
 import com.android.wm.shell.shared.animation.MinimizeAnimationTargets;
 import com.android.wm.shell.shared.animation.MinimizeAnimator;
 import com.android.wm.shell.transition.Transitions;
@@ -248,7 +249,8 @@ public class FreeformTaskTransitionHandler
             return false;
         }
         final Rect targetBounds =
-                taskInfo.getWindowingMode() == WINDOWING_MODE_FREEFORM
+                MinimizeToDockAnimationMode.current() != MinimizeToDockAnimationMode.OFF
+                                && taskInfo.getWindowingMode() == WINDOWING_MODE_FREEFORM
                         ? MinimizeAnimationTargets.findTarget(taskInfo)
                         : null;
         final Animator animator = MinimizeAnimator.create(
