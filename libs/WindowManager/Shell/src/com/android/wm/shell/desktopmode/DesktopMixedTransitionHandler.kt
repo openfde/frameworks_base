@@ -44,6 +44,7 @@ import com.android.wm.shell.freeform.FreeformTaskTransitionHandler
 import com.android.wm.shell.freeform.FreeformTaskTransitionStarter
 import com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_DESKTOP_MODE
 import com.android.wm.shell.shared.TransitionUtil
+import com.android.wm.shell.shared.animation.MinimizeAnimationTargets
 import com.android.wm.shell.shared.annotations.ShellMainThread
 import com.android.wm.shell.sysui.ShellInit
 import com.android.wm.shell.transition.MixedTransitionHandler
@@ -549,12 +550,20 @@ class DesktopMixedTransitionHandler(
             return false
         }
         logV("Animating mixed minimize transition task#%d", minimizeChange.taskInfo?.taskId)
+        val dockAnimationEnabled =
+            MinimizeToDockAnimationMode.current() != MinimizeToDockAnimationMode.OFF
         val shouldDispatchAnimation =
             if (Flags.desktopMinimizeLastTaskBugfix()) {
                 // We never exit Desktop mode by minimizing a task
                 false
             } else {
-                pending.isLastTask
+                // Even for the last task, use the minimize handler when a freeform window has
+                // a dock icon to fly into. Otherwise the leftover handler would play the
+                // generic minimize animation and the dock effect would be lost.
+                pending.isLastTask &&
+                    (minimizeChange.taskInfo?.windowingMode != WINDOWING_MODE_FREEFORM ||
+                        !dockAnimationEnabled ||
+                        !MinimizeAnimationTargets.hasTarget(minimizeChange))
             }
         if (shouldDispatchAnimation) {
             return dispatchToLeftoverHandler(

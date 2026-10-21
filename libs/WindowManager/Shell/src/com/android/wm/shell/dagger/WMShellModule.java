@@ -1577,9 +1577,10 @@ public abstract class WMShellModule {
             @ShellMainThread ShellExecutor mainExecutor,
             @ShellAnimationThread ShellExecutor animExecutor,
             DisplayController displayController,
+            RootTaskDisplayAreaOrganizer rootTaskDisplayAreaOrganizer,
             @ShellAnimationThread Handler mainHandler) {
         return new DesktopMinimizationTransitionHandler(mainExecutor, animExecutor,
-                displayController, mainHandler);
+                displayController, rootTaskDisplayAreaOrganizer, mainHandler);
     }
 
     @WMSingleton
