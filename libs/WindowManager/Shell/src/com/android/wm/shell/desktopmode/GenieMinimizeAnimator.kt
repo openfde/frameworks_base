@@ -64,15 +64,15 @@ object GenieMinimizeAnimator {
     private const val MESH_COLS = 20
     private const val MESH_ROWS = 24
 
-    // The top edge should move down fairly early so it does not become a long stretched tail,
-    // while it keeps its width longer to preserve the funnel shape.
-    private const val TOP_Y_LAG = 0.15f
-    private const val TOP_X_LAG = 0.25f
-    private const val TOP_WIDTH_LAG = 0.45f
-    private const val TARGET_WIDTH_FACTOR = 0.20f
-    private const val TARGET_HEIGHT_FACTOR = 0.20f
+    // All rows keep collapsing towards the icon; the top lags only slightly so the shape stays a
+    // funnel instead of becoming a wide sheet that collapses only at the very end.
+    private const val TOP_Y_LAG = 0.12f
+    private const val TOP_X_LAG = 0.18f
+    private const val TOP_WIDTH_LAG = 0.15f
+    private const val TARGET_WIDTH_FACTOR = 0.12f
+    private const val TARGET_HEIGHT_FACTOR = 0.12f
     private const val MAX_SNAPSHOT_SIZE = 1920f
-    private const val ALPHA_START = 0.86f
+    private const val ALPHA_START = 0.90f
     private const val RENDER_MARGIN_FRACTION = 0.35f
 
     /**

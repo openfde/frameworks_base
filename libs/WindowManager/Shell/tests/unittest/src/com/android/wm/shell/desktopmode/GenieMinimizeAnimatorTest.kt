@@ -105,6 +105,28 @@ class GenieMinimizeAnimatorTest {
             .isGreaterThan((topLeft.first + topRight.first) / 2f)
     }
 
+    @Test
+    fun computeVertices_late_topIsStillCollapsing() {
+        GenieMinimizeAnimator.computeVertices(
+            startBounds,
+            targetBounds,
+            renderBounds,
+            0.7f,
+            vertices,
+        )
+
+        val topLeft = vertex(0, 0)
+        val topRight = vertex(0, COLS)
+        val bottomLeft = vertex(ROWS, 0)
+        val bottomRight = vertex(ROWS, COLS)
+        val topWidth = topRight.first - topLeft.first
+        val bottomWidth = bottomRight.first - bottomLeft.first
+
+        // By 70% the top must have collapsed too, not only the bottom tip.
+        assertThat(topWidth).isLessThan(startBounds.width() * 0.25f)
+        assertThat(bottomWidth).isLessThan(topWidth)
+    }
+
     private fun assertVertex(index: Int, x: Int, y: Int) {
         val (vx, vy) = vertex(index / (COLS + 1), (index % (COLS + 1)))
         assertThat(vx).isWithin(0.01f).of((x - renderBounds.left).toFloat())
