@@ -92,6 +92,14 @@ class GenieMinimizeAnimatorTest {
             .isLessThan(topRight.first - topLeft.first)
         // Bottom has travelled further down than the top.
         assertThat(bottomLeft.second).isGreaterThan(topLeft.second)
+        // The bottom should also be most of the way to the dock by the halfway point, rather than
+        // shrinking first and only moving at the end.
+        val bottomTargetY =
+            targetBounds.exactCenterY() + targetBounds.height() * 0.20f * 0.5f
+        val bottomTravel =
+            (bottomLeft.second + renderBounds.top - startBounds.bottom) /
+                (bottomTargetY - startBounds.bottom)
+        assertThat(bottomTravel).isGreaterThan(0.85f)
         // Bottom leads towards the icon on the right.
         assertThat((bottomLeft.first + bottomRight.first) / 2f)
             .isGreaterThan((topLeft.first + topRight.first) / 2f)

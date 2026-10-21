@@ -148,9 +148,11 @@ object GenieMinimizeAnimator {
             }
 
         try {
-            computeVertices(startBounds, targetBounds, renderBounds, 1f, vertices)
+            computeVertices(startBounds, targetBounds, renderBounds, 0f, vertices)
             // Prime the hardware renderer and queue a fully rendered first buffer before the
             // layer is shown. The first lockHardwareCanvas() can otherwise produce a blank frame.
+            // This must be the identity frame: showing the final frame here would make the
+            // window jump to the dock for one frame before the animation starts.
             drawFrame(surface, bitmap, vertices, paint)
             drawFrame(surface, bitmap, vertices, paint)
         } catch (e: Exception) {
@@ -368,8 +370,11 @@ object GenieMinimizeAnimator {
             val xT = delayedProgress(t, (1f - v) * TOP_X_LAG)
             val widthT = delayedProgress(t, (1f - v) * TOP_WIDTH_LAG)
 
-            val xProgress = xT.pow(0.75f)
-            val yProgress = yT.pow(0.90f)
+            // Move towards the icon at the same time as the window is shrinking. The previous
+            // curves shrank the window first and only moved it near the end, which made the
+            // funnel bottom look far away from the icon for most of the animation.
+            val xProgress = easeOutCubic(xT)
+            val yProgress = easeOutCubic(yT)
             val widthProgress = easeOutCubic(widthT)
             val centerX = quadratic(startCenterX, controlX, targetCenterX, xProgress)
             val startRowY = startBounds.top + v * startHeight
