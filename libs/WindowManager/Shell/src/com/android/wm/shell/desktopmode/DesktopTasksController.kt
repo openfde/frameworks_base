@@ -16,6 +16,7 @@
 
 package com.android.wm.shell.desktopmode
 
+import android.Manifest
 import android.annotation.UserIdInt
 import android.app.ActivityManager
 import android.app.ActivityManager.RecentTaskInfo
@@ -52,6 +53,7 @@ import android.os.Binder
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
+import android.os.Process
 import android.os.RemoteException
 import android.os.ServiceManager
 import android.os.Trace
@@ -178,6 +180,7 @@ import com.android.wm.shell.shared.TransitionUtil
 import com.android.wm.shell.shared.annotations.ShellDesktopThread
 import com.android.wm.shell.shared.annotations.ShellMainThread
 import com.android.wm.shell.shared.annotations.ShellMainThreadImmediate
+import com.android.wm.shell.shared.animation.MinimizeAnimationTargets
 import com.android.wm.shell.shared.bubbles.BubbleFlagHelper
 import com.android.wm.shell.shared.bubbles.logging.BubbleLog
 import com.android.wm.shell.shared.desktopmode.DesktopConfig
@@ -315,6 +318,94 @@ class DesktopTasksController(
                 }
             }
         }
+    /**
+     * Receives dock icon bounds from the taskbar plugin. This is used as a compatibility path
+     * because Launcher bundles its own copy of the IDesktopMode interface: an older Launcher APK
+     * does not expose the new IDesktopMode methods even when the shell side is up to date.
+     */
+    private val dockAnimationReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                try {
+                    val senderUid = sentFromUid
+                    val senderAllowed =
+                        senderUid == Process.INVALID_UID ||
+                            context?.checkPermission(
+                                Manifest.permission.MANAGE_ACTIVITY_TASKS,
+                                -1,
+                                senderUid,
+                            ) == PackageManager.PERMISSION_GRANTED
+                    if (!senderAllowed) {
+                        Log.w(
+                            "DockMinimizeTargets",
+                            "rejecting ${intent?.action} from uid=$senderUid",
+                        )
+                        return
+                    }
+                    when (intent?.action) {
+                        MinimizeAnimationTargets.ACTION_UPDATE_DOCK_ICON_BOUNDS ->
+                            onDockIconBoundsReported(intent)
+                        MinimizeAnimationTargets.ACTION_SET_MINIMIZE_TARGET ->
+                            onMinimizeTargetReported(intent)
+                    }
+                } catch (e: Exception) {
+                    Log.e("DockMinimizeTargets", "dockAnimationReceiver failed", e)
+                }
+            }
+        }
+
+    private fun onDockIconBoundsReported(intent: Intent) {
+        val displayId =
+            intent.getIntExtra(MinimizeAnimationTargets.EXTRA_DISPLAY_ID, INVALID_DISPLAY)
+        if (displayId == INVALID_DISPLAY) return
+
+        val names =
+            intent.getStringArrayListExtra(MinimizeAnimationTargets.EXTRA_PACKAGE_NAMES)
+                ?: arrayListOf()
+        val packageBounds =
+            intent.getParcelableArrayListExtra(
+                MinimizeAnimationTargets.EXTRA_PACKAGE_BOUNDS,
+                Rect::class.java,
+            ) ?: arrayListOf()
+        val taskIds =
+            intent.getIntegerArrayListExtra(MinimizeAnimationTargets.EXTRA_TASK_IDS)
+                ?: arrayListOf()
+        val taskBounds =
+            intent.getParcelableArrayListExtra(
+                MinimizeAnimationTargets.EXTRA_TASK_BOUNDS,
+                Rect::class.java,
+            ) ?: arrayListOf()
+
+        val packageBundle = Bundle()
+        for (i in names.indices) {
+            val bounds = packageBounds.getOrNull(i) ?: continue
+            packageBundle.putParcelable(names[i], bounds)
+        }
+        val taskBundle = Bundle()
+        for (i in taskIds.indices) {
+            val bounds = taskBounds.getOrNull(i) ?: continue
+            taskBundle.putParcelable(taskIds[i].toString(), bounds)
+        }
+        Log.d(
+            "DockMinimizeTargets",
+            "bounds display=$displayId packages=${packageBundle.size()} tasks=${taskBundle.size()}",
+        )
+        MinimizeAnimationTargets.updateDockIconBounds(displayId, packageBundle, taskBundle)
+    }
+
+    private fun onMinimizeTargetReported(intent: Intent) {
+        val taskId =
+            intent.getIntExtra(MinimizeAnimationTargets.EXTRA_TASK_ID, INVALID_TASK_ID)
+        if (taskId == INVALID_TASK_ID) return
+        val bounds =
+            intent.getParcelableExtra(
+                MinimizeAnimationTargets.EXTRA_TARGET_BOUNDS,
+                Rect::class.java,
+            ) ?: return
+        Log.d("DockMinimizeTargets", "target task=$taskId bounds=$bounds")
+        MinimizeAnimationTargets.setPendingTarget(taskId, bounds)
+    }
+
     private val latencyTracker: LatencyTracker
 
     // TODO(b/489936769): Isolate relevant logic from DesktopTasksController to decouple
@@ -449,6 +540,22 @@ class DesktopTasksController(
                 IntentFilter(DesktopWallpaperActivity.ACTION_WALLPAPER_TOUCH),
                 Context.RECEIVER_EXPORTED,
             )
+        }
+        try {
+            context.registerReceiver(
+                dockAnimationReceiver,
+                IntentFilter().apply {
+                    addAction(MinimizeAnimationTargets.ACTION_UPDATE_DOCK_ICON_BOUNDS)
+                    addAction(MinimizeAnimationTargets.ACTION_SET_MINIMIZE_TARGET)
+                },
+                // Permission is checked in onReceive so rejected senders are visible in logs.
+                null,
+                handler,
+                Context.RECEIVER_EXPORTED,
+            )
+            Log.d("DockMinimizeTargets", "receiver registered")
+        } catch (e: Exception) {
+            Log.e("DockMinimizeTargets", "Unable to register dock animation receiver", e)
         }
         // Update the current user id again because it might be updated between init and onInit().
         updateCurrentUser(ActivityManager.getCurrentUser())
@@ -7563,6 +7670,26 @@ class DesktopTasksController(
                 if (taskInfo != null) {
                     c.minimizeTask(taskInfo, MinimizeReason.TASKBAR_ICON_TAP)
                 }
+            }
+        }
+
+        override fun updateDockIconBounds(
+            displayId: Int,
+            boundsByPackage: Bundle,
+            boundsByTaskId: Bundle,
+        ) {
+            executeRemoteCallWithTaskPermission(controller, "updateDockIconBounds") { _ ->
+                MinimizeAnimationTargets.updateDockIconBounds(
+                    displayId,
+                    boundsByPackage,
+                    boundsByTaskId,
+                )
+            }
+        }
+
+        override fun setMinimizeAnimationTarget(taskId: Int, bounds: Rect) {
+            executeRemoteCallWithTaskPermission(controller, "setMinimizeAnimationTarget") { _ ->
+                MinimizeAnimationTargets.setPendingTarget(taskId, bounds)
             }
         }
 

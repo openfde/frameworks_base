@@ -21,6 +21,7 @@ import android.app.WindowConfiguration.WINDOWING_MODE_FREEFORM
 import android.os.Handler
 import android.os.IBinder
 import android.os.SystemProperties
+import android.util.Log
 import android.view.SurfaceControl.Transaction
 import android.view.WindowManager.TRANSIT_TO_BACK
 import android.window.DesktopExperienceFlags
@@ -34,6 +35,7 @@ import com.android.wm.shell.common.ShellExecutor
 import com.android.wm.shell.desktopmode.DesktopModeTransitionTypes.TRANSIT_DESKTOP_MODE_TASK_LIMIT_MINIMIZE
 import com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_DESKTOP_MODE
 import com.android.wm.shell.shared.TransitionUtil
+import com.android.wm.shell.shared.animation.MinimizeAnimationTargets
 import com.android.wm.shell.shared.animation.MinimizeAnimator.create
 import com.android.wm.shell.transition.Transitions
 import java.time.Duration
@@ -96,6 +98,11 @@ class DesktopMinimizationTransitionHandler(
             } else {
                 Duration.ZERO
             }
+        // Only genuine minimize transitions should fly into the dock. This handler also
+        // animates close and back-navigation transitions, which must keep their own animation.
+        val animateToDock =
+            info.type == Transitions.TRANSIT_MINIMIZE ||
+                info.type == TRANSIT_DESKTOP_MODE_TASK_LIMIT_MINIMIZE
         animations +=
             info.changes
                 .filter {
@@ -107,7 +114,13 @@ class DesktopMinimizationTransitionHandler(
                     checkChangeMode(it)
                 }
                 .mapNotNull {
-                    createMinimizeAnimation(it, finishTransaction, onAnimFinish, startAnimDelay)
+                    createMinimizeAnimation(
+                        it,
+                        finishTransaction,
+                        onAnimFinish,
+                        startAnimDelay,
+                        animateToDock,
+                    )
                 }
         if (animations.isEmpty()) return false
         startTransaction.apply()
@@ -120,6 +133,7 @@ class DesktopMinimizationTransitionHandler(
         finishTransaction: Transaction,
         onAnimFinish: (Animator) -> Unit,
         startAnimDelay: Duration,
+        animateToDock: Boolean,
     ): Animator? {
         val t = Transaction()
         val sc = change.leash
@@ -134,6 +148,16 @@ class DesktopMinimizationTransitionHandler(
             )
             return null
         }
+        val targetBounds =
+            if (animateToDock && change.taskInfo?.windowingMode == WINDOWING_MODE_FREEFORM) {
+                MinimizeAnimationTargets.findTarget(change)
+            } else {
+                null
+            }
+        Log.d(
+            "DockMinimizeTargets",
+            "minimize task=${change.taskInfo?.taskId} target=$targetBounds",
+        )
         return create(
             displayContext,
             change,
@@ -142,6 +166,7 @@ class DesktopMinimizationTransitionHandler(
             InteractionJankMonitor.getInstance(),
             animHandler,
             startAnimDelay,
+            targetBounds,
         )
     }
 

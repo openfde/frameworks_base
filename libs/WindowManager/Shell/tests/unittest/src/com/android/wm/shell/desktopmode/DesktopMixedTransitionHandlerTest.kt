@@ -64,6 +64,7 @@ import com.android.wm.shell.desktopmode.multidesks.DesksController
 import com.android.wm.shell.desktopmode.multidesks.DesksOrganizer
 import com.android.wm.shell.desktopmode.multidesks.DesksTransitionObserver
 import com.android.wm.shell.freeform.FreeformTaskTransitionHandler
+import com.android.wm.shell.shared.animation.MinimizeAnimationTargets
 import com.android.wm.shell.sysui.ShellInit
 import com.android.wm.shell.transition.Transitions
 import com.android.wm.shell.transition.Transitions.TRANSIT_MINIMIZE
@@ -119,6 +120,7 @@ class DesktopMixedTransitionHandlerTest : ShellTestCase() {
 
     @Before
     fun setUp() {
+        MinimizeAnimationTargets.clear()
         whenever(userRepositories.current).thenReturn(desktopRepository)
         whenever(userRepositories.getProfile(Mockito.anyInt())).thenReturn(desktopRepository)
         whenever(

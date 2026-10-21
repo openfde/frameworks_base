@@ -18,6 +18,7 @@ package com.android.wm.shell.desktopmode.api;
 
 import android.app.ActivityManager.RunningTaskInfo;
 import android.app.PendingIntent;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.window.RemoteTransition;
 import com.android.wm.shell.desktopmode.IDesktopTaskListener;
@@ -116,4 +117,20 @@ interface IDesktopMode {
 
     /** Start a transition when launching an intent in desktop mode */
     void startLaunchIntentTransition(in PendingIntent pendingIntent, in Bundle options, in int displayId);
+
+    /**
+     * Updates the location of the dock icons on the given display. The keys of
+     * {@code boundsByPackage} are package names and the keys of {@code boundsByTaskId} are task
+     * ids (as strings); both map to icon bounds in display coordinates. Shell uses these bounds as
+     * the target of the minimize animation.
+     */
+    oneway void updateDockIconBounds(int displayId, in Bundle boundsByPackage,
+            in Bundle boundsByTaskId);
+
+    /**
+     * Sets a one-shot minimize animation target for the task with the given id. This is used when
+     * the minimize is initiated by clicking a dock icon; the target takes precedence over the
+     * bounds supplied through {@link #updateDockIconBounds}.
+     */
+    oneway void setMinimizeAnimationTarget(int taskId, in Rect bounds);
 }
