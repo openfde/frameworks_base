@@ -106,6 +106,22 @@ class GenieMinimizeAnimatorTest {
     }
 
     @Test
+    fun computeVertices_topEdgeIsStraight() {
+        GenieMinimizeAnimator.computeVertices(
+            startBounds,
+            targetBounds,
+            renderBounds,
+            0.5f,
+            vertices,
+        )
+
+        val topLeft = vertex(0, 0)
+        val topRight = vertex(0, COLS)
+        // The top edge must not bow upwards in the middle.
+        assertThat(topLeft.second).isWithin(0.01f).of(topRight.second)
+    }
+
+    @Test
     fun computeVertices_late_topIsStillCollapsing() {
         GenieMinimizeAnimator.computeVertices(
             startBounds,

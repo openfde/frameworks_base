@@ -44,8 +44,7 @@ import com.android.wm.shell.shared.animation.MinimizeAnimationTuning
 import java.time.Duration
 import java.util.concurrent.Executor
 import kotlin.math.max
-import kotlin.math.pow
-import kotlin.math.sin
+import kotlin.math.roundToInt
 
 /**
  * Snapshot-based mesh-warp minimize animation.
@@ -105,16 +104,24 @@ object GenieMinimizeAnimator {
         val displayWidth = metrics.widthPixels
         val displayHeight = metrics.heightPixels
         if (displayWidth <= 0 || displayHeight <= 0) return null
+        // The dock is normally 70dp tall and its icons are centered vertically, so its top edge is
+        // about 35dp above the icon center. The taskbar is drawn over the render layer; keep the
+        // merge point at the dock's top edge (configurable) so the narrow end remains visible.
+        val mergeYOffsetDp = MinimizeAnimationTuning.mergeYOffsetDp()
+        val mergeYOffsetPx = (mergeYOffsetDp * metrics.density).roundToInt()
+        val animationTargetBounds =
+            Rect(targetBounds).apply { offset(0, -mergeYOffsetPx) }
 
         val snapshot = captureSnapshot(change.leash, startBounds) ?: return null
         val bitmap = snapshot.bitmap
         Log.d(
             TAG,
             "snapshot ${bitmap.width}x${bitmap.height} start=$startBounds target=$targetBounds " +
+                "mergeTarget=$animationTargetBounds mergeYOffset=${mergeYOffsetDp}dp " +
                 "speed=${MinimizeAnimationTuning.speed()} duration=${durationMs}ms",
         )
         val renderBounds =
-            calculateRenderBounds(startBounds, targetBounds, displayWidth, displayHeight)
+            calculateRenderBounds(startBounds, animationTargetBounds, displayWidth, displayHeight)
         if (renderBounds.isEmpty) {
             snapshot.release()
             return null
@@ -151,7 +158,7 @@ object GenieMinimizeAnimator {
             }
 
         try {
-            computeVertices(startBounds, targetBounds, renderBounds, 0f, vertices)
+            computeVertices(startBounds, animationTargetBounds, renderBounds, 0f, vertices)
             // Prime the hardware renderer and queue a fully rendered first buffer before the
             // layer is shown. The first lockHardwareCanvas() can otherwise produce a blank frame.
             // This must be the identity frame: showing the final frame here would make the
@@ -205,7 +212,13 @@ object GenieMinimizeAnimator {
                 this.startDelay = startAnimDelay.toMillis()
                 addUpdateListener { animation ->
                     val fraction = animation.animatedFraction
-                    computeVertices(startBounds, targetBounds, renderBounds, fraction, vertices)
+                    computeVertices(
+                        startBounds,
+                        animationTargetBounds,
+                        renderBounds,
+                        fraction,
+                        vertices,
+                    )
                     try {
                         drawFrame(surface, bitmap, vertices, paint)
                     } catch (e: Exception) {
@@ -378,7 +391,9 @@ object GenieMinimizeAnimator {
             // funnel bottom look far away from the icon for most of the animation.
             val xProgress = easeOutCubic(xT)
             val yProgress = easeOutCubic(yT)
-            val widthProgress = easeOutCubic(widthT)
+            // Narrow the whole shape aggressively so every row, not just the bottom, keeps
+            // collapsing into the icon throughout the animation.
+            val widthProgress = easeOutQuart(widthT)
             val centerX = quadratic(startCenterX, controlX, targetCenterX, xProgress)
             val startRowY = startBounds.top + v * startHeight
             val targetRowY = targetCenterY + (v - 0.5f) * targetHeight
@@ -387,11 +402,8 @@ object GenieMinimizeAnimator {
 
             for (col in 0..MESH_COLS) {
                 val u = col.toFloat() / MESH_COLS
-                val arc =
-                    (1f - yT) * (2f * u - 1f).pow(2f) * startHeight * 0.025f *
-                        sin(Math.PI.toFloat() * t)
                 outVertices[index++] = centerX + (u - 0.5f) * rowWidth - originX
-                outVertices[index++] = centerY + arc - originY
+                outVertices[index++] = centerY - originY
             }
         }
     }
@@ -465,5 +477,10 @@ object GenieMinimizeAnimator {
     private fun easeOutCubic(fraction: Float): Float {
         val inverse = 1f - fraction
         return 1f - inverse * inverse * inverse
+    }
+
+    private fun easeOutQuart(fraction: Float): Float {
+        val inverse = 1f - fraction
+        return 1f - inverse * inverse * inverse * inverse
     }
 }
