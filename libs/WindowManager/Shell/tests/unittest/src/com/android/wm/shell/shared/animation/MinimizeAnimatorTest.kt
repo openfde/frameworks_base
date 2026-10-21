@@ -21,6 +21,7 @@ import android.animation.AnimatorSet
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.res.Resources
+import android.graphics.Rect
 import android.os.Handler
 import android.util.DisplayMetrics
 import android.view.SurfaceControl
@@ -77,6 +78,31 @@ class MinimizeAnimatorTest {
         assertThat(animatorSet.childAnimations).hasSize(2)
         assertIsBoundsAnimator(animatorSet.childAnimations[0])
         assertIsAlphaAnimator(animatorSet.childAnimations[1])
+    }
+
+    @Test
+    fun create_withDockTarget_returnsSingleTargetAnimator() {
+        val change =
+            TransitionInfo.Change(mock<WindowContainerToken>(), leash).apply {
+                setStartAbsBounds(Rect(0, 0, 1000, 600))
+            }
+
+        val animator =
+            MinimizeAnimator.create(
+                context,
+                change,
+                transaction,
+                {},
+                interactionJankMonitor,
+                animationHandler,
+                targetBounds = Rect(400, 800, 464, 864),
+            )
+
+        assertThat(animator).isInstanceOf(AnimatorSet::class.java)
+        val animatorSet = animator as AnimatorSet
+        assertThat(animatorSet.childAnimations).hasSize(1)
+        assertThat(animatorSet.childAnimations[0]).isInstanceOf(ValueAnimator::class.java)
+        assertThat(animatorSet.childAnimations[0].duration).isEqualTo(420)
     }
 
     @Test

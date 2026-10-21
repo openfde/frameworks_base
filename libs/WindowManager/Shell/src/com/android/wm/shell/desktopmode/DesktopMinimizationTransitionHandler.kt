@@ -21,6 +21,7 @@ import android.app.WindowConfiguration.WINDOWING_MODE_FREEFORM
 import android.os.Handler
 import android.os.IBinder
 import android.os.SystemProperties
+import android.util.Log
 import android.view.SurfaceControl.Transaction
 import android.view.WindowManager.TRANSIT_TO_BACK
 import android.window.DesktopExperienceFlags
@@ -29,11 +30,13 @@ import android.window.TransitionRequestInfo
 import android.window.WindowContainerTransaction
 import com.android.internal.jank.InteractionJankMonitor
 import com.android.internal.protolog.ProtoLog
+import com.android.wm.shell.RootTaskDisplayAreaOrganizer
 import com.android.wm.shell.common.DisplayController
 import com.android.wm.shell.common.ShellExecutor
 import com.android.wm.shell.desktopmode.DesktopModeTransitionTypes.TRANSIT_DESKTOP_MODE_TASK_LIMIT_MINIMIZE
 import com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_DESKTOP_MODE
 import com.android.wm.shell.shared.TransitionUtil
+import com.android.wm.shell.shared.animation.MinimizeAnimationTargets
 import com.android.wm.shell.shared.animation.MinimizeAnimator.create
 import com.android.wm.shell.transition.Transitions
 import java.time.Duration
@@ -49,6 +52,7 @@ class DesktopMinimizationTransitionHandler(
     private val mainExecutor: ShellExecutor,
     private val animExecutor: ShellExecutor,
     private val displayController: DisplayController,
+    private val rootTaskDisplayAreaOrganizer: RootTaskDisplayAreaOrganizer,
     private val animHandler: Handler,
 ) : Transitions.TransitionHandler {
 
@@ -96,6 +100,11 @@ class DesktopMinimizationTransitionHandler(
             } else {
                 Duration.ZERO
             }
+        // Only genuine minimize transitions should fly into the dock. This handler also
+        // animates close and back-navigation transitions, which must keep their own animation.
+        val animateToDock =
+            info.type == Transitions.TRANSIT_MINIMIZE ||
+                info.type == TRANSIT_DESKTOP_MODE_TASK_LIMIT_MINIMIZE
         animations +=
             info.changes
                 .filter {
@@ -107,7 +116,14 @@ class DesktopMinimizationTransitionHandler(
                     checkChangeMode(it)
                 }
                 .mapNotNull {
-                    createMinimizeAnimation(it, finishTransaction, onAnimFinish, startAnimDelay)
+                    createMinimizeAnimation(
+                        it,
+                        startTransaction,
+                        finishTransaction,
+                        onAnimFinish,
+                        startAnimDelay,
+                        animateToDock,
+                    )
                 }
         if (animations.isEmpty()) return false
         startTransaction.apply()
@@ -117,9 +133,11 @@ class DesktopMinimizationTransitionHandler(
 
     private fun createMinimizeAnimation(
         change: TransitionInfo.Change,
+        startTransaction: Transaction,
         finishTransaction: Transaction,
         onAnimFinish: (Animator) -> Unit,
         startAnimDelay: Duration,
+        animateToDock: Boolean,
     ): Animator? {
         val t = Transaction()
         val sc = change.leash
@@ -134,6 +152,40 @@ class DesktopMinimizationTransitionHandler(
             )
             return null
         }
+        val targetBounds =
+            if (animateToDock && change.taskInfo?.windowingMode == WINDOWING_MODE_FREEFORM) {
+                MinimizeAnimationTargets.findTarget(change)
+            } else {
+                null
+            }
+        Log.d(
+            "DockMinimizeTargets",
+            "minimize task=${change.taskInfo?.taskId} target=$targetBounds",
+        )
+        val taskInfo = change.taskInfo
+        if (targetBounds != null && taskInfo != null) {
+            val displayAreaLeash =
+                rootTaskDisplayAreaOrganizer.getDisplayAreaLeash(taskInfo.displayId)
+            if (displayAreaLeash != null) {
+                val genieAnimator =
+                    GenieMinimizeAnimator.create(
+                        displayContext,
+                        change,
+                        targetBounds,
+                        displayAreaLeash,
+                        startTransaction,
+                        onAnimFinish,
+                        InteractionJankMonitor.getInstance(),
+                        animHandler,
+                        startAnimDelay,
+                    )
+                if (genieAnimator != null) {
+                    Log.d("DockMinimizeTargets", "using genie mesh animation")
+                    return genieAnimator
+                }
+                Log.d("DockMinimizeTargets", "genie unavailable, fallback to affine")
+            }
+        }
         return create(
             displayContext,
             change,
@@ -142,6 +194,7 @@ class DesktopMinimizationTransitionHandler(
             InteractionJankMonitor.getInstance(),
             animHandler,
             startAnimDelay,
+            targetBounds,
         )
     }
 

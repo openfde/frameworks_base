@@ -31,10 +31,12 @@ import android.view.WindowManager.TRANSIT_CLOSE
 import android.window.TransitionInfo
 import androidx.test.filters.SmallTest
 import com.android.window.flags.Flags
+import com.android.wm.shell.RootTaskDisplayAreaOrganizer
 import com.android.wm.shell.ShellTestCase
 import com.android.wm.shell.TestRunningTaskInfoBuilder
 import com.android.wm.shell.common.DisplayController
 import com.android.wm.shell.common.ShellExecutor
+import com.android.wm.shell.shared.animation.MinimizeAnimationTargets
 import com.android.wm.shell.transition.Transitions
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -59,11 +61,13 @@ class DesktopMinimizationTransitionHandlerTest : ShellTestCase() {
 
     @Before
     fun setUp() {
+        MinimizeAnimationTargets.clear()
         handler =
             DesktopMinimizationTransitionHandler(
                 testExecutor,
                 testExecutor,
                 displayController,
+                mock<RootTaskDisplayAreaOrganizer>(),
                 mock<Handler>(),
             )
         whenever(displayController.getDisplayContext(any())).thenReturn(mContext)
