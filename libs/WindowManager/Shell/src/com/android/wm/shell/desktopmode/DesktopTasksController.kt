@@ -4508,19 +4508,28 @@ class DesktopTasksController(
             logV("skip keyguard is locked")
             return null
         }
+        // A freeform task started by an app is created with the default freeform bounds for the
+        // activity's requested orientation. Re-placing it right after the launch changes the
+        // window configuration a second time, which relaunches activities that do not declare
+        // smallestScreenSize/screenLayout in their configChanges and can cancel in-flight work
+        // such as a QR-code login session (openfde/openfde#499). Keep the bounds the task was
+        // launched with unless the app has remembered bounds restored by the user earlier.
+        val launchBounds = task.configuration.windowConfiguration.bounds
+        val rememberedBounds =
+            displayController.getDisplayLayout(task.displayId)?.let { displayLayout ->
+                calculateRememberedBounds(
+                    userRepositories.getProfile(task.userId),
+                    task.componentNameForRememberedBounds,
+                    displayLayout,
+                    task,
+                )
+            }
+        val placementBounds = rememberedBounds ?: launchBounds.takeIf { !it.isEmpty }
         return handleFreeformTaskPlacement(
             task = task,
             transition = transition,
             targetDisplayId = task.displayId,
-            requestedTaskBounds =
-                displayController.getDisplayLayout(task.displayId)?.let { displayLayout ->
-                    calculateRememberedBounds(
-                        userRepositories.getProfile(task.userId),
-                        task.componentNameForRememberedBounds,
-                        displayLayout,
-                        task,
-                    )
-                },
+            requestedTaskBounds = placementBounds,
             requestType = requestType,
             enterReason = EnterReason.TASK_LAUNCH,
             forceBringTaskToFront = true,
