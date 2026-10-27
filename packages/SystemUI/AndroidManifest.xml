@@ -860,6 +860,19 @@
             android:theme="@android:style/Theme.NoDisplay">
         </activity >
 
+        <!-- AppFunction to open/close the parallel world of an application window. -->
+        <service
+            android:name=".appfunctions.parallelworld.ParallelWorldAppFunctionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE">
+            <property
+                android:name="android.app.appfunctions"
+                android:value="parallel_world_app_functions.xml" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+
         <!-- Data Attribution for Android Context Engine use cases -->
         <activity android:name=".personalcontext.attribution.AttributionActivity"
             android:exported="true"
