@@ -206,11 +206,13 @@ public final class DisplayTopology implements Parcelable {
                     /* offset= */ 0);
             mPrimaryDisplayId = displayId;
         } else if (mRoot.mChildren.isEmpty()) {
-            // This is the 2nd display. Align the middles of the top and bottom edges.
-            float width = pxToDp(logicalWidth, logicalDensity);
-            float offset = mRoot.getWidth() / 2 - width / 2;
+            // This is the 2nd display. Align the middles of the left and right edges.
+            float height = pxToDp(logicalHeight, logicalDensity);
+            float offset = mRoot.getHeight() / 2 - height / 2;
+
             TreeNode display = new TreeNode(
-                    displayId, logicalWidth, logicalHeight, logicalDensity, POSITION_TOP, offset);
+                    displayId, logicalWidth, logicalHeight, logicalDensity,
+                    POSITION_RIGHT, offset);
             mRoot.mChildren.add(display);
         } else {
             TreeNode rightMostDisplay = findRightMostDisplay(mRoot, mRoot.getWidth()).first;
