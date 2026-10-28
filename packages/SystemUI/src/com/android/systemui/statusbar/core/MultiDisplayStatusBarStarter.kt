@@ -57,6 +57,10 @@ constructor(
                 .onStart { emit(displayRepository.displayIdsWithSystemDecorations.value) }
                 .collect { newDisplays ->
                     logger.logNewDisplaysWithSystemDecorations(newDisplays)
+                    // FDE multi-display: both the built-in display and connected displays with
+                    // system decorations own a StatusBar. Do not filter to DEFAULT_DISPLAY here;
+                    // the secondary bar is what hosts the duplicated FDE top bar. A future
+                    // setting can make the secondary bar optional without changing this path.
                     newDisplays.forEach { createAndStartComponentsForDisplay(it) }
                 }
         }

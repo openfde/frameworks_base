@@ -350,8 +350,21 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
     private final NotificationShadeWindowController mNotificationShadeWindowController;
     @Nullable
     private PhoneStatusBarView mPhoneStatusBarView;
+    /**
+     * FDE multi-display: every display owns its own PhoneStatusBarView. Keep them keyed by
+     * displayId so an OverlayPlugin can be attached to each status bar instead of only the last
+     * view that happened to be initialized. mPhoneStatusBarView above remains the default-display
+     * view for legacy code paths that still expect a single status bar.
+     */
+    private final android.util.ArrayMap<Integer, PhoneStatusBarView> mStatusBarViews =
+            new android.util.ArrayMap<>();
     /** Overlay plugins connected before the status bar view was initialized. */
     private final ArraySet<OverlayPlugin> mPendingOverlayPlugins = new ArraySet<>();
+    /**
+     * Overlay plugins currently attached to one or more status bar views. This is separate from
+     * mOverlayPlugins below, which only tracks plugins holding the shade open.
+     */
+    private final ArraySet<OverlayPlugin> mConnectedOverlayPlugins = new ArraySet<>();
     /** Overlay plugins currently holding the status bar open. */
     private final ArraySet<OverlayPlugin> mOverlayPlugins = new ArraySet<>();
     /** Message code for plugin-triggered screen recording dialog. */
@@ -864,20 +877,35 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
                     @Override
                     public void onPluginConnected(OverlayPlugin plugin, Context pluginContext) {
                         Log.d(TAG, "onPluginConnected: " + mPhoneStatusBarView + " " + mScreenRecordHandler);
-                        if (mPhoneStatusBarView == null) {
-                            Log.d(TAG, "onPluginConnected: status bar view not ready, deferring setup");
-                            synchronized (mPendingOverlayPlugins) {
-                                mPendingOverlayPlugins.add(plugin);
-                            }
-                            return;
+                        // Remember the plugin even if no status bar view exists yet. The view
+                        // initialization callback below replays setup() for every display.
+                        synchronized (mConnectedOverlayPlugins) {
+                            mConnectedOverlayPlugins.add(plugin);
                         }
-                        setupOverlayPlugin(plugin);
+                        synchronized (mStatusBarViews) {
+                            if (mStatusBarViews.isEmpty()) {
+                                Log.d(TAG, "onPluginConnected: status bar view not ready, deferring setup");
+                                synchronized (mPendingOverlayPlugins) {
+                                    mPendingOverlayPlugins.add(plugin);
+                                }
+                                return;
+                            }
+                            // Attach the plugin to every display's status bar. Using only
+                            // mPhoneStatusBarView here would leave secondary displays without
+                            // the FDE top bar.
+                            for (int i = 0; i < mStatusBarViews.size(); i++) {
+                                setupOverlayPlugin(plugin, mStatusBarViews.valueAt(i));
+                            }
+                        }
                     }
 
                     @Override
                     public void onPluginDisconnected(OverlayPlugin plugin) {
                         synchronized (mPendingOverlayPlugins) {
                             mPendingOverlayPlugins.remove(plugin);
+                        }
+                        synchronized (mConnectedOverlayPlugins) {
+                            mConnectedOverlayPlugins.remove(plugin);
                         }
                         mMainExecutor.execute(() -> {
                             mOverlayPlugins.remove(plugin);
@@ -2814,25 +2842,64 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
         return mNotificationAnimationProvider.getAnimatorController(associatedView);
     }
 
+    /**
+     * FDE multi-display: called once for every display's status bar view. Record the view under
+     * its real displayId and replay OverlayPlugin.setup() for every already-connected plugin.
+     * The default-display view is additionally kept in mPhoneStatusBarView for legacy callers.
+     */
     @Override
     public void onStatusBarViewInitialized(HomeStatusBarComponent component) {
-        mPhoneStatusBarView = component.getPhoneStatusBarView();
-        android.util.Log.d(TAG, "onStatusBarViewInitialized: " + mPhoneStatusBarView);
+        final PhoneStatusBarView view = component.getPhoneStatusBarView();
+        final int displayId = getStatusBarDisplayId(view);
+        android.util.Log.d(TAG, "onStatusBarViewInitialized: display=" + displayId + " " + view);
+        synchronized (mStatusBarViews) {
+            mStatusBarViews.put(displayId, view);
+        }
+        if (displayId == Display.DEFAULT_DISPLAY) {
+            mPhoneStatusBarView = view;
+        }
 
-        OverlayPlugin[] pending;
         synchronized (mPendingOverlayPlugins) {
-            pending = mPendingOverlayPlugins.toArray(new OverlayPlugin[0]);
             mPendingOverlayPlugins.clear();
         }
-        for (OverlayPlugin plugin : pending) {
-            setupOverlayPlugin(plugin);
+        synchronized (mConnectedOverlayPlugins) {
+            for (int i = 0; i < mConnectedOverlayPlugins.size(); i++) {
+                setupOverlayPlugin(mConnectedOverlayPlugins.valueAt(i), view);
+            }
         }
     }
 
+    /**
+     * Remove only the entry that still points at this exact view. A display can be destroyed and
+     * recreated while a plugin setup for the replacement view is already in flight, so an
+     * unconditional remove(displayId) could drop the new view.
+     */
     @Override
     public void onStatusBarViewDestroyed(HomeStatusBarComponent component) {
-        android.util.Log.d(TAG, "onStatusBarViewDestroyed: ");
-        mPhoneStatusBarView = null;
+        final PhoneStatusBarView view = component.getPhoneStatusBarView();
+        final int displayId = getStatusBarDisplayId(view);
+        android.util.Log.d(TAG, "onStatusBarViewDestroyed: display=" + displayId);
+        synchronized (mStatusBarViews) {
+            if (mStatusBarViews.get(displayId) == view) {
+                mStatusBarViews.remove(displayId);
+            }
+        }
+        if (displayId == Display.DEFAULT_DISPLAY) {
+            mPhoneStatusBarView = null;
+        }
+    }
+
+    /**
+     * getDisplay() can be null while the status bar view is being attached; the window context
+     * already knows the target display, so use it as a fallback. Without this, both displays can
+     * be mapped to DEFAULT_DISPLAY and only the last setup wins.
+     */
+    private int getStatusBarDisplayId(PhoneStatusBarView view) {
+        Display display = view.getDisplay();
+        if (display == null) {
+            display = view.getContext().getDisplay();
+        }
+        return display != null ? display.getDisplayId() : Display.DEFAULT_DISPLAY;
     }
 
     private void setupOverlayPlugin(OverlayPlugin plugin) {
@@ -2842,11 +2909,21 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces,
             }
             return;
         }
-        mPhoneStatusBarView.setTag(mScreenRecordHandler);
+        setupOverlayPlugin(plugin, mPhoneStatusBarView);
+    }
+
+    /**
+     * Attach one OverlayPlugin to a specific status bar view. Only the default display gets a
+     * navigation bar argument; secondary displays own their navigation bar through their own
+     * taskbar/panel window and must not receive the default display's nav bar view.
+     */
+    private void setupOverlayPlugin(OverlayPlugin plugin, PhoneStatusBarView statusBarView) {
+        final int displayId = getStatusBarDisplayId(statusBarView);
+        statusBarView.setTag(mScreenRecordHandler);
         mMainExecutor.execute(
                 () -> plugin.setup(
-                        mPhoneStatusBarView,
-                        getNavigationBarView(),
+                        statusBarView,
+                        displayId == Display.DEFAULT_DISPLAY ? getNavigationBarView() : null,
                         new OverlayPluginCallback(plugin), mDozeParameters));
     }
 
