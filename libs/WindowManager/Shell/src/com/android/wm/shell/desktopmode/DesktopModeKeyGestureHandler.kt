@@ -115,6 +115,13 @@ class DesktopModeKeyGestureHandler(
                 }
             }
             KeyGestureEvent.KEY_GESTURE_TYPE_SWITCH_TO_PREVIOUS_DESK -> {
+                // FDE: desk switching is only defined for the primary desktop. On a secondary
+                // display the shortcut would change the primary desk while the user is working
+                // on the secondary screen, so ignore it until the secondary UX is designed.
+                if (focusTransitionObserver.globallyFocusedDisplayId != DEFAULT_DISPLAY) {
+                    logV("SWITCH_TO_PREVIOUS_DESK ignored on secondary display")
+                    return
+                }
                 logV("Key gesture SWITCH_TO_PREVIOUS_DESK is handled")
                 mainExecutor.execute {
                     desktopTasksController
@@ -127,6 +134,12 @@ class DesktopModeKeyGestureHandler(
                 }
             }
             KeyGestureEvent.KEY_GESTURE_TYPE_SWITCH_TO_NEXT_DESK -> {
+                // See SWITCH_TO_PREVIOUS_DESK: keep the second display from changing the desk
+                // belonging to the primary desktop.
+                if (focusTransitionObserver.globallyFocusedDisplayId != DEFAULT_DISPLAY) {
+                    logV("SWITCH_TO_NEXT_DESK ignored on secondary display")
+                    return
+                }
                 logV("Key gesture SWITCH_TO_NEXT_DESK is handled")
                 mainExecutor.execute {
                     desktopTasksController

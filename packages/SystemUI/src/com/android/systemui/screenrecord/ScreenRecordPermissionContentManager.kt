@@ -302,9 +302,13 @@ class ScreenRecordPermissionContentManager(
                             warningText =
                                 R.string
                                     .media_projection_entry_app_permission_dialog_warning_entire_screen,
+                            // Use the recording-specific label. The media-projection
+                            // "continue entire screen" string says "share screen", which made
+                            // the recording dialog's primary action look like screen sharing
+                            // when an external display was selected.
                             startButtonText =
                                 R.string
-                                    .media_projection_entry_app_permission_dialog_continue_entire_screen,
+                                    .screenrecord_permission_dialog_continue_entire_screen,
                             displayId = it.displayId,
                             displayName = it.name,
                         )
