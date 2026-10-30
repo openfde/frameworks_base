@@ -2620,6 +2620,9 @@ easier.
     </style>
 
     <style name="Theme.DeviceDefault.Resolver" parent="Theme.DeviceDefault.ResolverCommon">
+        <!-- fde: show the intent resolver as a content-sized floating window instead of a
+             fullscreen sheet, so the activity window matches the dialog height. -->
+        <item name="windowIsFloating">true</item>
         <item name="windowLightNavigationBar">true</item>
     </style>
 
