@@ -107,6 +107,25 @@ public class DesktopModeCompatPolicy {
     }
 
     /**
+     * FDE: whether the component is the system intent resolver (chooser).
+     *
+     * <p>The chooser is a transparent, platform-signed dialog. Desktop auto-hide in
+     * {@code DisplayPolicy} treats such a fullscreen task as an immersive app and takes the status
+     * bar and the dock away while it is showing. Keeping the chooser inside desktop windowing lets
+     * it show as a window on top of the desktop with the system bars still visible.
+     */
+    private static boolean isSystemChooser(@NonNull String packageName,
+            @Nullable String className) {
+        if (className == null) {
+            return false;
+        }
+        if (!"android".equals(packageName) && !"com.android.intentresolver".equals(packageName)) {
+            return false;
+        }
+        return className.endsWith(".ResolverActivity") || className.endsWith(".ChooserActivity");
+    }
+
+    /**
      * @see #isTopActivityExemptFromDesktopWindowing(ComponentName, boolean, boolean, int, int,
      * ActivityInfo, int)
      */
@@ -155,6 +174,10 @@ public class DesktopModeCompatPolicy {
         // If activity belongs to default home package, safe to force out of desktop.
         if (isPartOfDefaultHomePackageOrNoHomeAvailable(packageName, userId, className)) {
             return true;
+        }
+        // FDE: keep the system chooser in desktop windowing instead of forcing it fullscreen.
+        if (isSystemChooser(packageName, className)) {
+            return false;
         }
         // If all activities in task stack are transparent AND package has the relevant
         // fullscreen transparent permission OR is signed with platform key, safe to force out
