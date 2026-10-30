@@ -2989,7 +2989,12 @@ public class DisplayPolicy {
     private void updateAutoHideState() {
         final boolean fullscreenOnTop = !mInFreeformMode
                 && mFocusedWindow != null
-                && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_STANDARD;
+                && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_STANDARD
+                // fde start: a transparent/dialog activity (e.g. the intent resolver) does not
+                // occlude the desktop, so it must not be treated as an immersive fullscreen app.
+                && (mFocusedWindow.mActivityRecord == null
+                        || mFocusedWindow.mActivityRecord.occludesParent());
+                // fde end
         if (fullscreenOnTop == mFullscreenOnTop) {
             return;
         }
