@@ -174,6 +174,7 @@ import android.window.WindowContainerToken;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.app.IVoiceInteractor;
+import com.android.internal.policy.FdeWindowSizeConfig;
 import com.android.internal.protolog.ProtoLog;
 import com.android.internal.util.XmlUtils;
 import com.android.modules.utils.TypedXmlPullParser;
@@ -2410,9 +2411,44 @@ class Task extends TaskFragment {
 
         adjustForMinimalTaskDimensions(outOverrideBounds, previousBounds, newParentConfig);
         if (windowingMode == WINDOWING_MODE_FREEFORM) {
+            // fde start: clamp to the per-app min/max window size configured in config.xml
+            // (config_fdeAppWindowSizeSettings). This is the authoritative backstop for both
+            // drag-resize and maximize (fullscreen), so the window never exceeds the configured
+            // max size nor falls below the configured min size.
+            clampToConfiguredWindowSize(outOverrideBounds, previousBounds, newParentConfig);
+            // fde end
             computeFreeformBounds(outOverrideBounds, newParentConfig);
             return;
         }
+    }
+
+    /**
+     * Clamps freeform bounds to the per-app min/max window size configured in config.xml
+     * (config_fdeAppWindowSizeSettings).
+     *
+     * <p>Only applies to freeform (FDE desktop) windows of configured packages. As this method
+     * runs on every bounds resolution, it covers window resize by dragging and window maximize
+     * (fullscreen) alike.
+     */
+    private void clampToConfiguredWindowSize(@NonNull Rect bounds, @NonNull Rect previousBounds,
+            @NonNull Configuration newParentConfig) {
+        if (bounds.isEmpty() || getWindowingMode() != WINDOWING_MODE_FREEFORM) {
+            return;
+        }
+        final FdeWindowSizeConfig.Entry config = FdeWindowSizeConfig.getInstance(
+                mWmService.mContext).getEntry(getBasePackageName());
+        if (config == null) {
+            return;
+        }
+        final float density = (float) newParentConfig.densityDpi / DisplayMetrics.DENSITY_DEFAULT;
+        final Rect parentBounds = new Rect(newParentConfig.windowConfiguration.getBounds());
+        final DisplayContent display = getDisplayContent();
+        if (display != null) {
+            final Rect stableBounds = new Rect();
+            display.getStableRect(stableBounds);
+            parentBounds.intersect(stableBounds);
+        }
+        config.clampBounds(bounds, previousBounds, parentBounds, density);
     }
 
     void adjustForMinimalTaskDimensions(@NonNull Rect bounds, @NonNull Rect previousBounds,

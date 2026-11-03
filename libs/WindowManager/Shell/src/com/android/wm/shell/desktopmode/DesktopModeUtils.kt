@@ -43,6 +43,7 @@ import android.view.DragEvent
 import android.window.DesktopExperienceFlags
 import android.window.SplashScreen.SPLASH_SCREEN_STYLE_ICON
 import com.android.internal.policy.DesktopModeCompatUtils
+import com.android.internal.policy.FdeWindowSizeConfig
 import com.android.window.flags.Flags
 import com.android.wm.shell.ShellTaskOrganizer
 import com.android.wm.shell.common.DisplayController
@@ -186,22 +187,47 @@ fun calculateInitialBounds(
 fun calculateMaximizeBounds(displayLayout: DisplayLayout, taskInfo: RunningTaskInfo): Rect {
     val stableBounds = Rect()
     displayLayout.getStableBounds(stableBounds)
-    if (taskInfo.isResizeable) {
-        // if resizable then expand to entire stable bounds (full display minus insets)
-        return Rect(stableBounds)
-    } else {
-        // if non-resizable then calculate max bounds according to aspect ratio
-        val activityAspectRatio = calculateAspectRatio(taskInfo)
-        val captionInsets = taskInfo.freeformCaptionInsets(displayLayout)
-        val newSize =
-            maximizeSizeGivenAspectRatio(
-                taskInfo,
-                Size(stableBounds.width(), stableBounds.height()),
-                activityAspectRatio,
-                captionInsets,
+    val maximizeBounds =
+        if (taskInfo.isResizeable) {
+            // if resizable then expand to entire stable bounds (full display minus insets)
+            Rect(stableBounds)
+        } else {
+            // if non-resizable then calculate max bounds according to aspect ratio
+            val activityAspectRatio = calculateAspectRatio(taskInfo)
+            val captionInsets = taskInfo.freeformCaptionInsets(displayLayout)
+            val newSize =
+                maximizeSizeGivenAspectRatio(
+                    taskInfo,
+                    Size(stableBounds.width(), stableBounds.height()),
+                    activityAspectRatio,
+                    captionInsets,
+                )
+            centerInArea(newSize, stableBounds, stableBounds.left, stableBounds.top)
+        }
+    // fde start: cap the maximized bounds to the per-app max size configured in config.xml
+    // (core/res/res/values/config.xml -> config_fdeAppWindowSizeSettings). This keeps the
+    // maximize/fullscreen request aligned with the max-size clamped in system server, so the
+    // maximized window never exceeds the configured max size.
+    val config = taskInfo.fdeWindowSizeConfig()
+    if (config != null && config.maxWidth > 0 && config.maxHeight > 0) {
+        val density = displayLayout.density()
+        val maxW = FdeWindowSizeConfig.dpToPx(config.maxWidth, density)
+        val maxH = FdeWindowSizeConfig.dpToPx(config.maxHeight, density)
+        if (maximizeBounds.width() > maxW || maximizeBounds.height() > maxH) {
+            if (maximizeBounds.width() > maxW) maximizeBounds.right = maximizeBounds.left + maxW
+            if (maximizeBounds.height() > maxH) maximizeBounds.bottom = maximizeBounds.top + maxH
+            // Re-center the capped maximized window in the stable bounds so it still looks
+            // maximized, consistent with the clamping done in system server.
+            return centerInArea(
+                Size(maximizeBounds.width(), maximizeBounds.height()),
+                stableBounds,
+                stableBounds.left,
+                stableBounds.top,
             )
-        return centerInArea(newSize, stableBounds, stableBounds.left, stableBounds.top)
+        }
     }
+    // fde end
+    return maximizeBounds
 }
 
 /**
@@ -285,11 +311,28 @@ fun calculateAspectRatio(taskInfo: TaskInfo): Float {
         minOf(appBounds.height(), appBounds.width()).toFloat()
 }
 
+/**
+ * Returns the FDE per-app window size config (defined in config.xml) for the task's top activity
+ * package, or {@code null} if the package is not configured.
+ */
+private fun TaskInfo.fdeWindowSizeConfig(): FdeWindowSizeConfig.Entry? {
+    val packageName = topActivity?.packageName ?: baseActivity?.packageName ?: return null
+    return FdeWindowSizeConfig.getInstance(null).getEntry(packageName)
+}
+
 /** Returns whether the task is maximized. */
 fun isTaskMaximized(taskInfo: RunningTaskInfo, displayLayout: DisplayLayout): Boolean {
+    val currentTaskBounds = taskInfo.configuration.windowConfiguration.bounds
+    // fde start: for apps with a configured max size the maximized window is capped at that max,
+    // so compare against the (possible capped) maximize bounds instead of the raw stable bounds.
+    val config = taskInfo.fdeWindowSizeConfig()
+    if (config != null && config.maxWidth > 0 && config.maxHeight > 0 && taskInfo.isResizeable) {
+        return isTaskBoundsEqual(
+            currentTaskBounds, calculateMaximizeBounds(displayLayout, taskInfo))
+    }
+    // fde end
     val stableBounds = Rect()
     displayLayout.getStableBounds(stableBounds)
-    val currentTaskBounds = taskInfo.configuration.windowConfiguration.bounds
     return if (taskInfo.isResizeable) {
         isTaskBoundsEqual(currentTaskBounds, stableBounds)
     } else {

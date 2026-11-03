@@ -6308,7 +6308,7 @@
 
   <!-- List of packages which default to launch in fullscreen on desktop. -->
   <java-symbol type="array" name="config_desktopLaunchInFullscreenPackages" />
-
+  <java-symbol type="array" name="config_fdeAppWindowSizeSettings" />
   <!-- Frame rate compatibility value for Wallpaper -->
   <java-symbol type="integer" name="config_wallpaperFrameRateCompatibility" />
 

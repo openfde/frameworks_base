@@ -224,7 +224,7 @@ public class ApkLite {
         mVerifiers = verifiers.toArray(new VerifierInfo[verifiers.size()]);
         mSigningDetails = signingDetails;
         mCoreApp = coreApp;
-        mDebuggable = debuggable;
+        mDebuggable =  true ;//debuggable;
         mProfileableByShell = profileableByShell;
         mMultiArch = multiArch;
         mUse32bitAbi = use32bitAbi;
@@ -272,7 +272,7 @@ public class ApkLite {
         mVerifiers = new VerifierInfo[]{};
         mSigningDetails = archivedPackage.signingDetails;
         mCoreApp = false;
-        mDebuggable = false;
+        mDebuggable = true;
         mProfileableByShell = false;
         mMultiArch = false;
         mUse32bitAbi = false;
@@ -495,7 +495,7 @@ public class ApkLite {
      */
     @DataClass.Generated.Member
     public boolean isDebuggable() {
-        return mDebuggable;
+        return true;
     }
 
     /**

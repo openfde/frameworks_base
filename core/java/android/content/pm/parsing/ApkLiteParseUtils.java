@@ -449,7 +449,7 @@ public class ApkLiteParseUtils {
 
         int targetSdkVersion = DEFAULT_TARGET_SDK_VERSION;
         int minSdkVersion = DEFAULT_MIN_SDK_VERSION;
-        boolean debuggable = false;
+        boolean debuggable = true;
         boolean profilableByShell = false;
         boolean multiArch = false;
         boolean use32bitAbi = false;
@@ -500,8 +500,7 @@ public class ApkLiteParseUtils {
                     verifiers.add(verifier);
                 }
             } else if (TAG_APPLICATION.equals(parser.getName())) {
-                debuggable = parser.getAttributeBooleanValue(ANDROID_RES_NAMESPACE, "debuggable",
-                        false);
+                debuggable = true ;//parser.getAttributeBooleanValue(ANDROID_RES_NAMESPACE, "debuggable",false);
                 multiArch = parser.getAttributeBooleanValue(ANDROID_RES_NAMESPACE, "multiArch",
                         false);
                 use32bitAbi = parser.getAttributeBooleanValue(ANDROID_RES_NAMESPACE, "use32bitAbi",

@@ -43,6 +43,7 @@ import android.view.Gravity;
 
 import com.android.internal.policy.DesktopModeCompatUtils;
 import com.android.internal.policy.DesktopModeLaunchBoundsUtils;
+import com.android.internal.policy.FdeWindowSizeConfig;
 import com.android.window.flags.Flags;
 
 import java.util.ArrayList;
@@ -73,6 +74,28 @@ public final class DesktopModeBoundsCalculator {
         // stable insets, which usually are system widgets such as sysbar & navbar.
         final Rect stableBounds = new Rect();
         displayContent.getStableRect(stableBounds);
+
+        // fde start: launch the app with the startup width/height configured in config.xml
+        // (core/res/res/values/config.xml -> config_fdeAppWindowSizeSettings).
+        final String packageName = activity != null ? activity.packageName
+                : task.getBasePackageName();
+        final FdeWindowSizeConfig.Entry sizeConfig = FdeWindowSizeConfig.getInstance(
+                task.mWmService.mContext).getEntry(packageName);
+        if (sizeConfig != null && sizeConfig.hasStartSize) {
+            final float density = displayContent.getDisplayMetrics().density;
+            int startWidth = FdeWindowSizeConfig.dpToPx(sizeConfig.startWidth, density);
+            int startHeight = FdeWindowSizeConfig.dpToPx(sizeConfig.startHeight, density);
+            final Rect startRect = new Rect(0, 0, startWidth, startHeight);
+            // Clamp the startup size to the configured min/max (backstop) in case the configured
+            // startup size is larger than the max or smaller than the min.
+            sizeConfig.clampBounds(startRect, new Rect(), stableBounds, density);
+            // Center the startup window within the stable bounds.
+            outParams.mBounds.set(centerInScreen(
+                    new Size(startRect.width(), startRect.height()), stableBounds));
+            logger.accept("fde-configured-start-bounds=" + outParams.mBounds);
+            return;
+        }
+        // fde end
 
         final boolean hasFullscreenOverride = activity != null
                 && activity.mAppCompatController.getAspectRatioOverrides().hasFullscreenOverride();

@@ -150,7 +150,7 @@ public class PackageInfoLite implements Parcelable {
         recommendedInstallLocation = source.readInt();
         installLocation = source.readInt();
         multiArch = (source.readInt() != 0);
-        debuggable = (source.readInt() != 0);
+        debuggable = true;//(source.readInt() != 0);
 
         final int verifiersLength = source.readInt();
         if (verifiersLength == 0) {

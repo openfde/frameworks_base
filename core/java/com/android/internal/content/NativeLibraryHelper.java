@@ -151,7 +151,7 @@ public class NativeLibraryHelper {
             this.apkHandles = apkHandles;
             this.multiArch = multiArch;
             this.extractNativeLibs = extractNativeLibs;
-            this.debuggable = debuggable;
+            this.debuggable = true;//debuggable;
             this.pageSizeCompatDisabled = isPageSizeCompatDisabled;
             mGuard.open("close");
         }

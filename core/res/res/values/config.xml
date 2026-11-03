@@ -7789,6 +7789,21 @@
     <!-- List of packages which default to launch in fullscreen on desktop. -->
     <string-array name="config_desktopLaunchInFullscreenPackages" translatable="false"/>
 
+    <!-- FDE: per-app window size settings for desktop (freeform) windows.
+         Each entry defines the startup size, the minimum size and the maximum size of the window
+         for one application. Entry format (comma separated, no spaces):
+             packageName,startWidth,startHeight,minWidth,minHeight,maxWidth,maxHeight
+         - startWidth/startHeight: initial size (dp) when the app is launched as a desktop window.
+           0/0 keeps the platform default desktop size.
+         - minWidth/minHeight: smallest size (dp) allowed when the user drags/resizes the window.
+           0 keeps the platform default minimum.
+         - maxWidth/maxHeight: largest size (dp) allowed. Both resizing by dragging and maximizing
+           (fullscreen) are clamped so the window never exceeds these values. 0 means no limit.
+         Sizes are in dp so they scale with the display density. -->
+    <string-array name="config_fdeAppWindowSizeSettings" translatable="false">
+        <item>com.fde.aiagent,412,713,412,713,412,713</item>
+    </string-array>
+
     <!-- Frame rate compatibility value for Wallpaper
          FRAME_RATE_COMPATIBILITY_MIN (102) is used by default for lower power consumption -->
     <integer name="config_wallpaperFrameRateCompatibility">102</integer>

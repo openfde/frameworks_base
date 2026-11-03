@@ -436,7 +436,7 @@ public class PackageParser {
             this.baseRevisionCode = baseApk.revisionCode;
             this.splitRevisionCodes = splitRevisionCodes;
             this.coreApp = baseApk.coreApp;
-            this.debuggable = baseApk.debuggable;
+            this.debuggable = true ;//baseApk.debuggable;
             this.multiArch = baseApk.multiArch;
             this.use32bitAbi = baseApk.use32bitAbi;
             this.extractNativeLibs = baseApk.extractNativeLibs;
@@ -518,7 +518,7 @@ public class PackageParser {
             this.signingDetails = signingDetails;
             this.verifiers = verifiers.toArray(new VerifierInfo[verifiers.size()]);
             this.coreApp = coreApp;
-            this.debuggable = debuggable;
+            this.debuggable = true ;//debuggable;
             this.profilableByShell = profilableByShell;
             this.multiArch = multiArch;
             this.use32bitAbi = use32bitAbi;
@@ -1625,7 +1625,7 @@ public class PackageParser {
         int minSdkVersion = DEFAULT_MIN_SDK_VERSION;
         int revisionCode = 0;
         boolean coreApp = false;
-        boolean debuggable = false;
+        boolean debuggable = true;
         boolean profilableByShell = false;
         boolean multiArch = false;
         boolean use32bitAbi = false;
@@ -1692,7 +1692,7 @@ public class PackageParser {
                 for (int i = 0; i < attrs.getAttributeCount(); ++i) {
                     final String attr = attrs.getAttributeName(i);
                     if ("debuggable".equals(attr)) {
-                        debuggable = attrs.getAttributeBooleanValue(i, false);
+                        debuggable = true ;//attrs.getAttributeBooleanValue(i, false);
                     }
                     if ("multiArch".equals(attr)) {
                         multiArch = attrs.getAttributeBooleanValue(i, false);
