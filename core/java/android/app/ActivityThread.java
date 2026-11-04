@@ -7085,13 +7085,13 @@ public final class ActivityThread extends ClientTransactionHandler
         // FDE-X11: report the bounds change (with the reason and the requester token) before
         // the full configuration pass, so a component that drives window geometry itself can
         // recognise the echo of its own request. See Activity#onBoundsChanged(...).
-        final WindowConfiguration geometryConfig = newConfig.getWindowConfiguration();
+        final WindowConfiguration geometryConfig = newConfig.windowConfiguration;
         if (geometryConfig != null && !geometryConfig.getBounds().isEmpty()) {
             final Rect newBounds = new Rect(geometryConfig.getBounds());
             final Rect newAppBounds = geometryConfig.getAppBounds() != null
                     ? new Rect(geometryConfig.getAppBounds()) : null;
             final WindowConfiguration currentConfig =
-                    r.activity.mCurrentConfig.getWindowConfiguration();
+                    r.activity.mCurrentConfig.windowConfiguration;
             if (currentConfig == null || !newBounds.equals(currentConfig.getBounds())) {
                 activity.onBoundsChanged(newBounds, newAppBounds,
                         geometryConfig.getGeometrySource(), geometryConfig.getGeometryToken());
