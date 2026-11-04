@@ -321,6 +321,19 @@ public class ActivityTaskManager {
      * @param bounds Bounds to resize task.
      */
     @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS)
+    /**
+     * @hide FDE-X11: resize the task and tag the resulting bounds change with a caller
+     * token, so the activity can recognise the echo of this request.
+     */
+    public void resizeTask(int taskId, Rect bounds, long geometryToken) {
+        try {
+            getService().resizeTaskWithToken(taskId, bounds, RESIZE_MODE_SYSTEM,
+                    geometryToken, Activity.BOUNDS_CHANGE_SOURCE_REQUESTER);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
     public void resizeTask(int taskId, Rect bounds) {
         try {
             getService().resizeTask(taskId, bounds, RESIZE_MODE_SYSTEM);

@@ -220,6 +220,8 @@ interface IActivityTaskManager {
      * @param resizeMode Resize mode defined as {@code ActivityTaskManager#RESIZE_MODE_*} constants.
      */
     void resizeTask(int taskId, in Rect bounds, int resizeMode);
+    /** @hide FDE-X11: resize and tag the resulting bounds change with a caller token. */
+    void resizeTaskWithToken(int taskId, in Rect bounds, int resizeMode, long geometryToken, int geometrySource);
     void moveRootTaskToDisplay(int taskId, int displayId);
 
     void moveTaskToRootTask(int taskId, int rootTaskId, boolean toTop);

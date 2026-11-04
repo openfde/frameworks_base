@@ -146,6 +146,7 @@ import android.annotation.Nullable;
 import android.annotation.SpecialUsers.CanBeCURRENT;
 import android.annotation.SpecialUsers.CannotBeSpecialUser;
 import android.annotation.UserIdInt;
+import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManagerInternal;
 import android.app.ActivityOptions;
@@ -3307,8 +3308,35 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
      * {@link AppTaskImpl#moveTaskTo} here the WM Shell is forced to comply with the bounds
      * provided by the WM Core.
      */
+    /** @hide FDE-X11: binder entry for a token-tagged resize. */
+    @Override
+    public void resizeTaskWithToken(int taskId, Rect bounds, int resizeMode,
+            long geometryToken, int geometrySource) {
+        resizeTask(taskId, bounds, resizeMode, geometryToken, geometrySource);
+    }
+
     @Override
     public void resizeTask(int taskId, Rect bounds, int resizeMode) {
+        resizeTask(taskId, bounds, resizeMode, 0L /* geometryToken */,
+                Activity.BOUNDS_CHANGE_SOURCE_REQUESTER);
+    }
+
+    /**
+     * Same as {@link #resizeTask(int, Rect, int)} but tags the resulting bounds change with a
+     * caller supplied {@code geometryToken} and a reason. The tag travels on the task's
+     * {@link WindowConfiguration} and is delivered to
+     * {@link Activity#onBoundsChanged(Rect, Rect, int, long)}, which lets a component that
+     * drives window geometry itself (a desktop shell, for example) recognise the echo of its
+     * own request instead of relying on timing heuristics.
+     *
+     * @param geometryToken opaque token, chosen by the caller; {@code 0} means "untagged"
+     * @param source        one of {@link Activity#BOUNDS_CHANGE_SOURCE_UNKNOWN},
+     *                      {@link Activity#BOUNDS_CHANGE_SOURCE_REQUESTER} or
+     *                      {@link Activity#BOUNDS_CHANGE_SOURCE_USER_DRAG}
+     * @hide
+     */
+    public void resizeTask(int taskId, Rect bounds, int resizeMode, long geometryToken,
+            int source) {
         enforceTaskPermission("resizeTask()");
         final long ident = Binder.clearCallingIdentity();
         try {
@@ -3323,6 +3351,10 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                     Slog.w(TAG, "resizeTask not allowed on task=" + task);
                     return;
                 }
+                // Tag the transaction before the resize so the configuration produced by it
+                // carries the token to the activity.
+                task.getWindowConfiguration().setGeometryToken(geometryToken);
+                task.getWindowConfiguration().setGeometrySource(source);
 
                 // Reparent the task to the right root task if necessary
                 boolean preserveWindow = (resizeMode & RESIZE_MODE_PRESERVE_WINDOW) != 0;

@@ -48,6 +48,7 @@ import static com.android.internal.os.SafeZipPathValidatorCallback.VALIDATE_ZIP_
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityOptions.SceneTransitionInfo;
+import android.app.WindowConfiguration;
 import android.app.RemoteServiceException.BadForegroundServiceNotificationException;
 import android.app.RemoteServiceException.BadUserInitiatedJobNotificationException;
 import android.app.RemoteServiceException.CannotPostForegroundServiceNotificationException;
@@ -118,6 +119,7 @@ import android.database.sqlite.SQLiteDebug;
 import android.database.sqlite.SQLiteDebug.DbStats;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.graphics.HardwareRenderer;
 import android.graphics.Typeface;
 import android.hardware.display.DisplayManager;
@@ -7079,6 +7081,22 @@ public final class ActivityThread extends ClientTransactionHandler
         // multi-window / pip mode changes, if any, should be sent before the configuration
         // change callback, see also PinnedStackTests#testConfigurationChangeOrderDuringTransition
         handleWindowingModeChangeIfNeeded(r, newConfig);
+
+        // FDE-X11: report the bounds change (with the reason and the requester token) before
+        // the full configuration pass, so a component that drives window geometry itself can
+        // recognise the echo of its own request. See Activity#onBoundsChanged(...).
+        final WindowConfiguration geometryConfig = newConfig.getWindowConfiguration();
+        if (geometryConfig != null && !geometryConfig.getBounds().isEmpty()) {
+            final Rect newBounds = new Rect(geometryConfig.getBounds());
+            final Rect newAppBounds = geometryConfig.getAppBounds() != null
+                    ? new Rect(geometryConfig.getAppBounds()) : null;
+            final WindowConfiguration currentConfig =
+                    r.activity.mCurrentConfig.getWindowConfiguration();
+            if (currentConfig == null || !newBounds.equals(currentConfig.getBounds())) {
+                activity.onBoundsChanged(newBounds, newAppBounds,
+                        geometryConfig.getGeometrySource(), geometryConfig.getGeometryToken());
+            }
+        }
 
         final boolean movedToDifferentDisplay = isDifferentDisplay(activity.getDisplayId(),
                 displayId);

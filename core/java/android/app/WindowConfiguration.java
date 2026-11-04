@@ -79,6 +79,15 @@ public class WindowConfiguration implements Parcelable, Comparable<WindowConfigu
     @Nullable
     private Rect mAppBounds;
 
+    // --- FDE-X11: geometry transaction correlation -------------------------
+    // Bounds changes are requested by someone (a shell, the user, a display switch).
+    // Carrying the requester token and the reason on the configuration lets the
+    // requester recognise the echo of its own request without resorting to timers.
+    // See Activity#onBoundsChanged(Rect, Rect, int, long).
+    private long mGeometryToken = 0;
+    private int mGeometrySource = 0; // Activity.BOUNDS_CHANGE_SOURCE_*
+
+
     /**
      * The maximum {@link Rect} bounds that an app can expect. It is used to report value of
      * {@link WindowManager#getMaximumWindowMetrics()}.
@@ -237,6 +246,8 @@ public class WindowConfiguration implements Parcelable, Comparable<WindowConfigu
     public void writeToParcel(Parcel dest, int flags) {
         mBounds.writeToParcel(dest, flags);
         dest.writeTypedObject(mAppBounds, flags);
+        dest.writeLong(mGeometryToken);
+        dest.writeInt(mGeometrySource);
         mMaxBounds.writeToParcel(dest, flags);
         dest.writeInt(mWindowingMode);
         dest.writeInt(mActivityType);
@@ -249,6 +260,8 @@ public class WindowConfiguration implements Parcelable, Comparable<WindowConfigu
     public void readFromParcel(@NonNull Parcel source) {
         mBounds.readFromParcel(source);
         mAppBounds = source.readTypedObject(Rect.CREATOR);
+        mGeometryToken = source.readLong();
+        mGeometrySource = source.readInt();
         mMaxBounds.readFromParcel(source);
         mWindowingMode = source.readInt();
         mActivityType = source.readInt();
@@ -963,4 +976,24 @@ public class WindowConfiguration implements Parcelable, Comparable<WindowConfigu
         }
         return sb.toString();
     }
+    /** @hide */
+    public long getGeometryToken() {
+        return mGeometryToken;
+    }
+
+    /** @hide */
+    public void setGeometryToken(long geometryToken) {
+        mGeometryToken = geometryToken;
+    }
+
+    /** @hide */
+    public int getGeometrySource() {
+        return mGeometrySource;
+    }
+
+    /** @hide */
+    public void setGeometrySource(int geometrySource) {
+        mGeometrySource = geometrySource;
+    }
+
 }

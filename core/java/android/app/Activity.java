@@ -81,6 +81,7 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.media.AudioManager;
@@ -3441,6 +3442,51 @@ public class Activity extends ContextThemeWrapper
      *
      * @param newConfig The new device configuration.
      */
+    /**
+     * Called when the bounds of this activity's window changed, before the full
+     * {@link #onConfigurationChanged(Configuration)} pass.
+     *
+     * <p>Unlike the configuration callback, this reports <em>why</em> the bounds changed and
+     * carries the {@code geometryToken} supplied by the caller of
+     * {@code ActivityTaskManager.resizeTask(...)}. A component that drives window geometry
+     * itself (a desktop shell, for example) can use that pair to tell its own request apart
+     * from a user-initiated drag without relying on timers.
+     *
+     * <p>The default implementation does nothing.
+     *
+     * @param bounds        the new task bounds, in screen coordinates
+     * @param appBounds     the application area inside {@code bounds} (system bars
+     *                      excluded), or {@code null} when unknown
+     * @param source        one of {@link #BOUNDS_CHANGE_SOURCE_UNKNOWN},
+     *                      {@link #BOUNDS_CHANGE_SOURCE_USER_DRAG},
+     *                      {@link #BOUNDS_CHANGE_SOURCE_REQUESTER} or
+     *                      {@link #BOUNDS_CHANGE_SOURCE_DISPLAY}
+     * @param geometryToken the token passed by the requester of the resize, or {@code 0}
+     * @hide
+     */
+    public void onBoundsChanged(@NonNull Rect bounds, @Nullable Rect appBounds,
+            @BoundsChangeSource int source, long geometryToken) {
+    }
+
+    /** @hide */
+    @IntDef(prefix = { "BOUNDS_CHANGE_SOURCE_" }, value = {
+            BOUNDS_CHANGE_SOURCE_UNKNOWN,
+            BOUNDS_CHANGE_SOURCE_USER_DRAG,
+            BOUNDS_CHANGE_SOURCE_REQUESTER,
+            BOUNDS_CHANGE_SOURCE_DISPLAY,
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface BoundsChangeSource {}
+
+    /** @hide */
+    public static final int BOUNDS_CHANGE_SOURCE_UNKNOWN = 0;
+    /** @hide */
+    public static final int BOUNDS_CHANGE_SOURCE_USER_DRAG = 1;
+    /** @hide */
+    public static final int BOUNDS_CHANGE_SOURCE_REQUESTER = 2;
+    /** @hide */
+    public static final int BOUNDS_CHANGE_SOURCE_DISPLAY = 3;
+
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         if (DEBUG_LIFECYCLE) Slog.v(TAG, "onConfigurationChanged " + this + ": " + newConfig);
         mCalled = true;
