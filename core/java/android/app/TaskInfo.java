@@ -304,6 +304,28 @@ public class TaskInfo {
     public int minHeight;
 
     /**
+     * Maximum width of the task. {@code -1} when no maximum width is specified in the manifest,
+     * meaning the window may grow as large as its parent allows.
+     * @hide
+     */
+    public int maxWidth;
+
+    /**
+     * Maximum height of the task. {@code -1} when no maximum height is specified in the manifest,
+     * meaning the window may grow as large as its parent allows.
+     * @hide
+     */
+    public int maxHeight;
+
+    /**
+     * Whether the user is allowed to adjust the width and height of the window (i.e. resize it).
+     * When {@code false}, the window is treated as fixed-size and the resize entry points
+     * (maximize/fullscreen buttons, double-click to maximize, drag-to-resize) should be disabled.
+     * @hide
+     */
+    public boolean isAdjust = true;
+
+    /**
      * The default minimal size of the task used when a minWidth or minHeight is not specified.
      * @hide
      */
@@ -551,6 +573,9 @@ public class TaskInfo {
         isResizeable = other.isResizeable;
         minWidth = other.minWidth;
         minHeight = other.minHeight;
+        maxWidth = other.maxWidth;
+        maxHeight = other.maxHeight;
+        isAdjust = other.isAdjust;
         defaultMinSize = other.defaultMinSize;
         launchCookies = other.launchCookies != null
                 ? new ArrayList<>(other.launchCookies)
@@ -744,7 +769,9 @@ public class TaskInfo {
                 && magicWindowRatio == that.magicWindowRatio
                 && magicWindowEnabled == that.magicWindowEnabled
                 && magicWindowUserConfigured == that.magicWindowUserConfigured
-                && minWidth == that.minWidth && minHeight == that.minHeight;
+                && minWidth == that.minWidth && minHeight == that.minHeight
+                && maxWidth == that.maxWidth && maxHeight == that.maxHeight
+                && isAdjust == that.isAdjust;
     }
 
     /**
@@ -803,6 +830,9 @@ public class TaskInfo {
         isResizeable = source.readBoolean();
         minWidth = source.readInt();
         minHeight = source.readInt();
+        maxWidth = source.readInt();
+        maxHeight = source.readInt();
+        isAdjust = source.readBoolean();
         defaultMinSize = source.readInt();
         source.readBinderList(launchCookies);
         positionInParent = source.readTypedObject(Point.CREATOR);
@@ -869,6 +899,9 @@ public class TaskInfo {
         dest.writeBoolean(isResizeable);
         dest.writeInt(minWidth);
         dest.writeInt(minHeight);
+        dest.writeInt(maxWidth);
+        dest.writeInt(maxHeight);
+        dest.writeBoolean(isAdjust);
         dest.writeInt(defaultMinSize);
         dest.writeBinderList(launchCookies);
         dest.writeTypedObject(positionInParent, flags);
@@ -918,6 +951,9 @@ public class TaskInfo {
                 + " isResizeable=" + isResizeable
                 + " minWidth=" + minWidth
                 + " minHeight=" + minHeight
+                + " maxWidth=" + maxWidth
+                + " maxHeight=" + maxHeight
+                + " isAdjust=" + isAdjust
                 + " defaultMinSize=" + defaultMinSize
                 + " token=" + token
                 + " topActivityType=" + topActivityType

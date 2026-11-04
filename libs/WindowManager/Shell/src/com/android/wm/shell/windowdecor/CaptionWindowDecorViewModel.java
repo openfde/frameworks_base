@@ -415,6 +415,10 @@ public class CaptionWindowDecorViewModel implements WindowDecorViewModel, FocusT
                 mTaskOperations.minimizeTask(mTaskToken, mTaskId, /* isLastTask= */ false);
             } else if (id == R.id.maximize_window) {
                 RunningTaskInfo taskInfo = mTaskOrganizer.getRunningTaskInfo(mTaskId);
+                if (!taskInfo.isAdjust) {
+                    // Fixed-size windows (isAdjust=false in the manifest) cannot be maximized.
+                    return;
+                }
                 final DisplayAreaInfo rootDisplayAreaInfo =
                         mRootTaskDisplayAreaOrganizer.getDisplayAreaInfo(taskInfo.displayId);
                 mTaskOperations.maximizeTask(taskInfo,

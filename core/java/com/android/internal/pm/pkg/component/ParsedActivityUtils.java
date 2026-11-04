@@ -652,14 +652,37 @@ public class ParsedActivityUtils {
                 }
             }
 
+            int complexMaxWidth = -1;
+            final int maxWidthType = sw.getType(R.styleable.AndroidManifestLayout_maxWidth);
+            if (maxWidthType == TypedValue.TYPE_DIMENSION) {
+                final TypedValue vOut =
+                        sw.peekValue(R.styleable.AndroidManifestLayout_maxWidth);
+                if (vOut != null) {
+                    complexMaxWidth = vOut.data;
+                }
+            }
+
+            int complexMaxHeight = -1;
+            final int maxHeightType = sw.getType(R.styleable.AndroidManifestLayout_maxHeight);
+            if (maxHeightType == TypedValue.TYPE_DIMENSION) {
+                final TypedValue vOut =
+                        sw.peekValue(R.styleable.AndroidManifestLayout_maxHeight);
+                if (vOut != null) {
+                    complexMaxHeight = vOut.data;
+                }
+            }
+
+            final boolean isAdjust =
+                    sw.getBoolean(R.styleable.AndroidManifestLayout_isAdjust, true);
+
             String windowLayoutAffinity =
                     sw.getNonConfigurationString(
                             R.styleable.AndroidManifestLayout_windowLayoutAffinity, 0);
 
             final ActivityInfo.WindowLayout windowLayout = new ActivityInfo.WindowLayout(
                     complexWidth, widthFraction, complexHeight, heightFraction, gravity,
-                    complexMinWidth, complexMinHeight, windowLayoutAffinity,
-                    res.getDisplayMetrics());
+                    complexMinWidth, complexMinHeight, complexMaxWidth, complexMaxHeight,
+                    isAdjust, windowLayoutAffinity, res.getDisplayMetrics());
             return input.success(windowLayout);
         } finally {
             sw.recycle();

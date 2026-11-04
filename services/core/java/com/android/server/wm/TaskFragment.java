@@ -233,6 +233,42 @@ class TaskFragment extends WindowContainer<WindowContainer> {
      */
     protected int mComplexMinHeight;
 
+    /**
+     * @deprecated Use {@link #getMaxWidth} instead.
+     * Maximum width of this task fragment when it's resizeable. {@link #INVALID_MIN_SIZE} means
+     * the window can grow as large as the parent allows.
+     */
+    @Deprecated
+    protected int mMaxWidth = INVALID_MIN_SIZE;
+
+    /**
+     * @deprecated Use {@link #getMaxHeight} instead.
+     * Maximum height of this task fragment when it's resizeable. {@link #INVALID_MIN_SIZE} means
+     * the window can grow as large as the parent allows.
+     */
+    @Deprecated
+    protected int mMaxHeight = INVALID_MIN_SIZE;
+
+    /**
+     * Maximum width of this task fragment when it's resizeable. {@link #INVALID_MIN_SIZE} means
+     * the window can grow as large as the parent allows.
+     * Use {@link TaskFragment#getMaxWidth} to resolve it to a pixel value.
+     */
+    protected int mComplexMaxWidth = INVALID_MIN_SIZE;
+
+    /**
+     * Maximum height of this task fragment when it's resizeable. {@link #INVALID_MIN_SIZE} means
+     * the window can grow as large as the parent allows.
+     * Use {@link TaskFragment#getMaxHeight} to resolve it to a pixel value.
+     */
+    protected int mComplexMaxHeight = INVALID_MIN_SIZE;
+
+    /**
+     * Whether the user is allowed to adjust the width and height of the task (i.e. resize it).
+     * When {@code false}, the task is treated as fixed-size.
+     */
+    protected boolean mIsAdjust = true;
+
     final Dimmer mDimmer = new Dimmer(this);
 
     /** Apply the dim layer on the embedded TaskFragment. */
@@ -3013,6 +3049,59 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                         mComplexMinHeight,
                         getDisplayContent().getDisplayMetrics()
                 );
+    }
+
+    /**
+     * Sets the maximum dimensions and whether the user is allowed to adjust (resize) the task, as
+     * described by the activity's window layout.
+     *
+     * @see #getMaxWidth
+     * @see #getMaxHeight
+     * @see #isAdjust
+     */
+    void setMaxDimensions(int maxWidth, int maxHeight, int complexMaxWidth, int complexMaxHeight,
+            boolean isAdjust) {
+        mMaxWidth = maxWidth;
+        mMaxHeight = maxHeight;
+        mComplexMaxWidth = complexMaxWidth;
+        mComplexMaxHeight = complexMaxHeight;
+        mIsAdjust = isAdjust;
+    }
+
+    int getMaxWidth() {
+        if (!Flags.runtimeDensityResolutionForWindowLayoutBugfix()) {
+            return mMaxWidth;
+        }
+        return getDisplayContent() == null
+                ? INVALID_MIN_SIZE
+                : TypedValue.complexToDimensionPixelSize(
+                        mComplexMaxWidth,
+                        getDisplayContent().getDisplayMetrics()
+                );
+    }
+
+    int getMaxHeight() {
+        if (!Flags.runtimeDensityResolutionForWindowLayoutBugfix()) {
+            return mMaxHeight;
+        }
+        return getDisplayContent() == null
+                ? INVALID_MIN_SIZE
+                : TypedValue.complexToDimensionPixelSize(
+                        mComplexMaxHeight,
+                        getDisplayContent().getDisplayMetrics()
+                );
+    }
+
+    int getComplexMaxWidth() {
+        return mComplexMaxWidth;
+    }
+
+    int getComplexMaxHeight() {
+        return mComplexMaxHeight;
+    }
+
+    boolean isAdjust() {
+        return mIsAdjust;
     }
 
     /**

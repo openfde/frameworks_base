@@ -1247,6 +1247,8 @@ UnflaggedApi: android.R.dimen#system_corner_radius_xlarge:
     New API must be flagged with @FlaggedApi: field android.R.dimen.system_corner_radius_xlarge
 UnflaggedApi: android.R.dimen#system_corner_radius_xsmall:
     New API must be flagged with @FlaggedApi: field android.R.dimen.system_corner_radius_xsmall
+UnflaggedApi: android.R.attr#isAdjust:
+    New API must be flagged with @FlaggedApi: field android.R.attr.isAdjust
 UnflaggedApi: android.accessibilityservice.AccessibilityService#OVERLAY_RESULT_INTERNAL_ERROR:
     New API must be flagged with @FlaggedApi: field android.accessibilityservice.AccessibilityService.OVERLAY_RESULT_INTERNAL_ERROR
 UnflaggedApi: android.accessibilityservice.AccessibilityService#OVERLAY_RESULT_INVALID:
@@ -1437,6 +1439,8 @@ UnflaggedApi: android.content.Intent#EXTRA_ARCHIVAL:
     New API must be flagged with @FlaggedApi: field android.content.Intent.EXTRA_ARCHIVAL
 UnflaggedApi: android.content.om.FabricatedOverlay#setResourceValue(String, android.content.res.AssetFileDescriptor, String):
     New API must be flagged with @FlaggedApi: method android.content.om.FabricatedOverlay.setResourceValue(String,android.content.res.AssetFileDescriptor,String)
+UnflaggedApi: android.content.pm.ActivityInfo.WindowLayout#isAdjust:
+    New API must be flagged with @FlaggedApi: field android.content.pm.ActivityInfo.WindowLayout.isAdjust
 UnflaggedApi: android.content.pm.PackageManager#FEATURE_THREAD_NETWORK:
     New API must be flagged with @FlaggedApi: field android.content.pm.PackageManager.FEATURE_THREAD_NETWORK
 UnflaggedApi: android.database.sqlite.SQLiteDatabase#beginTransactionReadOnly():

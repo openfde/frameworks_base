@@ -61,5 +61,6 @@ fun TaskInfo.isDragResizable(inFullImmersive: Boolean): Boolean =
         // Task cannot be resized in full immersive.
         false
     } else {
-        isFreeform && isVisibleRequested
+        // Fixed-size windows (android:isAdjust="false") are not drag resizeable.
+        isFreeform && isVisibleRequested && isAdjust
     }

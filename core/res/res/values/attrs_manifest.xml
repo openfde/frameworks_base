@@ -4329,6 +4329,22 @@
          will also ignore any other minimal height attributes of non-root activities. -->
         <attr name="minHeight" />
 
+        <!-- Maximum width of the activity. If set, the window will never grow wider than this
+             value, on initial layout or on any later user resize. Honor the {@link #isAdjust}
+             attribute when combined with a fixed-size window. -->
+        <attr name="maxWidth" />
+        <!-- Maximum height of the activity. If set, the window will never grow taller than this
+             value, on initial layout or on any later user resize. Honor the {@link #isAdjust}
+             attribute when combined with a fixed-size window. -->
+        <attr name="maxHeight" />
+        <!-- Whether the user is allowed to adjust the width and height of the window (i.e. resize
+             it). Defaults to {@code true}.
+
+             <p>When {@code false}, the window is treated as fixed-size: the title bar maximize and
+             fullscreen buttons are disabled, double-clicking the title bar to maximize is
+             disabled, and dragging with the mouse to resize the window is not allowed. -->
+        <attr name="isAdjust" format="boolean" />
+
         <!-- Window layout affinity of this activity. Activities with the same window layout
           affinity will share the same layout record. That is, if a user is opening an activity in
           a new task on a display that can host freeform windows, and the user had opened a task

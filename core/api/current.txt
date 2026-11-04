@@ -1060,6 +1060,7 @@ package android {
     field public static final int interpolator = 16843073; // 0x1010141
     field public static final int intro = 16844395; // 0x101066b
     field public static final int isAccessibilityTool = 16844353; // 0x1010641
+    field public static final int isAdjust = 16844476; // 0x10106bc
     field public static final int isAlwaysSyncable = 16843571; // 0x1010333
     field public static final int isAsciiCapable = 16843753; // 0x10103e9
     field public static final int isAuxiliary = 16843647; // 0x101037f
@@ -13408,6 +13409,9 @@ package android.content.pm {
     field public final int gravity;
     field @Deprecated @FlaggedApi("com.android.window.flags.runtime_density_resolution_for_window_layout") public final int height;
     field public final float heightFraction;
+    field public final boolean isAdjust;
+    field @Deprecated @FlaggedApi("com.android.window.flags.runtime_density_resolution_for_window_layout") public final int maxHeight;
+    field @Deprecated @FlaggedApi("com.android.window.flags.runtime_density_resolution_for_window_layout") public final int maxWidth;
     field @Deprecated @FlaggedApi("com.android.window.flags.runtime_density_resolution_for_window_layout") public final int minHeight;
     field @Deprecated @FlaggedApi("com.android.window.flags.runtime_density_resolution_for_window_layout") public final int minWidth;
     field @Deprecated @FlaggedApi("com.android.window.flags.runtime_density_resolution_for_window_layout") public final int width;

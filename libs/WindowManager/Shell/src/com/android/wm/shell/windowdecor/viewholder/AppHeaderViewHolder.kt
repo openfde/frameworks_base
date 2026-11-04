@@ -748,6 +748,11 @@ class AppHeaderViewHolder(
             closeWindowButton.visibility = View.VISIBLE
             minimizeWindowButton.visibility = View.VISIBLE
         }
+        // Non-adjustable windows (android:isAdjust="false" in the manifest) have a fixed
+        // size, so the maximize/restore button must be hidden.
+        if (!taskInfo.isAdjust) {
+            maximizeButtonView.visibility = View.GONE
+        }
     }
 
     private fun shouldAddAppName(headerType: Header.Type): Boolean {

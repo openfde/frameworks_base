@@ -118,8 +118,6 @@ class LaunchParamsUtil {
         // Aspect ratio requirements.
         final float minAspectRatio = activityRecord.getMinAspectRatio();
         final float maxAspectRatio = activityRecord.info.getMaxAspectRatio();
-
-        // Adjust the width and height to the aspect ratio requirements.
         int adjWidth = width;
         int adjHeight = height;
         if (minAspectRatio >= 1 && aspectRatio < minAspectRatio) {
@@ -140,6 +138,17 @@ class LaunchParamsUtil {
                 // Fix the height, scale the width.
                 adjWidth = (int) (adjHeight / maxAspectRatio + 0.5f);
             }
+        }
+
+        // Maximum layout requirements from the manifest.
+        final DisplayMetrics maxMetrics = displayArea.getDisplayContent().getDisplayMetrics();
+        final int layoutMaxWidth = (layout == null) ? -1 : layout.getMaxWidth(maxMetrics);
+        final int layoutMaxHeight = (layout == null) ? -1 : layout.getMaxHeight(maxMetrics);
+        if (layoutMaxWidth > 0) {
+            adjWidth = Math.min(adjWidth, layoutMaxWidth);
+        }
+        if (layoutMaxHeight > 0) {
+            adjHeight = Math.min(adjHeight, layoutMaxHeight);
         }
 
         return new Size(adjWidth, adjHeight);
@@ -245,6 +254,17 @@ class LaunchParamsUtil {
             height = defaultHeight;
         } else if (windowLayout.heightFraction > 0 && windowLayout.heightFraction < 1.0f) {
             height = (int) (stableParentHeight * windowLayout.heightFraction);
+        }
+
+        // Clamp to the maximum width/height specified in the manifest so that the window never
+        // exceeds its declared maximum size at launch.
+        final int maxWidth = windowLayout.getMaxWidth(displayMetrics);
+        if (maxWidth > 0) {
+            width = Math.min(width, maxWidth);
+        }
+        final int maxHeight = windowLayout.getMaxHeight(displayMetrics);
+        if (maxHeight > 0) {
+            height = Math.min(height, maxHeight);
         }
 
         inOutBounds.set(0, 0, width, height);

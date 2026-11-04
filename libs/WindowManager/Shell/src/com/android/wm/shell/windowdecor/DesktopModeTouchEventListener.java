@@ -211,6 +211,11 @@ public class DesktopModeTouchEventListener
                 mWindowDecorationActions.onOpenHandleMenu(mTaskId);
             }
         } else if (id == R.id.maximize_window) {
+            if (!decoration.getTaskInfo().isAdjust) {
+                // Maximize/restore is disabled for non-adjustable windows
+                // (android:isAdjust="false" in the manifest).
+                return;
+            }
             // TODO(b/346441962): move click detection logic into the decor's
             //  {@link AppHeaderViewHolder}. Let it encapsulate the that and have it report
             //  back to the decoration using
@@ -795,9 +800,18 @@ public class DesktopModeTouchEventListener
                 && action != MotionEvent.ACTION_CANCEL)) {
             return false;
         }
+        final WindowDecorationWrapper decoration = mWindowDecorationFinder.apply(mTaskId);
+        if (decoration == null) {
+            return false;
+        }
         final DesktopRepository desktopRepository = mDesktopUserRepositories.getCurrent();
         if (desktopRepository.isTaskInFullImmersiveState(mTaskId)) {
             // Disallow double-tap to resize when in full immersive.
+            return false;
+        }
+        if (!decoration.getTaskInfo().isAdjust) {
+            // Disallow double-tap to maximize/restore when the window is not adjustable
+            // (android:isAdjust="false" in the manifest).
             return false;
         }
         mWindowDecorationActions.onMaximizeOrRestore(mTaskId,

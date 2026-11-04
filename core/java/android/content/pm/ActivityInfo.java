@@ -2537,6 +2537,9 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
      * @attr ref android.R.styleable#AndroidManifestLayout_gravity
      * @attr ref android.R.styleable#AndroidManifestLayout_minWidth
      * @attr ref android.R.styleable#AndroidManifestLayout_minHeight
+     * @attr ref android.R.styleable#AndroidManifestLayout_maxWidth
+     * @attr ref android.R.styleable#AndroidManifestLayout_maxHeight
+     * @attr ref android.R.styleable#AndroidManifestLayout_isAdjust
      */
     public static final class WindowLayout {
 
@@ -2550,7 +2553,9 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
                 -1 /* width */, -1 /* complexWidth */, -1f /* widthFraction */,
                 -1 /* height */, -1 /* complexHeight */, -1f /* heightFraction */,
                 Gravity.NO_GRAVITY, -1 /* minWidth */, -1 /* complexMinWidth */,
-                -1 /* minHeight */, -1 /* complexMinHeight */, null /* windowLayoutAffinity */);
+                -1 /* minHeight */, -1 /* complexMinHeight */, -1 /* maxWidth */,
+                -1 /* complexMaxWidth */, -1 /* maxHeight */, -1 /* complexMaxHeight */,
+                true /* isAdjust */, null /* windowLayoutAffinity */);
 
         /**
          * Creates a new WindowLayout instance with the specified dimensions and constraints.
@@ -2573,7 +2578,9 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
                     TypedValue.createComplexDimension(minWidth, TypedValue.COMPLEX_UNIT_PX),
                     minHeight,
                     TypedValue.createComplexDimension(minHeight, TypedValue.COMPLEX_UNIT_PX),
-                    null /* windowLayoutAffinity */);
+                    -1 /* maxWidth */, -1 /* complexMaxWidth */,
+                    -1 /* maxHeight */, -1 /* complexMaxHeight */,
+                    true /* isAdjust */, null /* windowLayoutAffinity */);
         }
 
         /** @hide */
@@ -2584,12 +2591,29 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
                     complexToDimensionPixelSize(complexHeight, metrics), complexHeight,
                     heightFraction, gravity, complexToDimensionPixelSize(complexMinWidth, metrics),
                     complexMinWidth, complexToDimensionPixelSize(complexMinHeight, metrics),
-                    complexMinHeight, windowLayoutAffinity);
+                    complexMinHeight, -1 /* maxWidth */, -1 /* complexMaxWidth */,
+                    -1 /* maxHeight */, -1 /* complexMaxHeight */, true /* isAdjust */,
+                    windowLayoutAffinity);
+        }
+
+        /** @hide */
+        public WindowLayout(int complexWidth, float widthFraction, int complexHeight,
+                float heightFraction, int gravity, int complexMinWidth, int complexMinHeight,
+                int complexMaxWidth, int complexMaxHeight, boolean isAdjust,
+                @Nullable String windowLayoutAffinity, @Nullable DisplayMetrics metrics) {
+            this(complexToDimensionPixelSize(complexWidth, metrics), complexWidth, widthFraction,
+                    complexToDimensionPixelSize(complexHeight, metrics), complexHeight,
+                    heightFraction, gravity, complexToDimensionPixelSize(complexMinWidth, metrics),
+                    complexMinWidth, complexToDimensionPixelSize(complexMinHeight, metrics),
+                    complexMinHeight, complexToDimensionPixelSize(complexMaxWidth, metrics),
+                    complexMaxWidth, complexToDimensionPixelSize(complexMaxHeight, metrics),
+                    complexMaxHeight, isAdjust, windowLayoutAffinity);
         }
 
         private WindowLayout(int width, int complexWidth, float widthFraction, int height,
                 int complexHeight, float heightFraction, int gravity, int minWidth,
-                int complexMinWidth, int minHeight, int complexMinHeight,
+                int complexMinWidth, int minHeight, int complexMinHeight, int maxWidth,
+                int complexMaxWidth, int maxHeight, int complexMaxHeight, boolean isAdjust,
                 @Nullable String windowLayoutAffinity) {
             this.width = width;
             this.complexWidth = complexWidth;
@@ -2602,6 +2626,11 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
             this.complexMinWidth = complexMinWidth;
             this.minHeight = minHeight;
             this.complexMinHeight = complexMinHeight;
+            this.maxWidth = maxWidth;
+            this.complexMaxWidth = complexMaxWidth;
+            this.maxHeight = maxHeight;
+            this.complexMaxHeight = complexMaxHeight;
+            this.isAdjust = isAdjust;
             this.windowLayoutAffinity = windowLayoutAffinity;
         }
 
@@ -2619,6 +2648,11 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
             minHeight = source.readInt();
             complexMinHeight = source.readInt();
             windowLayoutAffinity = source.readString8();
+            maxWidth = source.readInt();
+            complexMaxWidth = source.readInt();
+            maxHeight = source.readInt();
+            complexMaxHeight = source.readInt();
+            isAdjust = source.readBoolean();
         }
 
         /**
@@ -2737,6 +2771,60 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
         private final int complexMinHeight;
 
         /**
+         * Maximum width of activity in pixels. If set, the window will never grow wider than
+         * this value, on initial layout or on any later user resize.
+         *
+         * @attr ref android.R.styleable#AndroidManifestLayout_maxWidth
+         * @deprecated This field contains the pixel value resolved at install time using the
+         * default device density. It does not reflect the actual constraint on displays with
+         * different densities (e.g. external monitors). The system automatically enforces the
+         * correct constraints at runtime based on the current display context. Do not use this
+         * value for manual layout calculations.
+         */
+        @Deprecated
+        @FlaggedApi(Flags.FLAG_RUNTIME_DENSITY_RESOLUTION_FOR_WINDOW_LAYOUT)
+        public final int maxWidth;
+
+        /**
+         * Holds the maximum width in complex units to support runtime density updates.
+         * The value is resolved to pixels in {@link #getMaxWidth(DisplayMetrics)}.
+         */
+        private final int complexMaxWidth;
+
+        /**
+         * Maximum height of activity in pixels. If set, the window will never grow taller than
+         * this value, on initial layout or on any later user resize.
+         *
+         * @attr ref android.R.styleable#AndroidManifestLayout_maxHeight
+         * @deprecated This field contains the pixel value resolved at install time using the
+         * default device density. It does not reflect the actual constraint on displays with
+         * different densities (e.g. external monitors). The system automatically enforces the
+         * correct constraints at runtime based on the current display context. Do not use this
+         * value for manual layout calculations.
+         */
+        @Deprecated
+        @FlaggedApi(Flags.FLAG_RUNTIME_DENSITY_RESOLUTION_FOR_WINDOW_LAYOUT)
+        public final int maxHeight;
+
+        /**
+         * Holds the maximum height in complex units to support runtime density updates.
+         * The value is resolved to pixels in {@link #getMaxHeight(DisplayMetrics)}.
+         */
+        private final int complexMaxHeight;
+
+        /**
+         * Whether the user is allowed to adjust the width and height of the window (i.e. resize
+         * it). Defaults to {@code true}.
+         *
+         * <p>When {@code false}, the window is treated as fixed-size: the title bar maximize and
+         * fullscreen buttons are disabled, double-clicking the title bar to maximize is disabled,
+         * and dragging with the mouse to resize the window is not allowed.
+         *
+         * @attr ref android.R.styleable#AndroidManifestLayout_isAdjust
+         */
+        public final boolean isAdjust;
+
+        /**
          * Affinity of window layout parameters. Activities with the same UID and window layout
          * affinity will share the same window dimension record.
          *
@@ -2814,6 +2902,66 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
         }
 
         /**
+         * Returns the maximum width of the window in pixels.
+         *
+         * @param metrics The display metrics used to resolve the complex dimension.
+         * @return The maximum width of the window in pixels.
+         * @hide
+         */
+        public int getMaxWidth(@NonNull DisplayMetrics metrics) {
+            if (!Flags.runtimeDensityResolutionForWindowLayoutBugfix()) {
+                return this.maxWidth;
+            }
+
+            return complexToDimensionPixelSize(complexMaxWidth, metrics);
+        }
+
+        /**
+         * Returns the maximum height of the window in pixels.
+         *
+         * @param metrics The display metrics used to resolve the complex dimension.
+         * @return The maximum height of the window in pixels.
+         * @hide
+         */
+        public int getMaxHeight(@NonNull DisplayMetrics metrics) {
+            if (!Flags.runtimeDensityResolutionForWindowLayoutBugfix()) {
+                return this.maxHeight;
+            }
+
+            return complexToDimensionPixelSize(complexMaxHeight, metrics);
+        }
+
+        /**
+         * Returns whether the user is allowed to adjust the width and height of the window.
+         *
+         * @return {@code true} if the window size may be adjusted, {@code false} otherwise.
+         * @hide
+         */
+        public boolean isAdjust() {
+            return isAdjust;
+        }
+
+        /**
+         * Returns the maximum width of the window in complex format.
+         *
+         * @return The maximum width of the window in complex format.
+         * @hide
+         */
+        public int getComplexMaxWidth() {
+            return complexMaxWidth;
+        }
+
+        /**
+         * Returns the maximum height of the window in complex format.
+         *
+         * @return The maximum height of the window in complex format.
+         * @hide
+         */
+        public int getComplexMaxHeight() {
+            return complexMaxHeight;
+        }
+
+        /**
          * Returns the minimum width of the window in complex format.
          *
          * @return The minimum width of the window in complex format.
@@ -2853,6 +3001,11 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
             dest.writeInt(minHeight);
             dest.writeInt(complexMinHeight);
             dest.writeString8(windowLayoutAffinity);
+            dest.writeInt(maxWidth);
+            dest.writeInt(complexMaxWidth);
+            dest.writeInt(maxHeight);
+            dest.writeInt(complexMaxHeight);
+            dest.writeBoolean(isAdjust);
         }
     }
 }

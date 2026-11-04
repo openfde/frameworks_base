@@ -862,7 +862,9 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
             // Task cannot be resized in full immersive.
             return false;
         }
-        return taskInfo.isFreeform();
+        // Window is not resizeable when isAdjust is set to false in the manifest; in that case
+        // the decorated task keeps a fixed size.
+        return taskInfo.isFreeform() && taskInfo.isAdjust;
     }
 
     private void notifyCaptionStateChanged() {

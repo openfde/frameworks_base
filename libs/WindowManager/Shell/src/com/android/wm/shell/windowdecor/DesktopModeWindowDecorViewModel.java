@@ -937,6 +937,11 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         }
 
         final RunningTaskInfo taskInfo = decoration.getTaskInfo();
+        if (!taskInfo.isAdjust) {
+            // Non-adjustable windows (android:isAdjust="false") have a fixed size, so
+            // maximize/restore is not allowed.
+            return;
+        }
         final int displayId = taskInfo.displayId;
         final DisplayLayout displayLayout = mDisplayController.getDisplayLayout(displayId);
 

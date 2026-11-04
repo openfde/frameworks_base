@@ -4848,10 +4848,32 @@ public class PackageParser {
                 complexMinHeight = vOut.data;
             }
         }
+
+        int complexMaxWidth = -1;
+        final int maxWidthType = sw.getType(R.styleable.AndroidManifestLayout_maxWidth);
+        if (maxWidthType == TypedValue.TYPE_DIMENSION) {
+            final TypedValue vOut = sw.peekValue(R.styleable.AndroidManifestLayout_maxWidth);
+            if (vOut != null) {
+                complexMaxWidth = vOut.data;
+            }
+        }
+
+        int complexMaxHeight = -1;
+        final int maxHeightType = sw.getType(R.styleable.AndroidManifestLayout_maxHeight);
+        if (maxHeightType == TypedValue.TYPE_DIMENSION) {
+            final TypedValue vOut = sw.peekValue(R.styleable.AndroidManifestLayout_maxHeight);
+            if (vOut != null) {
+                complexMaxHeight = vOut.data;
+            }
+        }
+
+        final boolean isAdjust = sw.getBoolean(
+                R.styleable.AndroidManifestLayout_isAdjust, true);
         sw.recycle();
         a.info.windowLayout = new ActivityInfo.WindowLayout(complexWidth, widthFraction,
                 complexHeight, heightFraction, gravity, complexMinWidth, complexMinHeight,
-                null /* windowLayoutAffinity */, res.getDisplayMetrics());
+                complexMaxWidth, complexMaxHeight, isAdjust, null /* windowLayoutAffinity */,
+                res.getDisplayMetrics());
     }
 
     /**

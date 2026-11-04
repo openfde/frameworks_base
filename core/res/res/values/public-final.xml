@@ -1400,6 +1400,7 @@
   <public type="attr" name="segmentedButtonStyle" id="0x01010330" />
   <public type="attr" name="staticWallpaperPreview" id="0x01010331" />
   <public type="attr" name="allowParallelSyncs" id="0x01010332" />
+  <public type="attr" name="isAdjust" id="0x010106bc" />
   <public type="attr" name="isAlwaysSyncable" id="0x01010333" />
   <public type="attr" name="verticalScrollbarPosition" id="0x01010334" />
   <public type="attr" name="fastScrollAlwaysVisible" id="0x01010335" />

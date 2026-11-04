@@ -360,9 +360,9 @@ public class CaptionWindowDecoration extends WindowDecoration<WindowDecorLinearL
 
         bindData(mResult.mRootView, taskInfo);
 
-        if (!taskInfo.isFreeform()) {
+        if (!taskInfo.isFreeform() || !taskInfo.isAdjust) {
             // Non-freeform tasks are not drag resizeable and thus the drag resize listener can be
-            // closed.
+            // closed. Fixed-size tasks (isAdjust=false) disable mouse drag-to-resize as well.
             closeDragResizeListener();
             return;
         }
@@ -441,6 +441,10 @@ public class CaptionWindowDecoration extends WindowDecoration<WindowDecorLinearL
     private void bindData(View rootView, RunningTaskInfo taskInfo) {
         // Set up the tint first so that the drawable can be stylized when loaded.
         setupCaptionColor(taskInfo);
+
+        // Hide the maximize button for fixed-size windows (isAdjust=false).
+        rootView.findViewById(R.id.maximize_window)
+                .setVisibility(taskInfo.isAdjust ? View.VISIBLE : View.GONE);
 
         final boolean isFullscreen =
                 taskInfo.getWindowingMode() == WindowConfiguration.WINDOWING_MODE_FULLSCREEN;

@@ -709,7 +709,8 @@ class Task extends TaskFragment {
             int nextTaskId, int callingUid, String callingPackage,
             @Nullable String callingFeatureId, int resizeMode, boolean supportsPictureInPicture,
             boolean realActivitySuspended, boolean userSetupComplete, int minWidth, int minHeight,
-            int complexMinWidth, int complexMinHeight, @Nullable ActivityInfo info,
+            int complexMinWidth, int complexMinHeight, int maxWidth, int maxHeight,
+            int complexMaxWidth, int complexMaxHeight, boolean isAdjust, @Nullable ActivityInfo info,
             @Nullable IVoiceInteractionSession voiceSession, IVoiceInteractor voiceInteractor,
             boolean createdByOrganizer, IBinder launchCookie, boolean deferTaskAppear,
             boolean removeWithTaskOrganizer, boolean isForceOpaque, boolean shouldIgnoreInsets,
@@ -756,6 +757,11 @@ class Task extends TaskFragment {
             mMinHeight = minHeight;
             mComplexMinWidth = complexMinWidth;
             mComplexMinHeight = complexMinHeight;
+            mMaxWidth = maxWidth;
+            mMaxHeight = maxHeight;
+            mComplexMaxWidth = complexMaxWidth;
+            mComplexMaxHeight = complexMaxHeight;
+            mIsAdjust = isAdjust;
         }
         mAtmService.getTaskChangeNotificationController().notifyTaskCreated(taskId, realActivity);
         mHandler = new ActivityTaskHandler(mTaskSupervisor.mLooper);
@@ -1161,25 +1167,43 @@ class Task extends TaskFragment {
         final int minHeight;
         final int complexMinWidth;
         final int complexMinHeight;
+        final int maxWidth;
+        final int maxHeight;
+        final int complexMaxWidth;
+        final int complexMaxHeight;
+        final boolean isAdjust;
         if (info != null && info.windowLayout != null) {
             minWidth = info.windowLayout.minWidth;
             minHeight = info.windowLayout.minHeight;
             complexMinWidth = info.windowLayout.getComplexMinWidth();
             complexMinHeight = info.windowLayout.getComplexMinHeight();
+            maxWidth = info.windowLayout.maxWidth;
+            maxHeight = info.windowLayout.maxHeight;
+            complexMaxWidth = info.windowLayout.getComplexMaxWidth();
+            complexMaxHeight = info.windowLayout.getComplexMaxHeight();
+            isAdjust = info.windowLayout.isAdjust();
         } else {
             minWidth = INVALID_MIN_SIZE;
             minHeight = INVALID_MIN_SIZE;
             complexMinWidth = INVALID_MIN_SIZE;
             complexMinHeight = INVALID_MIN_SIZE;
+            maxWidth = INVALID_MIN_SIZE;
+            maxHeight = INVALID_MIN_SIZE;
+            complexMaxWidth = INVALID_MIN_SIZE;
+            complexMaxHeight = INVALID_MIN_SIZE;
+            isAdjust = true;
         }
 
         if (!Flags.runtimeDensityResolutionForWindowLayoutBugfix() && mMinWidth == minWidth
-                && mMinHeight == minHeight) {
+                && mMinHeight == minHeight && mMaxWidth == maxWidth && mMaxHeight == maxHeight
+                && mIsAdjust == isAdjust) {
             return false;
         }
 
         if (Flags.runtimeDensityResolutionForWindowLayoutBugfix()
-                && mComplexMinWidth == complexMinWidth && mComplexMinHeight == complexMinHeight) {
+                && mComplexMinWidth == complexMinWidth && mComplexMinHeight == complexMinHeight
+                && mComplexMaxWidth == complexMaxWidth
+                && mComplexMaxHeight == complexMaxHeight && mIsAdjust == isAdjust) {
             return false;
         }
 
@@ -1187,10 +1211,17 @@ class Task extends TaskFragment {
         mMinHeight = minHeight;
         mComplexMinWidth = complexMinWidth;
         mComplexMinHeight = complexMinHeight;
+        mMaxWidth = maxWidth;
+        mMaxHeight = maxHeight;
+        mComplexMaxWidth = complexMaxWidth;
+        mComplexMaxHeight = complexMaxHeight;
+        mIsAdjust = isAdjust;
         // Only update for pure TaskFragment.
         forAllTaskFragments(tf -> {
             if (tf.asTask() == null) {
                 tf.setMinDimensions(minWidth, minHeight, complexMinWidth, complexMinHeight);
+                tf.setMaxDimensions(maxWidth, maxHeight, complexMaxWidth, complexMaxHeight,
+                        isAdjust);
             }
         });
         return true;
@@ -3067,6 +3098,36 @@ class Task extends TaskFragment {
             return boundsChange;
         }
 
+        if (bounds != null && !bounds.isEmpty() && inFreeformWindowingMode() && isLeafTask()) {
+            // Enforce the maximum size declared in the manifest so the window can never grow
+            // beyond it, and keep the window fixed-size when isAdjust is false.
+            final Rect sanitized = new Rect(bounds);
+            final int maxWidth = getMaxWidth();
+            final int maxHeight = getMaxHeight();
+            if (!mIsAdjust) {
+                // Fixed-size window: only allow repositioning, never resize. The window keeps its
+                // current size, capped by the declared maximum. When the current bounds are not
+                // set yet (e.g. first launch), keep the requested bounds as the fixed size.
+                final Rect currentBounds = getBounds();
+                if (!currentBounds.isEmpty()) {
+                    int fixedWidth = currentBounds.width();
+                    int fixedHeight = currentBounds.height();
+                    if (maxWidth > 0) fixedWidth = Math.min(fixedWidth, maxWidth);
+                    if (maxHeight > 0) fixedHeight = Math.min(fixedHeight, maxHeight);
+                    sanitized.right = sanitized.left + fixedWidth;
+                    sanitized.bottom = sanitized.top + fixedHeight;
+                }
+            } else {
+                if (maxWidth > 0 && sanitized.width() > maxWidth) {
+                    sanitized.right = sanitized.left + maxWidth;
+                }
+                if (maxHeight > 0 && sanitized.height() > maxHeight) {
+                    sanitized.bottom = sanitized.top + maxHeight;
+                }
+            }
+            bounds = sanitized;
+        }
+
         if (!Flags.idempotentWctResolution()) {
             if (!isOverrideBoundsAllowed() && bounds != null && !bounds.isEmpty()) {
                 Slog.w(TAG, "Not allowed to set override bounds " + bounds + " for " + this);
@@ -3551,6 +3612,9 @@ class Task extends TaskFragment {
         //  and {@Link TaskInfo#minHeight}.
         info.minWidth = getMinWidth();
         info.minHeight = getMinHeight();
+        info.maxWidth = getMaxWidth();
+        info.maxHeight = getMaxHeight();
+        info.isAdjust = isAdjust();
         info.defaultMinSize = mDisplayContent == null
                 ? DEFAULT_MIN_TASK_SIZE_DP : mDisplayContent.mMinSizeOfResizeableTaskDp;
         info.positionInParent = getRelativePosition();
@@ -6958,6 +7022,11 @@ class Task extends TaskFragment {
         private int mMinHeight = INVALID_MIN_SIZE;
         private int mComplexMinWidth = INVALID_MIN_SIZE;
         private int mComplexMinHeight = INVALID_MIN_SIZE;
+        private int mMaxWidth = INVALID_MIN_SIZE;
+        private int mMaxHeight = INVALID_MIN_SIZE;
+        private int mComplexMaxWidth = INVALID_MIN_SIZE;
+        private int mComplexMaxHeight = INVALID_MIN_SIZE;
+        private boolean mIsAdjust = true;
         private ActivityInfo mActivityInfo;
         private ActivityOptions mActivityOptions;
         private IVoiceInteractionSession mVoiceSession;
@@ -7046,6 +7115,31 @@ class Task extends TaskFragment {
 
         Builder setComplexMinHeight(int complexMinHeight) {
             mComplexMinHeight = complexMinHeight;
+            return this;
+        }
+
+        Builder setMaxWidth(int maxWidth) {
+            mMaxWidth = maxWidth;
+            return this;
+        }
+
+        Builder setMaxHeight(int maxHeight) {
+            mMaxHeight = maxHeight;
+            return this;
+        }
+
+        Builder setComplexMaxWidth(int complexMaxWidth) {
+            mComplexMaxWidth = complexMaxWidth;
+            return this;
+        }
+
+        Builder setComplexMaxHeight(int complexMaxHeight) {
+            mComplexMaxHeight = complexMaxHeight;
+            return this;
+        }
+
+        Builder setIsAdjust(boolean isAdjust) {
+            mIsAdjust = isAdjust;
             return this;
         }
 
@@ -7392,7 +7486,8 @@ class Task extends TaskFragment {
                     mTaskAffiliation, mPrevAffiliateTaskId, mNextAffiliateTaskId, mCallingUid,
                     mCallingPackage, mCallingFeatureId, mResizeMode, mSupportsPictureInPicture,
                     mRealActivitySuspended, mUserSetupComplete, mMinWidth, mMinHeight,
-                    mComplexMinWidth, mComplexMinHeight, mActivityInfo, mVoiceSession,
+                    mComplexMinWidth, mComplexMinHeight, mMaxWidth, mMaxHeight, mComplexMaxWidth,
+                    mComplexMaxHeight, mIsAdjust, mActivityInfo, mVoiceSession,
                     mVoiceInteractor, mCreatedByOrganizer, mLaunchCookie, mDeferTaskAppear,
                     mRemoveWithTaskOrganizer, mIsForceOpaque, mShouldIgnoreInsets,
                     mDisableAppCompatRoundedCorners, mRealActivityAppLockEnabled,
