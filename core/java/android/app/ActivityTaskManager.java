@@ -338,6 +338,12 @@ public class ActivityTaskManager {
         }
     }
 
+    /**
+     * Resize task to given bounds.
+     * @param taskId Id of task to resize.
+     * @param bounds Bounds to resize task.
+     */
+    @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS)
     public void resizeTask(int taskId, Rect bounds) {
         try {
             getService().resizeTask(taskId, bounds, RESIZE_MODE_SYSTEM);
