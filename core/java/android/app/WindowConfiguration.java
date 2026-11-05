@@ -461,6 +461,11 @@ public class WindowConfiguration implements Parcelable, Comparable<WindowConfigu
         setActivityType(other.mActivityType);
         setAlwaysOnTop(other.mAlwaysOnTop);
         setRotation(other.mRotation);
+        // FDE-X11: the geometry tag has to survive the copies done while a task is
+        // resized/reparented, otherwise the activity sees token 0 and cannot tell its own
+        // request apart from a user drag.
+        mGeometryToken = other.mGeometryToken;
+        mGeometrySource = other.mGeometrySource;
     }
 
     /** Set this object to completely undefined.
@@ -518,6 +523,13 @@ public class WindowConfiguration implements Parcelable, Comparable<WindowConfigu
     @WindowConfig
     public int updateFrom(@NonNull WindowConfiguration delta) {
         int changed = 0;
+        // FDE-X11: a tagged resize must keep its tag after the update is merged in.
+        // The tag itself is not part of the change mask: it must not force an extra
+        // configuration pass, it only travels with the bounds change.
+        if (delta.mGeometryToken != 0 || delta.mGeometrySource != 0) {
+            mGeometryToken = delta.mGeometryToken;
+            mGeometrySource = delta.mGeometrySource;
+        }
         // Only allow override if bounds is not empty
         if (!delta.mBounds.isEmpty() && !delta.mBounds.equals(mBounds)) {
             changed |= WINDOW_CONFIG_BOUNDS;
