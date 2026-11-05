@@ -316,16 +316,20 @@ public class ActivityTaskManager {
     }
 
     /**
-     * Resize task to given bounds.
-     * @param taskId Id of task to resize.
-     * @param bounds Bounds to resize task.
+     * Resize task to given bounds, tagging the resulting bounds change with a caller token.
+     *
+     * <p>The token travels on the task's {@link android.app.WindowConfiguration} and comes back to the
+     * activity through {@link Activity#onBoundsChanged}, which lets a component that drives
+     * window geometry itself recognise the echo of its own request.
+     *
+     * @param taskId        id of the task to resize
+     * @param bounds        bounds to resize the task to
+     * @param geometryToken opaque caller token, {@code 0} means untagged
+     *
+     * @hide
      */
     @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS)
-    /**
-     * @hide FDE-X11: resize the task and tag the resulting bounds change with a caller
-     * token, so the activity can recognise the echo of this request.
-     */
-    public void resizeTask(int taskId, Rect bounds, long geometryToken) {
+    public void resizeTask(int taskId, @NonNull Rect bounds, long geometryToken) {
         try {
             getService().resizeTaskWithToken(taskId, bounds, RESIZE_MODE_SYSTEM,
                     geometryToken, Activity.BOUNDS_CHANGE_SOURCE_REQUESTER);
