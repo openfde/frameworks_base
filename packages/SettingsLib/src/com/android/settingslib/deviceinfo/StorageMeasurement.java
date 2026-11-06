@@ -23,6 +23,7 @@ import android.content.Context;
 import android.content.pm.UserInfo;
 import android.os.AsyncTask;
 import android.os.Environment;
+import android.os.ServiceSpecificException;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.UserManager;
@@ -164,6 +165,10 @@ public class StorageMeasurement {
             details.availSize = mStats.getFreeBytes(mVolume.fsUuid);
         } catch (IOException e) {
             // The storage volume became null while we were measuring it.
+            Log.w(TAG, e);
+            return details;
+        } catch (ServiceSpecificException e) {
+            // The storage service couldn't report the volume size (e.g. EINVAL from vold).
             Log.w(TAG, e);
             return details;
         }
