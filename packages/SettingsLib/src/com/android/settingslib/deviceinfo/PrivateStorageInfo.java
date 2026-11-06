@@ -19,6 +19,7 @@ package com.android.settingslib.deviceinfo;
 import android.app.AppGlobals;
 import android.app.usage.StorageStatsManager;
 import android.content.Context;
+import android.os.ServiceSpecificException;
 import android.os.storage.VolumeInfo;
 import android.util.Log;
 
@@ -51,6 +52,8 @@ public class PrivateStorageInfo {
                     privateFreeBytes += sm.getFreeBytes(stats, info);
                 } catch (IOException e) {
                     Log.w(TAG, e);
+                } catch (ServiceSpecificException e) {
+                    Log.w(TAG, e);
                 }
             }
         }
@@ -63,6 +66,9 @@ public class PrivateStorageInfo {
         try {
             return stats.getTotalBytes(info.getFsUuid());
         } catch (IOException e) {
+            Log.w(TAG, e);
+            return 0;
+        } catch (ServiceSpecificException e) {
             Log.w(TAG, e);
             return 0;
         }
