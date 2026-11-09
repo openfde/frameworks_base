@@ -27,14 +27,14 @@
         android:id="@+id/group_divider"
         android:layout_width="match_parent"
         android:layout_height="1dip"
-        android:layout_marginTop="8dip"
-        android:layout_marginBottom="8dip"
+        android:layout_marginTop="2dip"
+        android:layout_marginBottom="2dip"
         android:background="@drawable/list_divider_material" />
 
     <LinearLayout
         android:id="@+id/content"
         android:layout_width="match_parent"
-        android:layout_height="48dip"
+        android:layout_height="32dp"
         android:layout_marginEnd="12dip"
         android:duplicateParentState="true" >
 
@@ -45,6 +45,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
+            android:textSize="12sp"
             android:layout_marginStart="18dip"
             android:textAppearance="?attr/textAppearanceLargePopupMenu"
             android:singleLine="true"

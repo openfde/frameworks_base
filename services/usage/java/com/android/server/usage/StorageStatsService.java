@@ -56,6 +56,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.ParcelableException;
 import android.os.Process;
+import android.os.ServiceSpecificException;
 import android.os.StatFs;
 import android.os.SystemProperties;
 import android.os.Trace;
@@ -274,7 +275,16 @@ public class StorageStatsService extends IStorageStatsManager.Stub {
 
             // Since 1TB devices can actually have either 1000GB or 1024GB,
             // get the block device size and do just a small rounding if any at all
-            final long totalBytes = mStorage.getInternalStorageBlockDeviceSize();
+            final long totalBytes;
+            try {
+                totalBytes = mStorage.getInternalStorageBlockDeviceSize();
+            } catch (ServiceSpecificException e) {
+                // vold may be unable to report the raw block device size (e.g. EINVAL on
+                // unusual storage layouts). Fall back to the userspace storage size so we
+                // don't leak a ServiceSpecificException to our clients.
+                Slog.w(TAG, "Failed to query internal storage block device size", e);
+                return roundedUserspaceBytes;
+            }
             final long totalBytesRounded = FileUtils.roundStorageSize(totalBytes);
             // If the storage size is 997GB-999GB, round it to a 1000GB to show
             // 1TB in UI instead of 0.99TB. Same for 2TB, 4TB, 8TB etc.
