@@ -650,6 +650,10 @@ public abstract class FileSystemProvider extends DocumentsProvider {
 
         String trashedPath = MediaStore.trashFile(getContext().getContentResolver(),
                 file.getPath());
+        if (trashedPath == null) {
+            throw new IllegalStateException(
+                    "Failed to trash " + file.getPath() + ": provider returned no trashed path");
+        }
         File trashedFile = new File(trashedPath);
         final String trashedDocId = getDocIdForFile(trashedFile);
         onDocIdChanged(documentId);
