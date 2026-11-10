@@ -35,8 +35,13 @@ import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 
 
 /**
@@ -160,8 +165,10 @@ class AndroidForwardingOs extends ForwardingOs {
         } catch (ErrnoException e) {
             // On emulated volumes, we have bind mounts for /Android/data and
             // /Android/obb, which prevents move from working across those directories
-            // and other directories on the filesystem. To work around that, try to
-            // recover by doing a copy instead.
+            // and other directories on the filesystem. Per-directory pass-through
+            // mounts (e.g. fde_ptfs) additionally make even moving a plain folder to
+            // another directory (such as .trash-storage) fail with EXDEV. To work
+            // around that, try to recover by doing a copy instead.
             // Note that we only do this for "/storage/emulated", because public volumes
             // don't have these bind mounts, neither do private volumes that are not
             // the primary storage.
@@ -169,8 +176,17 @@ class AndroidForwardingOs extends ForwardingOs {
                     && newPath.startsWith("/storage/emulated")) {
                 Log.v(TAG, "Recovering failed rename " + oldPath + " to " + newPath);
                 try {
-                    Files.move(new File(oldPath).toPath(), new File(newPath).toPath(),
-                            StandardCopyOption.REPLACE_EXISTING);
+                    final File oldFile = new File(oldPath);
+                    final File newFile = new File(newPath);
+                    if (oldFile.isDirectory()) {
+                        // Files.move() cannot copy a non-empty directory across file
+                        // systems (it fails with DirectoryNotEmptyException), so move
+                        // the whole directory tree with a recursive copy + delete.
+                        moveDirectoryAcrossFileSystems(oldFile, newFile);
+                    } else {
+                        Files.move(oldFile.toPath(), newFile.toPath(),
+                                StandardCopyOption.REPLACE_EXISTING);
+                    }
                 } catch (IOException e2) {
                     Log.e(TAG, "Rename recovery failed ", e2);
                     throw e;
@@ -179,5 +195,62 @@ class AndroidForwardingOs extends ForwardingOs {
                 throw e;
             }
         }
+    }
+
+    /**
+     * Moves a directory (and all of its contents) to another location even when the
+     * source and destination live on different file systems, by recursively copying
+     * the whole tree and then deleting the source directory.
+     */
+    private static void moveDirectoryAcrossFileSystems(File source, File target)
+            throws IOException {
+        if (source.isFile()) {
+            Files.move(source.toPath(), target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING);
+            return;
+        }
+
+        final Path sourcePath = source.toPath();
+        final Path targetDir = target.toPath();
+        if (!Files.exists(targetDir)) {
+            Files.createDirectories(targetDir);
+        }
+        if (!Files.isDirectory(targetDir)) {
+            throw new IOException("Destination is not a directory: " + target);
+        }
+
+        try (DirectoryStream<Path> children = Files.newDirectoryStream(sourcePath)) {
+            for (Path child : children) {
+                final Path destinationChild = targetDir.resolve(child.getFileName().toString());
+                if (Files.isSymbolicLink(child)) {
+                    Files.createSymbolicLink(destinationChild, Files.readSymbolicLink(child));
+                } else if (Files.isDirectory(child)) {
+                    moveDirectoryAcrossFileSystems(child.toFile(), destinationChild.toFile());
+                } else {
+                    Files.copy(child, destinationChild,
+                            StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+
+        // Delete the source tree once every entry has been copied over.
+        Files.walkFileTree(sourcePath, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                    throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc)
+                    throws IOException {
+                if (exc != null) {
+                    throw exc;
+                }
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 }
