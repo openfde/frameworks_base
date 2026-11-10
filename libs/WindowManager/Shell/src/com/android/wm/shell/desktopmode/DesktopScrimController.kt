@@ -123,6 +123,18 @@ class DesktopScrimController(
      */
     @VisibleForTesting
     fun updateDesktopScrim(displayId: Int, applyLightOutEffect: Boolean) {
+        // fde start: Disable the desktop scrim ("light out effect") entirely. When a desk task
+        // is maximized or snapped, this effect dims the wallpaper (darkening the area around the
+        // dock/taskbar, which looks like a shadow cast onto them) and switches the status bar to
+        // an opaque background. OpenFDE does not want this effect at all, so force it off for
+        // every trigger path (maximize toggle, drag-resize, minimize, close, task launch,
+        // move-to-desk, desk activation, ...). The request is still routed through
+        // [updateDesktopScrimInternal] once so that any previously applied dimming gets cleared.
+        updateDesktopScrimInternal(displayId, /* applyLightOutEffect= */ false)
+        // fde end
+    }
+
+    private fun updateDesktopScrimInternal(displayId: Int, applyLightOutEffect: Boolean) {
         if (lastAppliedScrimState[displayId] == applyLightOutEffect) {
             return
         }
