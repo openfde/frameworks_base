@@ -25,7 +25,6 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -90,7 +89,7 @@ import com.android.wm.shell.windowdecor.viewholder.util.HeaderDimensions
 class AppHeaderViewHolder(
     appHeaderView: View?,
     private val context: Context,
-    windowDecorationActions: WindowDecorationActions,
+    private val windowDecorationActions: WindowDecorationActions,
     gestureInterceptor: WindowDecorLinearLayout.GestureInterceptor,
     private val onLongClickListener: OnLongClickListener,
     onCaptionGenericMotionListener: View.OnGenericMotionListener,
@@ -136,6 +135,7 @@ class AppHeaderViewHolder(
     private val captionView: WindowDecorLinearLayout =
         rootView.requireViewById(R.id.desktop_mode_caption)
     private val captionHandle: View = rootView.requireViewById(R.id.caption_handle)
+    private val backWindowButton: ImageButton = rootView.requireViewById(R.id.back_button)
     private val openMenuButton: View = rootView.requireViewById(R.id.open_menu_button)
     private val closeWindowButton: ImageButton = rootView.requireViewById(R.id.close_window)
     private val expandMenuButton: ImageButton = rootView.requireViewById(R.id.expand_menu_button)
@@ -155,6 +155,15 @@ class AppHeaderViewHolder(
     /** The width of the maximize button view. */
     val maximizeButtonWidth: Int
         get() = maximizeButtonView.width
+
+    /** The width occupied by the back button, including its start margin. Zero when hidden. */
+    val backButtonAreaWidth: Int
+        get() =
+            if (backWindowButton.isVisible) {
+                dimensions.windowControlButtonWidth + backWindowButton.marginStart
+            } else {
+                0
+            }
 
     private val a11yAnnounceTextMaximize: String =
         context.getString(R.string.app_header_talkback_action_maximize_button_text)
@@ -191,6 +200,7 @@ class AppHeaderViewHolder(
             closeWindowButton.setOnTouchListener(onTouch)
             maximizeWindowButton.setOnTouchListener(onTouch)
             minimizeWindowButton.setOnTouchListener(onTouch)
+            backWindowButton.setOnTouchListener(onTouch)
 //            openMenuButton.setOnTouchListener(onTouch)
         } else {
             captionView.setOnTouchListener(gestureInterceptor)
@@ -198,11 +208,15 @@ class AppHeaderViewHolder(
             closeWindowButton.setOnTouchListener(gestureInterceptor)
             maximizeWindowButton.setOnTouchListener(gestureInterceptor)
             minimizeWindowButton.setOnTouchListener(gestureInterceptor)
+            backWindowButton.setOnTouchListener(gestureInterceptor)
 //            openMenuButton.setOnTouchListener(gestureInterceptor)
         }
 
         closeWindowButton.throttleFirstClicks(CLICK_DELAY) { v ->
             windowDecorationActions.onClose(currentTaskInfo)
+        }
+        backWindowButton.throttleFirstClicks(CLICK_DELAY) { v ->
+            windowDecorationActions.onBack(currentTaskInfo)
         }
         maximizeWindowButton.throttleFirstClicks(CLICK_DELAY) { v ->
             if (isTaskInFullImmersiveState) {
@@ -231,7 +245,7 @@ class AppHeaderViewHolder(
 
         openMenuButton.layoutParams =
             openMenuButton.layoutParams.apply { height = dimensions.windowControlButtonHeight }
-        listOf(minimizeWindowButton, closeWindowButton).forEach { button ->
+        listOf(minimizeWindowButton, closeWindowButton, backWindowButton).forEach { button ->
             button.layoutParams =
                 button.layoutParams.apply {
                     width = dimensions.windowControlButtonWidth
@@ -449,17 +463,17 @@ class AppHeaderViewHolder(
             context.getString(R.string.app_header_talkback_action_close_button_text),
             null,
         )
+
+        // Update a11y announcement to say "double tap to go back"
+        ViewCompat.replaceAccessibilityAction(
+            backWindowButton,
+            AccessibilityActionCompat.ACTION_CLICK,
+            context.getString(R.string.app_header_talkback_action_back_button_text),
+            null,
+        )
     }
 
     override fun bindData(data: HeaderData) {
-        Log.d(
-            TAG,
-            "bindData taskId=" + data.taskInfo.taskId
-                    + " topActivity=" + data.taskInfo.topActivity
-                    + " isTaskMaximized=" + data.isTaskMaximized
-                    + " isCaptionVisible=" + data.isCaptionVisible,
-            Throwable(),
-        )
         bindData(
             data.taskInfo,
             data.isTaskMaximized,
@@ -473,9 +487,10 @@ class AppHeaderViewHolder(
     /** Returns the elements of the header that could occlude app content. */
     fun getOccludingElements(): List<OccludingElement> =
         listOf(
-            // First, the "app chip" section of the caption bar (+ some extra margins).
+            // First, the back button and "app chip" section of the caption bar (+ some extra
+            // margins).
             OccludingElement(
-                width = dimensions.customizableRegionMarginStart,
+                width = dimensions.customizableRegionMarginStart + backButtonAreaWidth,
                 alignment = OccludingElement.Alignment.START,
             ),
             // Then, the right-aligned section (drag space, maximize and close buttons).
@@ -607,7 +622,6 @@ class AppHeaderViewHolder(
 
         if (topActivity != null) {
             val packageName = topActivity.packageName
-            Log.d(TAG,"bella_framework packageName $packageName")
             if (packageName in titleBarColorPackages) {
                 foregroundColor = if (isDarkMode()) Color.WHITE else Color.BLACK
             }else{
@@ -648,13 +662,23 @@ class AppHeaderViewHolder(
                     } else {
                         dimensions.appNameMaxWidth
                     }
-                isVisible = shouldAddAppName(header.type)
+                isVisible = shouldAddAppName()
             }
             appIconImageView.imageAlpha = foregroundAlpha
             defaultFocusHighlightEnabled = false
         }
         // Minimize button.
         minimizeWindowButton.apply {
+            imageTintList = colorStateList
+            background =
+                createBackgroundDrawable(
+                    color = foregroundColor,
+                    cornerRadius = dimensions.buttonCornerRadius,
+                    drawableInsets = dimensions.minimizeBackgroundInsets,
+                )
+        }
+        // Back button.
+        backWindowButton.apply {
             imageTintList = colorStateList
             background =
                 createBackgroundDrawable(
@@ -729,10 +753,8 @@ class AppHeaderViewHolder(
 
 
         var x11HideCaptionButton = false
-        Log.d(TAG, "updateRelayoutParams:" + taskInfo)
 
         if (topActivity != null) {
-            Log.d(TAG, "updateRelayoutParams: topActivity:" + topActivity.getClassName())
             x11HideCaptionButton = topActivity.getClassName().contains("fde") &&
                     topActivity.getClassName().contains("MainActivity11")
         }
@@ -742,18 +764,17 @@ class AppHeaderViewHolder(
             maximizeButtonView.visibility = View.GONE
             closeWindowButton.visibility = View.GONE
             minimizeWindowButton.visibility = View.GONE
+            backWindowButton.visibility = View.GONE
         } else {
             openMenuButton.visibility = View.VISIBLE
             maximizeButtonView.visibility = View.VISIBLE
             closeWindowButton.visibility = View.VISIBLE
             minimizeWindowButton.visibility = View.VISIBLE
+            backWindowButton.visibility = View.VISIBLE
         }
     }
 
-    private fun shouldAddAppName(headerType: Header.Type): Boolean {
-        if (headerType != Header.Type.DEFAULT) {
-            return false
-        }
+    private fun shouldAddAppName(): Boolean {
         val openMenuWidthWithText =
             if (appNameTextView.isVisible) {
                 openMenuButton.width
@@ -765,7 +786,7 @@ class AppHeaderViewHolder(
 
         val controlButtonsWidth: Int =
             (dimensions.windowControlButtonWidth + dimensions.windowControlButtonMarginEnd) *
-                WINDOW_CONTROLS_BUTTONS_COUNT
+                WINDOW_CONTROLS_BUTTONS_COUNT + backButtonAreaWidth
 
         return (openMenuWidthWithText + controlButtonsWidth) <= captionView.width
     }

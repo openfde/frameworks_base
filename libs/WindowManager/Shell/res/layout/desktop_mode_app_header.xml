@@ -24,6 +24,19 @@
     android:layout_gravity="center_vertical"
     android:orientation="horizontal">
 
+    <!-- Back button, styled to match the window control buttons on the right. -->
+    <ImageButton
+        android:id="@+id/back_button"
+        android:layout_width="44dp"
+        android:layout_height="40dp"
+        android:paddingHorizontal="10dp"
+        android:layout_marginStart="8dp"
+        android:contentDescription="@string/back_button_text"
+        android:src="@drawable/desktop_mode_header_ic_back"
+        android:scaleType="centerCrop"
+        android:layout_gravity="center_vertical"
+        android:gravity="center"/>
+
     <LinearLayout
         android:id="@+id/open_menu_button"
         android:layout_width="wrap_content"
@@ -32,7 +45,7 @@
         android:clickable="true"
         android:focusable="true"
         android:contentDescription="@string/desktop_mode_header_chip_text"
-        android:layout_marginStart="12dp">
+        android:layout_marginStart="1dp">
         <ImageView
             android:id="@+id/application_icon"
             android:layout_width="@dimen/desktop_mode_caption_icon_radius"
