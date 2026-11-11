@@ -279,6 +279,27 @@ class InsetsPolicy {
         }
     }
 
+    // fde start: reveal system bars transiently without checking the current source visibility.
+    // The desktop auto-hide flow forcibly hides the insets right before revealing the bars, and
+    // the sources may still be marked as visible at that point, which would make showTransient()
+    // skip them and hide the dock immediately.
+    void showTransientForAutoHide(@InsetsType int types) {
+        final int showingTransientTypes = mShowingTransientTypes | types;
+        if (mShowingTransientTypes == showingTransientTypes) {
+            return;
+        }
+        mShowingTransientTypes = showingTransientTypes;
+        mHidingTransientTypes &= ~showingTransientTypes;
+        final StatusBarManagerInternal statusBarManagerInternal =
+                mPolicy.getStatusBarManagerInternal();
+        if (statusBarManagerInternal != null) {
+            statusBarManagerInternal.showTransient(mDisplayContent.getDisplayId(),
+                    showingTransientTypes, false /* isGestureOnSystemBar */);
+        }
+        updateBarControlTarget(mFocusedWin);
+    }
+    // fde end
+
     @VisibleForTesting
     @NonNull
     InsetsControlTarget getShowingTransientControlTarget() {
