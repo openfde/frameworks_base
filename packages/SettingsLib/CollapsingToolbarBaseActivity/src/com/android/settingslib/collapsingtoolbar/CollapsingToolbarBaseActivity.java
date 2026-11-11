@@ -39,7 +39,7 @@ import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.appbar.CollapsingToolbarLayout;
 
 import java.util.List;
-
+import android.view.WindowInsetsController;
 /**
  * A base Activity that has a collapsing toolbar layout is used for the activities intending to
  * enable the collapsing toolbar function.
@@ -89,8 +89,20 @@ public class CollapsingToolbarBaseActivity extends FragmentActivity implements
         if (SetupWizardHelper.isAnySetupWizard(getIntent())) {
             findViewById(R.id.content_parent).setFitsSystemWindows(false);
         }
+
+        setupTransparentCaptionBar();
     }
 
+
+    private void setupTransparentCaptionBar() {
+        WindowInsetsController controller = getWindow().getInsetsController();
+        if (controller != null) {
+            controller.setSystemBarsAppearance(
+                    WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND,
+                    WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND
+            );
+        }
+    }
     @Override
     public void setContentView(int layoutResID) {
         final ViewGroup parent = (mToolbardelegate == null) ? findViewById(R.id.content_frame)

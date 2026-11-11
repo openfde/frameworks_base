@@ -17,7 +17,9 @@
 package com.android.settingslib.collapsingtoolbar;
 
 import androidx.fragment.app.FragmentActivity;
-
+import android.os.Bundle;
+import androidx.annotation.Nullable;
+import android.view.WindowInsetsController;
 /**
  * A base Activity for Settings-specific page transition. Activities extending it will get
  * Settings transition applied.
@@ -26,5 +28,21 @@ public abstract class SettingsTransitionActivity extends FragmentActivity {
 
     protected boolean isSettingsTransitionEnabled() {
         return false;
+    }
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setupTransparentCaptionBar();
+    }
+
+    private void setupTransparentCaptionBar() {
+        WindowInsetsController controller = getWindow().getInsetsController();
+        if (controller != null) {
+            controller.setSystemBarsAppearance(
+                    WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND,
+                    WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND
+            );
+        }
     }
 }

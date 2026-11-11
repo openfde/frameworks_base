@@ -21,6 +21,7 @@ import android.content.res.TypedArray;
 import android.os.Build;
 import android.view.ViewGroup;
 
+import android.util.Log;
 import androidx.activity.ComponentActivity;
 import androidx.activity.EdgeToEdge;
 import androidx.activity.SystemBarStyle;
@@ -104,7 +105,9 @@ public class EdgeToEdgeUtils {
                     int statusBarHeight = activity.getWindow().getDecorView().getRootWindowInsets()
                             .getInsets(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.captionBar()).top;
                     // Apply the insets paddings to the view.
-                    v.setPadding(insets.left, statusBarHeight, insets.right, insets.bottom);
+
+                    Log.d("EdgeToEdgeUtils"," statusBarHeight "+statusBarHeight);
+                    v.setPadding(insets.left, 0, insets.right, insets.bottom);
                     ((ViewGroup)v).setClipToPadding(false);
                     ((ViewGroup)v).setClipChildren(false);
 
