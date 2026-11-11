@@ -3301,6 +3301,22 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
     @ScreenOrientation
     @Override
     int getOrientation() {
+        // OEM: keep the display in landscape so that it never rotates to portrait for
+        // portrait-only apps. The activity level override in ActivityRecord#getOverrideOrientation
+        // keeps the app configuration consistent with the display, which avoids letterboxing.
+        final int hierarchyOrientation = getOrientationFromHierarchy();
+        ProtoLog.v(WM_DEBUG_ORIENTATION,
+                "Display id=%d orientation request %d is overridden to %d",
+                mDisplayId, hierarchyOrientation, SCREEN_ORIENTATION_LANDSCAPE);
+        return SCREEN_ORIENTATION_LANDSCAPE;
+    }
+
+    /**
+     * Original AOSP orientation resolution, kept for reference. The result is overridden by
+     * {@link #getOrientation()}.
+     */
+    @ScreenOrientation
+    private int getOrientationFromHierarchy() {
         final int compatOrientation = mWmService.mAppCompatCameraPolicy
                 .getOrientation(this);
         if (compatOrientation != SCREEN_ORIENTATION_UNSPECIFIED) {

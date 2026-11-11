@@ -2291,7 +2291,8 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         if (task == null) {
             return false;
         }
-        if (!ActivityInfo.isResizeableMode(task.mResizeMode)
+        if (!task.shouldForceResizeable()
+                && !ActivityInfo.isResizeableMode(task.mResizeMode)
                 && !tda.supportsNonResizableMultiWindow()) {
             return false;
         }
@@ -2992,6 +2993,11 @@ class TaskFragment extends WindowContainer<WindowContainer> {
     }
 
     int getMinWidth() {
+        // OEM: ignore the min width declared by a forced resizeable app so that the window can
+        // be resized freely (still bounded by the system default minimum task size).
+        if (isForcedResizeableTaskFragment()) {
+            return INVALID_MIN_SIZE;
+        }
         if (!Flags.runtimeDensityResolutionForWindowLayoutBugfix()) {
             return mMinWidth;
         }
@@ -3004,6 +3010,10 @@ class TaskFragment extends WindowContainer<WindowContainer> {
     }
 
     int getMinHeight() {
+        // OEM: ignore the min height declared by a forced resizeable app.
+        if (isForcedResizeableTaskFragment()) {
+            return INVALID_MIN_SIZE;
+        }
         if (!Flags.runtimeDensityResolutionForWindowLayoutBugfix()) {
             return mMinHeight;
         }
@@ -3012,7 +3022,13 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                 : TypedValue.complexToDimensionPixelSize(
                         mComplexMinHeight,
                         getDisplayContent().getDisplayMetrics()
-                );
+        );
+    }
+
+    /** OEM: whether the min dimensions of this TaskFragment should be ignored. */
+    private boolean isForcedResizeableTaskFragment() {
+        final Task task = getTask();
+        return task != null && task.shouldForceResizeable();
     }
 
     /**
