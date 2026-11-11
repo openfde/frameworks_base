@@ -2275,6 +2275,13 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         }
 
         @Override
+        public void onBack(@NonNull RunningTaskInfo taskInfo) {
+            // Make sure the back key is delivered to this task's window.
+            mViewModel.moveTaskToFront(taskInfo);
+            mViewModel.mTaskOperations.injectBackKey(taskInfo.displayId);
+        }
+
+        @Override
         public void onOpenIntent(int taskId, @NotNull Intent intent) {
             WdLog.logD(TAG, "Using DefaultWindowDecorationActions to open intent=%s for task=%d",
                     intent.toString(), taskId);

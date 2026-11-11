@@ -665,7 +665,8 @@ class AppHeaderController(
         val resources = decorWindowContext.resources
         val leftButtonsWidth =
             resources.getDimensionPixelSize(R.dimen.desktop_mode_app_details_width_minus_text) +
-                viewHolder.appNameTextWidth
+                viewHolder.appNameTextWidth +
+                viewHolder.backButtonAreaWidth
         val requiredEmptySpace =
             resources.getDimensionPixelSize(R.dimen.freeform_required_visible_empty_space_in_header)
         val rightButtonsWidth =

@@ -74,6 +74,9 @@ interface WindowDecorationActions {
     /** Requests for task to open float. */
     fun onToFloat(taskId: Int)
 
+    /** Navigates the task back, as if the back key was pressed in the task. */
+    fun onBack(taskInfo: RunningTaskInfo)
+
     /**
      * Opens app content in browser.
      *

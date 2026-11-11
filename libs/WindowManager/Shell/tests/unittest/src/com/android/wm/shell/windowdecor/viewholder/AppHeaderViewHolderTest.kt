@@ -58,6 +58,7 @@ class AppHeaderViewHolderTest : ShellTestCase() {
 
     private val mockAppHeader = mock<WindowDecorLinearLayout>()
     private val mockCaptionHandle = mock<ViewGroup>()
+    private val mockBackWindowButton = mock<ImageButton>()
     private val mockOpenMenuButton = mock<View>()
     private val mockCloseWindowButton = mock<ImageButton>()
     private val mockExpandMenuButton = mock<ImageButton>()
@@ -90,6 +91,9 @@ class AppHeaderViewHolderTest : ShellTestCase() {
         doReturn(mockCaptionHandle)
             .whenever(mockAppHeader)
             .requireViewById<View>(R.id.caption_handle)
+        doReturn(mockBackWindowButton)
+            .whenever(mockAppHeader)
+            .requireViewById<ImageButton>(R.id.back_button)
         doReturn(mockOpenMenuButton)
             .whenever(mockAppHeader)
             .requireViewById<View>(R.id.open_menu_button)
@@ -121,6 +125,7 @@ class AppHeaderViewHolderTest : ShellTestCase() {
         doReturn(mock<ViewGroup.LayoutParams>()).whenever(mockOpenMenuButton).layoutParams
         doReturn(mock<ViewGroup.LayoutParams>()).whenever(mockMinimizeWindowButton).layoutParams
         doReturn(mock<ViewGroup.LayoutParams>()).whenever(mockCloseWindowButton).layoutParams
+        doReturn(mock<ViewGroup.LayoutParams>()).whenever(mockBackWindowButton).layoutParams
 
         doReturn(Rect()).whenever(mockDimensions).windowControlButtonPadding
         doReturn(DrawableInsets()).whenever(mockDimensions).appChipBackgroundInsets
@@ -134,6 +139,7 @@ class AppHeaderViewHolderTest : ShellTestCase() {
                 mockMinimizeWindowButton,
                 mockMaximizeWindowButton,
                 mockCloseWindowButton,
+                mockBackWindowButton,
             )
             .forEach { doReturn(mContext).whenever(it).context }
 
@@ -227,6 +233,24 @@ class AppHeaderViewHolderTest : ShellTestCase() {
         onTouchListenerCaptor.value.onTouch(mockCloseWindowButton, downEvent)
 
         verify(mockWindowDecorationActions).onCaptionViewReceivedInteraction(task)
+    }
+
+    @Test
+    fun testClickOnBack_navigatesBack() {
+        bindData()
+
+        val onClickListenerCaptor = ArgumentCaptor.forClass(View.OnClickListener::class.java)
+        verify(mockBackWindowButton).setOnClickListener(onClickListenerCaptor.capture())
+        onClickListenerCaptor.value.onClick(mockBackWindowButton)
+
+        verify(mockWindowDecorationActions).onBack(task)
+    }
+
+    @Test
+    fun testBind_showsBackButton() {
+        bindData()
+
+        verify(mockBackWindowButton).setVisibility(View.VISIBLE)
     }
 
     private fun bindData(

@@ -1501,8 +1501,11 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
         }
         final int appTextWidth = ((AppHeaderViewHolder)
                 mWindowDecorViewHolder).getAppNameTextWidth();
+        final int backButtonWidth = ((AppHeaderViewHolder)
+                mWindowDecorViewHolder).getBackButtonAreaWidth();
         final int leftButtonsWidth = loadDimensionPixelSize(mContext.getResources(),
-                R.dimen.desktop_mode_app_details_width_minus_text) + appTextWidth;
+                R.dimen.desktop_mode_app_details_width_minus_text) + appTextWidth
+                + backButtonWidth;
         final int requiredEmptySpace = loadDimensionPixelSize(mContext.getResources(),
                 R.dimen.freeform_required_visible_empty_space_in_header);
         final int rightButtonsWidth = loadDimensionPixelSize(mContext.getResources(),

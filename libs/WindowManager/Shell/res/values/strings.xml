@@ -402,6 +402,8 @@
     <string name="app_header_talkback_action_minimize_button_text">Minimize app window</string>
     <!-- Accessibility action replacement for app header close button [CHAR LIMIT=NONE] -->
     <string name="app_header_talkback_action_close_button_text">Close app window</string>
+    <!-- Accessibility action replacement for app header back button [CHAR LIMIT=NONE] -->
+    <string name="app_header_talkback_action_back_button_text">Go back in app window</string>
     <!-- Accessibility action replacement for fullscreen header exit fullscreen button [CHAR LIMIT=NONE] -->
     <string name="fullscreen_header_talkback_action_exit_fullscreen_button_text">Exit Fullscreen</string>
 

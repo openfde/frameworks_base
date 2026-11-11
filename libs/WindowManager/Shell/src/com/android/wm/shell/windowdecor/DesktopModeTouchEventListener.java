@@ -263,7 +263,8 @@ public class DesktopModeTouchEventListener
 
         if (id != R.id.caption_handle && id != R.id.desktop_mode_caption
                 && id != R.id.open_menu_button && id != R.id.close_window
-                && id != R.id.maximize_window && id != R.id.minimize_window) {
+                && id != R.id.maximize_window && id != R.id.minimize_window
+                && id != R.id.back_button) {
             WdLog.motionEventLogD(TAG, mTaskId, "%s(%s) unsupported view, ignoring", tag,
                     viewName);
             return null;
@@ -540,7 +541,8 @@ public class DesktopModeTouchEventListener
         }
 
         final boolean touchingButton = (id == R.id.close_window || id == R.id.maximize_window
-                || id == R.id.open_menu_button || id == R.id.minimize_window);
+                || id == R.id.open_menu_button || id == R.id.minimize_window
+                || id == R.id.back_button);
         final DesktopRepository desktopRepository = mDesktopUserRepositories.getProfile(
                 taskInfo.userId);
         final boolean dragAllowed =
