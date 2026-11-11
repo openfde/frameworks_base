@@ -3001,9 +3001,28 @@ public class DisplayPolicy {
         mFullscreenOnTop = fullscreenOnTop;
         mHandler.removeCallbacks(mAutoHideRunnable);
         if (mFullscreenOnTop) {
+            mHandler.post(this::hideSystemBarsOnFullscreen);
             mHandler.postDelayed(mAutoHideRunnable, AUTO_HIDE_TIMEOUT_MS);
         } else {
             mHandler.post(this::showSystemBarsAfterAutoHide);
+        }
+    }
+
+    /**
+     * Hides the system bar insets for apps immediately, then reveals the bars transiently. This
+     * keeps the dock visible without letting the app lay out with a visible navigation bar inset,
+     * which would otherwise draw a bar-sized scrim over the bottom of the app window.
+     */
+    private void hideSystemBarsOnFullscreen() {
+        synchronized (mLock) {
+            if (!mFullscreenOnTop) {
+                return;
+            }
+            mSystemBarsAutoHidden = true;
+            setSystemBarVisibilityOverride(mAutoHideToken, 0 /* forciblyShowingInsetsTypes */,
+                    Type.statusBars() | Type.navigationBars() /* forciblyHiding */);
+            getInsetsPolicy().showTransientForAutoHide(
+                    Type.statusBars() | Type.navigationBars());
         }
     }
 
