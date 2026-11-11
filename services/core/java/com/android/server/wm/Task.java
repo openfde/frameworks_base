@@ -2084,6 +2084,10 @@ class Task extends TaskFragment {
             // Note: If not on the freeform workspace, we ignore the bounds.
             return true;
         }
+        // OEM: forced resizeable tasks can be resized to any bounds.
+        if (shouldForceResizeable()) {
+            return true;
+        }
         final boolean landscape = bounds.width() > bounds.height();
         final Rect configBounds = getRequestedOverrideBounds();
         if (mResizeMode == RESIZE_MODE_FORCE_RESIZABLE_PRESERVE_ORIENTATION) {
@@ -3146,9 +3150,19 @@ class Task extends TaskFragment {
         final boolean forceResizable = mAtmService.mForceResizableActivities
                 && getActivityType() == ACTIVITY_TYPE_STANDARD;
         if (forceResizable) return true;
+        // OEM: standard tasks are always resizeable. This is reported to the system UI via
+        // TaskInfo#isResizeable, which controls whether a freeform window can be dragged to
+        // any size and whether the task can be put into split-screen.
+        if (shouldForceResizeable()) return true;
         if (mForceNonResizeOverride) return false;
         return mForceResizeOverride || ActivityInfo.isResizeableMode(mResizeMode)
                 || (mSupportsPictureInPicture && checkPictureInPictureSupport);
+    }
+
+    /** OEM: whether this task belongs to an activity that must always be resizeable. */
+    boolean shouldForceResizeable() {
+        return getActivityType() == ACTIVITY_TYPE_STANDARD
+                || getActivityType() == ACTIVITY_TYPE_UNDEFINED;
     }
 
     /**
@@ -3157,6 +3171,9 @@ class Task extends TaskFragment {
      * @return true if orientation should not get changed upon resizing operation.
      */
     boolean preserveOrientationOnResize() {
+        // OEM: forced resizeable tasks can be resized to any aspect ratio, so never preserve
+        // the orientation while resizing.
+        if (shouldForceResizeable()) return false;
         return mResizeMode == RESIZE_MODE_FORCE_RESIZABLE_PORTRAIT_ONLY
                 || mResizeMode == RESIZE_MODE_FORCE_RESIZABLE_LANDSCAPE_ONLY
                 || mResizeMode == RESIZE_MODE_FORCE_RESIZABLE_PRESERVE_ORIENTATION;

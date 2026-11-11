@@ -3208,6 +3208,11 @@ final class ActivityRecord extends WindowToken {
     }
 
     boolean isResizeable() {
+        // OEM: standard activities are always resizeable so that freeform resizing and
+        // split-screen are available for every app.
+        if (shouldForceResizeable()) {
+            return true;
+        }
         return mAtmService.mForceResizableActivities
                 || ActivityInfo.isResizeableMode(info.resizeMode)
                 || info.supportsPictureInPicture()
@@ -3219,6 +3224,11 @@ final class ActivityRecord extends WindowToken {
     /** @return whether this activity is non-resizeable but is forced to be resizable. */
     boolean canForceResizeNonResizable(int windowingMode) {
         if (windowingMode == WINDOWING_MODE_PINNED && info.supportsPictureInPicture()) {
+            return false;
+        }
+        // OEM: standard activities are always treated as resizeable, so there is no need to
+        // warn the user that the app is being forced into multi-window mode.
+        if (shouldForceResizeable()) {
             return false;
         }
         // Activity should be resizable if the task is.
@@ -3293,7 +3303,9 @@ final class ActivityRecord extends WindowToken {
         }
 
         final ActivityInfo.WindowLayout windowLayout = info.windowLayout;
-        if (windowLayout == null) {
+        // OEM: ignore the min width/height declared by the app when it is forced resizeable,
+        // otherwise the app couldn't be put into split-screen on a small window.
+        if (windowLayout == null || shouldForceResizeable()) {
             return true;
         }
         if (!Flags.runtimeDensityResolutionForWindowLayoutBugfix()) {
@@ -7544,12 +7556,43 @@ final class ActivityRecord extends WindowToken {
     @Override
     @ActivityInfo.ScreenOrientation
     protected int getOverrideOrientation() {
+        // OEM: force landscape for fullscreen activities so that portrait-only apps get a
+        // landscape configuration and fill the whole screen, instead of being letterboxed
+        // with large blank areas on both sides.
+        if (shouldForceLandscapeForFullscreen()) {
+            return ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+        }
         int candidateOrientation = super.getOverrideOrientation();
         if (isRestrictedFixedOrientation(candidateOrientation)) {
             candidateOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
         }
         return mAppCompatController.getOrientationPolicy()
                 .overrideOrientationIfNeeded(candidateOrientation);
+    }
+
+    /**
+     * OEM: whether this activity should be forced to landscape because it occupies the whole
+     * screen. Activities in split-screen, freeform, picture-in-picture or activity embedding
+     * keep their own orientation behavior. Also used by app compat policies to skip size
+     * compatibility mode and aspect ratio restrictions, so that the activity always fills
+     * the screen.
+     */
+    boolean shouldForceLandscapeForFullscreen() {
+        final Task task = getTask();
+        if (task == null || task.inMultiWindowMode() || isEmbedded()) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * OEM: whether this activity should always be treated as resizeable, so that it can be
+     * resized freely in freeform mode and be put into split-screen, regardless of the
+     * {@code android:resizeableActivity}, {@code android:maxAspectRatio} or
+     * {@code android:minAspectRatio} declared by the app.
+     */
+    boolean shouldForceResizeable() {
+        return isActivityTypeStandardOrUndefined();
     }
 
     /**

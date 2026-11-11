@@ -198,7 +198,8 @@ class AppCompatSizeCompatModePolicy {
         }
         final AppCompatAspectRatioOverrides aspectRatioOverrides =
                 mActivityRecord.mAppCompatController.getAspectRatioOverrides();
-        if (mActivityRecord.isUniversalResizeable()
+        if (mActivityRecord.shouldForceResizeable()
+                || mActivityRecord.isUniversalResizeable()
                 || aspectRatioOverrides.isSystemOverrideToFullscreenEnabled()) {
             clearSizeCompatModeAttributes();
             clearOverrideConfiguration();
@@ -461,6 +462,12 @@ class AppCompatSizeCompatModePolicy {
      *         aspect ratio.
      */
     boolean shouldCreateAppCompatDisplayInsets() {
+        // OEM: standard activities are forced resizeable and must always follow the size of
+        // their container, so never freeze their bounds in size compatibility mode. The app
+        // accepts the risk of misbehaving, same as the user fullscreen override below.
+        if (mActivityRecord.shouldForceResizeable()) {
+            return false;
+        }
         if (mActivityRecord.mAppCompatController.getAspectRatioOverrides()
                 .hasFullscreenOverride()) {
             // If the user has forced the applications aspect ratio to be fullscreen, don't use size

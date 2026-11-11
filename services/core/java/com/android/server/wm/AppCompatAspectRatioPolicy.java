@@ -279,6 +279,12 @@ class AppCompatAspectRatioPolicy {
      */
     private boolean applyAspectRatio(Rect outBounds, Rect containingAppBounds,
             Rect containingBounds, float desiredAspectRatio) {
+        // OEM: standard activities are forced resizeable and must always fill their container,
+        // so the max/min aspect ratio declared by the app is ignored in every windowing mode
+        // (fullscreen, split-screen and freeform).
+        if (mActivityRecord.shouldForceResizeable()) {
+            return false;
+        }
         final float maxAspectRatio = getMaxAspectRatio();
         final Task rootTask = mActivityRecord.getRootTask();
         final Task task = mActivityRecord.getTask();
