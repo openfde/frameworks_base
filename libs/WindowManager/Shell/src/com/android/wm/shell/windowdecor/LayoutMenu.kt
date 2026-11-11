@@ -54,6 +54,7 @@ import android.view.SurfaceControl
 import android.view.SurfaceControl.Transaction
 import android.view.SurfaceControlViewHost
 import android.view.View
+import android.view.ViewGroup
 import android.view.View.OnClickListener
 import android.view.View.OnTouchListener
 import android.view.View.SCALE_Y
@@ -420,6 +421,27 @@ class LayoutMenu(
                 // fde end
             )
 
+        /**
+         * The four modes of the menu: the container used for hit testing and the button(s) whose
+         * selection state draws the hover highlight. The split option has no button here because
+         * its two halves are tinted separately by [updateSplitSnapSelection].
+         */
+        private val hoverOptions: List<Pair<View, List<View>>> =
+            listOf(
+                sizeToggleContainer to listOf(sizeToggleButton),
+                sizeToggleFullscreenContainer to listOf(fullscreenToggleButton),
+                // The split halves are tinted by updateSplitSnapSelection, not by selection.
+                snapContainer to emptyList(),
+                // fde start MAGIC WINDOW -> parallel world
+                parallelWorldContainer to listOf(parallelWorldButton),
+                // fde end
+            )
+
+        private val optionHitRect = Rect()
+
+        /** Last applied split selection, used to avoid re-applying the same drawable state. */
+        private var snapSelection: SnapToHalfSelection? = null
+
         private val decorThemeUtil = DecorThemeUtil(context)
 
         private val outlineRadius =
@@ -512,34 +534,11 @@ class LayoutMenu(
                     ACTION_HOVER_ENTER -> onMenuHoverListener?.invoke(true)
                     ACTION_HOVER_EXIT -> onMenuHoverListener?.invoke(false)
                 }
-
-                // Also check if the hover falls within the snap options layout, to manually
-                // set the left/right state based on the event's position.
-                // TODO(b/346440693): this manual hover tracking is needed for left/right snap
-                //  because its view/background(s) don't support selector states. Look into whether
-                //  that can be added to avoid manual tracking. Also because these button
-                //  colors/state logic is only being applied on hover events, but there's pressed,
-                //  focused and selected states that should be responsive too.
-                val snapLayoutBoundsRelToOverlay =
-                    hoverTempRect.also { rect ->
-                        snapButtonsLayout.getDrawingRect(rect)
-                        rootView.offsetDescendantRectToMyCoords(snapButtonsLayout, rect)
-                    }
-                if (event.action == ACTION_HOVER_ENTER || event.action == ACTION_HOVER_MOVE) {
-                    if (snapLayoutBoundsRelToOverlay.contains(event.x.toInt(), event.y.toInt())) {
-                        // Hover is inside the snap layout, anything left of center is the left
-                        // snap, and anything right of center is right snap.
-                        val layoutCenter = snapLayoutBoundsRelToOverlay.centerX()
-                        if (event.x < layoutCenter) {
-                            updateSplitSnapSelection(SnapToHalfSelection.LEFT)
-                        } else {
-                            updateSplitSnapSelection(SnapToHalfSelection.RIGHT)
-                        }
-                    } else {
-                        // Any other hover is outside the snap layout, so neither is selected.
-                        updateSplitSnapSelection(SnapToHalfSelection.NONE)
-                    }
-                }
+                // One place owns the highlight of every mode, including the split halves. The
+                // framework's state_hovered alone is not reliable here: the menu lives in a
+                // SurfaceControlViewHost window and can stay open while the pointer sits on the
+                // caption button, so a missed HOVER_EXIT used to leave a mode highlighted.
+                updateHoveredOption(event)
             }
 
 //            immersiveToggleContainer.isGone = immersiveConfig is ImmersiveConfig.Hidden
@@ -551,6 +550,13 @@ class LayoutMenu(
                 it.setOnClickListener(this)
                 it.setOnTouchListener(this)
             }
+
+            // Both split buttons are inflated from the same <shape> resource and therefore share
+            // one GradientDrawable.ConstantState. Without mutate(), setTint() on one half also
+            // colours the other half and persists in the Resources cache, so a half that was once
+            // highlighted can stay highlighted in this and in later menus.
+            snapLeftButton.background?.mutate()
+            snapRightButton.background?.mutate()
 
             rootView.setOnTouchListener { _, event ->
                 if (event.actionMasked == ACTION_OUTSIDE) {
@@ -804,29 +810,29 @@ class LayoutMenu(
             this.taskInfo = taskInfo
             this.style = calculateMenuStyle(taskInfo)
 
+            // The legacy layout puts the same background drawable on both the root and the inner
+            // container. Tint both explicitly (and mutate them) instead of relying on the shared
+            // ConstantState: when the resource cache returns independent drawables the inner one
+            // kept the XML colour, which follows system night mode rather than the title bar.
+            for (view in listOf(rootView, container)) {
+                view.background?.mutate()?.setTint(style.backgroundColor)
+            }
             if (Flags.enableConsolidatedWindowOptions()) {
-                container.background.setTint(style.backgroundColor)
-            } else {
-                rootView.background.setTint(style.backgroundColor)
+                requireWindowingPillView().background?.mutate()?.setTint(style.backgroundColor)
             }
 
             // Maximize option.
             sizeToggleButton.background = style.maximizeOption.drawable
-            sizeToggleButtonText.setTextColor(style.textColor)
-            sizeToggleFullscreenButtonText.setTextColor(style.textColor)
-            parallelWorldText.setTextColor(style.textColor)
 
             // Immersive option.
             immersiveToggleButton.background = style.immersiveOption.drawable
-            immersiveToggleButtonText.setTextColor(style.textColor)
 
             // Fullscreen option. 完全由代码按 DecorThemeUtil 解析出的主题生成边框、背景与
             // 激活态颜色，和最大化/沉浸按钮共用同一套绘制逻辑（见 createFullscreenDrawable）。
             fullscreenToggleButton.background = style.fullscreenOption.drawable
 
             // Snap options.
-            snapWindowText.setTextColor(style.textColor)
-            updateSplitSnapSelection(SnapToHalfSelection.NONE)
+            resetOptionHighlight()
 
             // fde start MAGIC WINDOW -> parallel world
             // The parallel world entry is offered for every task: for the packages of the device
@@ -837,7 +843,9 @@ class LayoutMenu(
             val isParallelWorldOn = isParallelWorldTask || taskInfo.magicWindowEnabled
             val isParallelWorldConfigured = parallelWorldType != TaskInfo.MAGIC_WINDOW_TYPE_NONE
             parallelWorldContainer.isVisible = true
-            parallelWorldButton.isSelected = isParallelWorldOn
+            // The on/off state is conveyed by the label ("进入/退出平行视界"). Selection is
+            // reserved for the hover highlight; setting it here made the mode stay highlighted
+            // forever whenever the feature was enabled.
             parallelWorldButton.background = style.parallelWorldOption.drawable
             parallelWorldText.setText(
                 when {
@@ -850,8 +858,25 @@ class LayoutMenu(
             if (Flags.enableConsolidatedWindowOptions()) {
                 val isInSplitScreen = splitScreenController.isTaskInSplitScreen(taskInfo.taskId)
                 requireWindowingPillView().bind(taskInfo, isInSplitScreen)
-                requireWindowingPillView().background.setTint(style.backgroundColor)
             }
+
+            // Do this last so it also covers the windowing pill's labels. All label colours must
+            // come from the same ColorScheme as the menu background: the XML defaults are
+            // @color/materialColorOnSurface, which follows *system* night mode, not the app's
+            // title bar theme. Mixing the two produced white text on a white menu (or dark text
+            // on a dark menu) whenever those two themes disagreed.
+            applyTextColorToLabels()
+        }
+
+        /** Applies the menu's foreground colour to every label, including collapsed rows. */
+        private fun applyTextColorToLabels() {
+            fun View.applyRecursively() {
+                if (this is TextView) setTextColor(style.textColor)
+                if (this is ViewGroup) {
+                    for (i in 0 until childCount) getChildAt(i).applyRecursively()
+                }
+            }
+            rootView.applyRecursively()
         }
 
         /** Animate the opening of the menu */
@@ -1087,8 +1112,69 @@ class LayoutMenu(
             menuAnimatorSet?.cancel()
         }
 
+        /** Returns the option container under (x, y), expressed in rootView coordinates. */
+        private fun findHoveredOption(x: Float, y: Float): View? {
+            for ((optionContainer, _) in hoverOptions) {
+                if (!optionContainer.isVisible) continue
+                optionContainer.getDrawingRect(optionHitRect)
+                rootView.offsetDescendantRectToMyCoords(optionContainer, optionHitRect)
+                if (optionHitRect.contains(x.toInt(), y.toInt())) return optionContainer
+            }
+            return null
+        }
+
+        /**
+         * Applies the hover highlight to exactly one mode. Selection is the single source of
+         * truth here (instead of the framework's state_hovered): a HOVER_EXIT that is dropped by
+         * the view host, or a pointer moving back to the caption button while this menu stays
+         * open, can no longer leave a mode highlighted forever.
+         */
+        private fun updateHoveredOption(event: MotionEvent) {
+            val option =
+                when (event.action) {
+                    ACTION_HOVER_ENTER, ACTION_HOVER_MOVE -> findHoveredOption(event.x, event.y)
+                    ACTION_HOVER_EXIT -> null
+                    else -> return
+                }
+
+            // Clear everything first, including any stale framework-managed hover state.
+            menuButtons.forEach { button ->
+                button.isHovered = false
+                button.isSelected = false
+            }
+            hoverOptions.firstOrNull { it.first == option }?.second?.forEach { button ->
+                button.isSelected = true
+            }
+
+            if (option == snapContainer) {
+                snapButtonsLayout.getDrawingRect(hoverTempRect)
+                rootView.offsetDescendantRectToMyCoords(snapButtonsLayout, hoverTempRect)
+                updateSplitSnapSelection(
+                    if (event.x < hoverTempRect.centerX()) SnapToHalfSelection.LEFT
+                    else SnapToHalfSelection.RIGHT
+                )
+            } else {
+                // Leaving the split option (or leaving the menu entirely) must always clear it.
+                updateSplitSnapSelection(SnapToHalfSelection.NONE)
+            }
+        }
+
+        /** Clears every highlight, e.g. when the menu is (re)bound. */
+        private fun resetOptionHighlight() {
+            menuButtons.forEach { button ->
+                button.isHovered = false
+                button.isSelected = false
+            }
+            snapSelection = null
+            updateSplitSnapSelection(SnapToHalfSelection.NONE)
+        }
+
         /** Update the view state to a new snap to half selection. */
         private fun updateSplitSnapSelection(selection: SnapToHalfSelection) {
+            // Hover moves are frequent; re-applying the drawables on every event causes flicker
+            // and keeps re-inflating the shared background resource.
+            if (snapSelection == selection) return
+            snapSelection = selection
             when (selection) {
                 SnapToHalfSelection.NONE -> deactivateSnapOptions()
                 SnapToHalfSelection.LEFT -> activateSnapOption(activateLeft = true)
@@ -1097,6 +1183,12 @@ class LayoutMenu(
         }
 
         private fun calculateMenuStyle(taskInfo: RunningTaskInfo): MenuStyle {
+            // The menu must follow the app's title bar, not the system night mode and not a fixed
+            // palette. getColorScheme(taskInfo) resolves getAppTheme(taskInfo), which is exactly
+            // the value AppHeaderViewHolder.getHeaderBackground()/FullscreenHeaderViewHolder use:
+            // a dark title bar -> darkColors, a light title bar -> lightColors.
+            // Every colour below (menu background, labels, icon layers, snap strokes) is derived
+            // from this one scheme, so foreground and background can never clash.
             val colorScheme = decorThemeUtil.getColorScheme(taskInfo)
             val menuBackgroundColor = colorScheme.surfaceContainerLow.toArgb()
             return MenuStyle(
@@ -1397,7 +1489,9 @@ class LayoutMenu(
             snapRightButton.background?.setTintList(snapSideColorList)
             with(snapButtonsLayout) {
                 setBackgroundResource(R.drawable.desktop_mode_layout_menu_layout_background)
-                (background as GradientDrawable).apply {
+                // setBackgroundResource hands out a drawable sharing the cached ConstantState;
+                // mutate before changing colours so other views/resources are not affected.
+                (background.mutate() as GradientDrawable).apply {
                     setColor(style.snapOptions.inactiveBackgroundColor)
                     setStroke(outlineStroke, style.snapOptions.inactiveStrokeColor)
                 }
@@ -1411,7 +1505,7 @@ class LayoutMenu(
                 setBackgroundResource(
                     R.drawable.desktop_mode_layout_menu_layout_background_on_hover
                 )
-                (background as GradientDrawable).apply {
+                (background.mutate() as GradientDrawable).apply {
                     setColor(style.snapOptions.activeBackgroundColor)
                     setStroke(outlineStroke, style.snapOptions.activeStrokeColor)
                 }
