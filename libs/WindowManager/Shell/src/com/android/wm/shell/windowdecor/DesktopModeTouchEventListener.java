@@ -114,6 +114,7 @@ public class DesktopModeTouchEventListener
     private boolean mDragInterrupted;
     private boolean mLongClickDisabled;
     private int mDragPointerId = -1;
+    private int mLastTouchDownViewId = View.NO_ID;
     private DesktopModeEventLogger.Companion.InputMethod mInputMethod =
             getInputMethodType(UNKNOWN_INPUT_METHOD);
     private int mCurrentPointerIconType = PointerIcon.TYPE_ARROW;
@@ -357,6 +358,7 @@ public class DesktopModeTouchEventListener
         final boolean isDown = e.getActionMasked() == MotionEvent.ACTION_DOWN;
         final ActivityManager.RunningTaskInfo taskInfo = decoration.getTaskInfo();
         if (isDown) {
+            mLastTouchDownViewId = v.getId();
             // Only move to front on down to prevent 2+ tasks from fighting
             // (and thus flickering) for front status when drag-moving them simultaneously with
             // two pointers.
@@ -792,6 +794,12 @@ public class DesktopModeTouchEventListener
      */
     @Override
     public boolean onDoubleTapEvent(@NonNull MotionEvent e) {
+        // Rapid clicks on the back button must only navigate back and must never toggle the
+        // window size. The touch listener is shared by the caption and its buttons, so ignore
+        // double-tap events that started on the back button.
+        if (mLastTouchDownViewId == R.id.back_button) {
+            return false;
+        }
         final int action = e.getActionMasked();
         if (mIsDragging || (action != MotionEvent.ACTION_UP
                 && action != MotionEvent.ACTION_CANCEL)) {

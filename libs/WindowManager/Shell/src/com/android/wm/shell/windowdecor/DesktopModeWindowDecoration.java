@@ -653,7 +653,7 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
             loadTaskNameAndIconInBackground((name, icon) -> {
                 final AppHeaderViewHolder appHeader = asAppHeader(mWindowDecorViewHolder);
                 if (appHeader != null) {
-                    appHeader.setAppName(name);
+                    appHeader.setDefaultAppName(name);
                     appHeader.setAppIcon(icon);
                     notifyCaptionStateChanged();
                 }

@@ -575,7 +575,7 @@ class FullscreenHeaderController(
         loadAppInfoJob =
             mainScope.launch {
                 val (name, icon) = taskResourceLoader.getNameAndHeaderIcon(taskInfo)
-                viewHolder.setAppName(name)
+                viewHolder.setDefaultAppName(name)
                 viewHolder.setAppIcon(icon)
                 notifyCaptionStateChanged()
             }
