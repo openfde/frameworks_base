@@ -323,6 +323,8 @@
     <string name="open_in_app_text">Open in App</string>
     <!-- Accessibility text for the handle menu new window button [CHAR LIMIT=NONE] -->
     <string name="new_window_text">New Window</string>
+    <!-- fde: text for the single exit-fullscreen item in the app handle menu -->
+    <string name="fde_exit_fullscreen_text">Exit full screen</string>
     <!-- Accessibility text for the handle menu new window button [CHAR LIMIT=NONE] -->
     <string name="manage_windows_text">Manage Windows</string>
     <!-- Accessibility text for the handle menu change aspect ratio button [CHAR LIMIT=NONE] -->

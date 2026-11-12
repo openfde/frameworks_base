@@ -31,6 +31,7 @@ import android.graphics.Point
 import android.graphics.PointF
 import android.graphics.Rect
 import android.view.Display
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.MotionEvent.ACTION_OUTSIDE
@@ -43,6 +44,7 @@ import android.view.WindowManager.LayoutParams
 import android.view.WindowlessWindowManager
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.window.DesktopExperienceFlags
 import android.window.DesktopModeFlags
 import android.window.SurfaceSyncGroup
@@ -52,12 +54,15 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.core.view.isGone
 import com.android.window.flags.Flags
 import com.android.wm.shell.R
+import com.android.wm.shell.desktopmode.DesktopModeEventLogger.Companion.InputMethod
 import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger
+import com.android.wm.shell.desktopmode.common.ToggleTaskSizeInteraction.AmbiguousSource
 import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger.DesktopUiEventEnum.DESKTOP_WINDOWING_APP_TO_WEB_OPEN_IN_APP
 import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger.DesktopUiEventEnum.DESKTOP_WINDOWING_APP_TO_WEB_OPEN_IN_BROWSER
 import com.android.wm.shell.gamecontrols.GameControlsHelper
 import com.android.wm.shell.shared.annotations.ShellMainThread
 import com.android.wm.shell.shared.bubbles.BubbleFlagHelper
+import com.android.wm.shell.shared.desktopmode.DesktopModeTransitionSource
 import com.android.wm.shell.shared.bubbles.ContextUtils.isRtl
 import com.android.wm.shell.shared.split.SplitScreenConstants
 import com.android.wm.shell.splitscreen.SplitScreenController
@@ -154,6 +159,10 @@ private constructor(
                 shouldShowGameControlsButton ||
                 shouldShowRestartButton
 
+    // fde start: the app handle menu only shows a single "exit fullscreen" item
+    private val showOnlyExitFullscreen = layoutResId == R.layout.desktop_mode_app_handle
+    // fde end
+
     private var loadAppInfoJob: Job? = null
 
     init {
@@ -219,6 +228,7 @@ private constructor(
                     appToWebData = appToWebData,
                     splitScreenController = splitScreenController,
                     decorThemeUtilFactory = decorThemeUtilFactory,
+                    showOnlyExitFullscreen = showOnlyExitFullscreen,
                 )
                 .apply {
                     bind(taskInfo, shouldShowMoreActionsPill)
@@ -244,13 +254,17 @@ private constructor(
                     this.onOutsideTouchListener = onOutsideTouchListener
                     this.onHandleMenuClicked = onHandleMenuClicked
                 }
-        loadAppInfoJob =
-            mainScope.launch {
-                if (!isActive) return@launch
-                val (name, icon) = taskResourceLoader.getNameAndHeaderIcon(taskInfo)
-                handleMenuView.setAppName(name)
-                handleMenuView.setAppIcon(icon)
-            }
+        // fde start: no app name/icon is shown in the single-item menu
+        if (!showOnlyExitFullscreen) {
+            loadAppInfoJob =
+                mainScope.launch {
+                    if (!isActive) return@launch
+                    val (name, icon) = taskResourceLoader.getNameAndHeaderIcon(taskInfo)
+                    handleMenuView.setAppName(name)
+                    handleMenuView.setAppIcon(icon)
+                }
+        }
+        // fde end
         val x = handleMenuPosition.x.toInt()
         val y = handleMenuPosition.y.toInt()
         val lpFlags = LayoutParams.FLAG_NOT_FOCUSABLE or LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
@@ -476,6 +490,12 @@ private constructor(
 
     /** Determines handle menu height based the max size and the visibility of pills. */
     private fun getHandleMenuHeight(): Int {
+        // fde start: only the exit-fullscreen pill (pill height + its top margin) is shown
+        if (showOnlyExitFullscreen) {
+            return loadDimensionPixelSize(R.dimen.desktop_mode_handle_menu_app_info_pill_height) +
+                loadDimensionPixelSize(R.dimen.desktop_mode_handle_menu_margin_top)
+        }
+        // fde end
         var menuHeight = loadDimensionPixelSize(R.dimen.desktop_mode_handle_menu_height)
         if (!shouldShowWindowingPill) {
             menuHeight -=
@@ -554,6 +574,9 @@ private constructor(
         private val appToWebData: AppToWebData?,
         private val splitScreenController: SplitScreenController,
         private val decorThemeUtilFactory: DecorThemeUtil.Factory,
+        // fde start: replace the whole menu content with a single "exit fullscreen" item
+        private val showOnlyExitFullscreen: Boolean = false,
+        // fde end
     ) : OnClickListener {
         val rootView =
             LayoutInflater.from(context)
@@ -637,6 +660,12 @@ private constructor(
         private val restartBtn =
             restartPill.requireViewById<HandleMenuActionButton>(R.id.handle_menu_restart_button)
 
+        // fde start: Exit Fullscreen Pill.
+        private val exitFullscreenPill = rootView.requireViewById<View>(R.id.exit_fullscreen_pill)
+        private val exitFullscreenBtn =
+            exitFullscreenPill.requireViewById<HandleMenuActionButton>(R.id.exit_fullscreen_button)
+        // fde end
+
         // Open in Browser/App Pill.
         private val openInAppOrBrowserPill =
             rootView.requireViewById<View>(R.id.open_in_app_or_browser_pill)
@@ -649,6 +678,7 @@ private constructor(
 
         private val menuButtons =
             listOf(
+                exitFullscreenBtn,
                 newWindowBtn,
                 changeAspectRatioBtn,
                 gameControlsBtn,
@@ -691,6 +721,23 @@ private constructor(
 
         override fun onClick(v: View) {
             when (v.id) {
+                // fde start: exit fullscreen (windowing-mode fullscreen) or restore a maximized
+                // window, then close the menu via onHandleMenuClicked below.
+                R.id.exit_fullscreen_button -> {
+                    if (taskInfo.isFullscreen) {
+                        windowDecorationActions.onToDesktop(
+                            taskInfo.taskId,
+                            DesktopModeTransitionSource.APP_HANDLE_MENU_BUTTON,
+                        )
+                    } else {
+                        windowDecorationActions.onMaximizeOrRestore(
+                            taskInfo.taskId,
+                            AmbiguousSource.MAXIMIZE_MENU,
+                            InputMethod.MOUSE,
+                        )
+                    }
+                }
+                // fde end
                 R.id.new_window_button -> {
                     windowDecorationActions.onNewWindow(taskInfo.taskId)
                 }
@@ -723,6 +770,14 @@ private constructor(
         fun bind(taskInfo: RunningTaskInfo, shouldShowMoreActionsPill: Boolean) {
             this.taskInfo = taskInfo
             this.style = calculateMenuStyle(taskInfo)
+
+            // fde start
+            if (showOnlyExitFullscreen) {
+                bindExitFullscreenOnly(style)
+                return
+            }
+            exitFullscreenPill.isGone = true
+            // fde end
 
             bindAppInfoPill(style)
             windowingPillView.isGone = !shouldShowWindowingPill
@@ -811,6 +866,41 @@ private constructor(
             appNameView.setTextColor(style.textColor)
             appNameView.startMarquee()
         }
+
+        // fde start
+        /** Shows only the "exit fullscreen" item, hiding every other pill of the menu. */
+        private fun bindExitFullscreenOnly(style: MenuStyle) {
+            appInfoPill.isGone = true
+            windowingPillView.isGone = true
+            moreActionsPill.isGone = true
+            restartPill.isGone = true
+            openInAppOrBrowserPill.isGone = true
+
+            exitFullscreenPill.isGone = false
+            exitFullscreenPill.background.setTint(style.backgroundColor)
+            exitFullscreenBtn.apply {
+                // Center the icon + label as a group. The shared style gives the label weight=1
+                // so it fills the row; wrap it instead to let gravity centering take effect.
+                gravity = Gravity.CENTER
+                (textView.layoutParams as LinearLayout.LayoutParams).apply {
+                    width = ViewGroup.LayoutParams.WRAP_CONTENT
+                    weight = 0f
+                }
+                textView.apply {
+                    setTextColor(style.textColor)
+                    startMarquee()
+                }
+                // Keep the icon's intrinsic colors (black rectangle with white arrows).
+                iconView.imageTintList = null
+                background =
+                    createBackgroundDrawable(
+                        color = style.textColor,
+                        cornerRadius = handleMenuCornerRadius,
+                        drawableInsets = DrawableInsets(),
+                    )
+            }
+        }
+        // fde end
 
         /** Update the split screen button (horizontal vs. vertical split) orientation. */
         fun updateSplitScreenButtonOrientation(configuration: Configuration) {
