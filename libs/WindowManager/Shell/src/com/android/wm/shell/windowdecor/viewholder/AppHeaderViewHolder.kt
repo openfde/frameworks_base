@@ -76,6 +76,7 @@ import com.android.wm.shell.windowdecor.common.OPACITY_55
 import com.android.wm.shell.windowdecor.common.OPACITY_65
 import com.android.wm.shell.windowdecor.common.Theme
 import com.android.wm.shell.windowdecor.common.createBackgroundDrawable
+import com.android.wm.shell.windowdecor.extension.fdeCustomTitle
 import com.android.wm.shell.windowdecor.extension.identityHashCode
 import com.android.wm.shell.windowdecor.extension.isLightCaptionBarAppearance
 import com.android.wm.shell.windowdecor.extension.isTransparentCaptionBarAppearance
@@ -182,8 +183,16 @@ class AppHeaderViewHolder(
     private lateinit var a11yTextRestore: String
     private lateinit var currentTaskInfo: RunningTaskInfo
     private var isTaskInFullImmersiveState: Boolean = false
+    private var currentAppName: CharSequence? = null
+    private var defaultAppName: CharSequence? = null
+    private var isFdeCustomTitle: Boolean = false
 
     init {
+        captionView.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if (right - left != oldRight - oldLeft) {
+                updateAppNameVisibility()
+            }
+        }
         if (Flags.interceptTouchEventForAppHeaderDragMove()) {
             captionView.setGestureInterceptor(gestureInterceptor)
             val onTouch =
@@ -215,7 +224,7 @@ class AppHeaderViewHolder(
         closeWindowButton.throttleFirstClicks(CLICK_DELAY) { v ->
             windowDecorationActions.onClose(currentTaskInfo)
         }
-        backWindowButton.throttleFirstClicks(CLICK_DELAY) { v ->
+        backWindowButton.setOnClickListener {
             windowDecorationActions.onBack(currentTaskInfo)
         }
         maximizeWindowButton.throttleFirstClicks(CLICK_DELAY) { v ->
@@ -510,12 +519,54 @@ class AppHeaderViewHolder(
             }
     }
 
+    /**
+     * Sets the app's name loaded from the package manager. This is the name shown unless the task
+     * provides a custom title with the FDE title marker.
+     */
+    fun setDefaultAppName(name: CharSequence) {
+        defaultAppName = name
+        if (!isFdeCustomTitle) {
+            setAppName(name)
+        }
+    }
+
     /** Sets the app's name in the header. */
     fun setAppName(name: CharSequence) {
+        if (name == currentAppName) {
+            return
+        }
+        currentAppName = name
         appNameTextView.text = name
         populateA11yStrings(name)
 
         updateMaximizeButtonContentDescription()
+        appNameTextView.post { updateAppNameVisibility() }
+    }
+
+    /** Shows or hides the app name depending on whether there is room in the caption. */
+    private fun updateAppNameVisibility() {
+        appNameTextView.isVisible = shouldAddAppName()
+    }
+
+    /**
+     * Applies the custom title from the task description, or restores the default app name if the
+     * custom title was removed.
+     */
+    private fun updateAppNameFromTask(taskInfo: RunningTaskInfo) {
+        val customTitle = taskInfo.fdeCustomTitle
+        if (customTitle != null) {
+            if (!isFdeCustomTitle) {
+                // Remember the name that would otherwise be shown so it can be restored when the
+                // custom title is removed. The loader may not have finished yet, in which case
+                // setDefaultAppName() will update the fallback later.
+                defaultAppName = currentAppName ?: defaultAppName
+            }
+            isFdeCustomTitle = true
+            setAppName(customTitle)
+        } else if (isFdeCustomTitle) {
+            isFdeCustomTitle = false
+            defaultAppName?.let { setAppName(it) }
+        }
     }
 
     /** Populates string variables from string templates which rely on app name */
@@ -606,6 +657,7 @@ class AppHeaderViewHolder(
         enableMaximizeLongClick: Boolean,
         isCaptionVisible: Boolean,
     ) {
+        updateAppNameFromTask(taskInfo)
         val header = fillHeaderInfo(taskInfo, hasGlobalFocus)
         val headerStyle = getHeaderStyle(header)
         val topActivity = taskInfo.topActivity
@@ -662,7 +714,7 @@ class AppHeaderViewHolder(
                     } else {
                         dimensions.appNameMaxWidth
                     }
-                isVisible = shouldAddAppName()
+                updateAppNameVisibility()
             }
             appIconImageView.imageAlpha = foregroundAlpha
             defaultFocusHighlightEnabled = false
@@ -775,6 +827,12 @@ class AppHeaderViewHolder(
     }
 
     private fun shouldAddAppName(): Boolean {
+        val captionWidth = captionView.width
+        if (captionWidth <= 0) {
+            // The caption hasn't been laid out yet, for example right after a minimized window is
+            // restored. Don't hide the app name based on a transient zero width.
+            return true
+        }
         val openMenuWidthWithText =
             if (appNameTextView.isVisible) {
                 openMenuButton.width
@@ -788,7 +846,7 @@ class AppHeaderViewHolder(
             (dimensions.windowControlButtonWidth + dimensions.windowControlButtonMarginEnd) *
                 WINDOW_CONTROLS_BUTTONS_COUNT + backButtonAreaWidth
 
-        return (openMenuWidthWithText + controlButtonsWidth) <= captionView.width
+        return (openMenuWidthWithText + controlButtonsWidth) <= captionWidth
     }
 
     private fun setCaptionVisibility(visible: Boolean) {

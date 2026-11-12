@@ -62,6 +62,7 @@ import com.android.wm.shell.windowdecor.common.OPACITY_55
 import com.android.wm.shell.windowdecor.common.OPACITY_65
 import com.android.wm.shell.windowdecor.common.Theme
 import com.android.wm.shell.windowdecor.common.createBackgroundDrawable
+import com.android.wm.shell.windowdecor.extension.fdeCustomTitle
 import com.android.wm.shell.windowdecor.extension.identityHashCode
 import com.android.wm.shell.windowdecor.extension.isLightCaptionBarAppearance
 import com.android.wm.shell.windowdecor.extension.throttleFirstClicks
@@ -127,6 +128,9 @@ class FullscreenHeaderViewHolder(
     private lateinit var a11yAnnounceTextFocused: String
 
     private lateinit var currentTaskInfo: RunningTaskInfo
+    private var currentAppName: CharSequence? = null
+    private var defaultAppName: CharSequence? = null
+    private var isFdeCustomTitle: Boolean = false
 
     init {
         if (!Flags.interceptTouchEventForAppHeaderDragMove()) {
@@ -382,6 +386,7 @@ class FullscreenHeaderViewHolder(
     }
 
     override fun bindData(data: HeaderData) {
+        updateAppNameFromTask(data.taskInfo)
         bindData(data.taskInfo, data.hasGlobalFocus, data.isCaptionVisible)
     }
 
@@ -390,10 +395,46 @@ class FullscreenHeaderViewHolder(
         captionHandle.stateDescription = a11yAnnounceTextFocused
     }
 
+    /**
+     * Sets the app's name loaded from the package manager. This is the name shown unless the task
+     * provides a custom title with the FDE title marker.
+     */
+    fun setDefaultAppName(name: CharSequence) {
+        defaultAppName = name
+        if (!isFdeCustomTitle) {
+            setAppName(name)
+        }
+    }
+
     /** Sets the app's name in the header. */
     fun setAppName(name: CharSequence) {
+        if (name == currentAppName) {
+            return
+        }
+        currentAppName = name
         appNameTextView.text = name
         populateA11yStrings(name)
+    }
+
+    /**
+     * Applies the custom title from the task description, or restores the default app name if the
+     * custom title was removed.
+     */
+    private fun updateAppNameFromTask(taskInfo: RunningTaskInfo) {
+        val customTitle = taskInfo.fdeCustomTitle
+        if (customTitle != null) {
+            if (!isFdeCustomTitle) {
+                // Remember the name that would otherwise be shown so it can be restored when the
+                // custom title is removed. The loader may not have finished yet, in which case
+                // setDefaultAppName() will update the fallback later.
+                defaultAppName = currentAppName ?: defaultAppName
+            }
+            isFdeCustomTitle = true
+            setAppName(customTitle)
+        } else if (isFdeCustomTitle) {
+            isFdeCustomTitle = false
+            defaultAppName?.let { setAppName(it) }
+        }
     }
 
     /** Populates string variables from string templates which rely on app name */

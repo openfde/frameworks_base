@@ -36,6 +36,25 @@ val TaskInfo.isLightCaptionBarAppearance: Boolean
         return (appearance and APPEARANCE_LIGHT_CAPTION_BARS) != 0
     }
 
+/**
+ * The custom window title set by the app through Activity#setTitle, or null if the title doesn't
+ * contain the FDE custom title marker.
+ *
+ * Only titles containing the marker override the caption's app name; all other titles keep the
+ * regular app name.
+ */
+val TaskInfo.fdeCustomTitle: CharSequence?
+    get() {
+        val label = taskDescription?.label ?: return null
+        val markerIndex = label.indexOf(FDE_CUSTOM_TITLE_MARKER)
+        if (markerIndex < 0) {
+            return null
+        }
+        return label.substring(markerIndex + FDE_CUSTOM_TITLE_MARKER.length).ifEmpty { null }
+    }
+
+private const val FDE_CUSTOM_TITLE_MARKER = "FDE::TITLE::"
+
 /** Whether the task is in fullscreen windowing mode. */
 val TaskInfo.isFullscreen: Boolean
     get() = windowingMode == WINDOWING_MODE_FULLSCREEN

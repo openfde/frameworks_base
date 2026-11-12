@@ -8128,6 +8128,14 @@ public class Activity extends ContextThemeWrapper
         if (mParent != null) {
             mParent.onChildTitleChanged(this, title);
         }
+
+        // Keep the task description label in sync so that window decorations can detect the FDE
+        // custom title marker and recents can reflect titles set dynamically through
+        // Activity#setTitle.
+        if (mToken != null) {
+            mTaskDescription.setLabel(title != null ? title.toString() : null);
+            setTaskDescription(mTaskDescription);
+        }
     }
 
     /**
