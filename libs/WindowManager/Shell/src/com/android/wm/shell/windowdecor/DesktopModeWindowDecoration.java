@@ -51,6 +51,7 @@ import android.app.assist.AssistContent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -862,8 +863,25 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
             // Task cannot be resized in full immersive.
             return false;
         }
+        // OEM: the launch splash/advertisement activity of filtered apps must not
+        // be resized by dragging the window edges. The window can still be moved by dragging
+        // the caption bar / app handle. Once the top activity changes, onTaskInfoChanged runs
+        // again and drag-resize is restored automatically.
+        if (isDragResizeDisabledForTopActivity(taskInfo)) {
+            return false;
+        }
         return taskInfo.isFreeform();
     }
+
+    // OEM start: disable drag-resize for launch splash / advertisement activities.
+    // Delegates to the compatible-config based check shared by all window decorations
+    // ("forcedPortraitMode" key), ported from the Android 14 implementation.
+    /** Whether the current top activity must not be resized by dragging the window edges. */
+    private static boolean isDragResizeDisabledForTopActivity(
+            @NonNull ActivityManager.RunningTaskInfo taskInfo) {
+        return DragPositioningCallbackUtility.isDragDisabledForTopActivity(taskInfo);
+    }
+    // OEM end
 
     private void notifyCaptionStateChanged() {
         if (!isCaptionVisible()) {

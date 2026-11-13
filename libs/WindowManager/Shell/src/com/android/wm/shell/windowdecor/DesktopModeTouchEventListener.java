@@ -548,7 +548,12 @@ public class DesktopModeTouchEventListener
         final DesktopRepository desktopRepository = mDesktopUserRepositories.getProfile(
                 taskInfo.userId);
         final boolean dragAllowed =
-                !desktopRepository.isTaskInFullImmersiveState(taskInfo.taskId);
+                !desktopRepository.isTaskInFullImmersiveState(taskInfo.taskId)
+                        // OEM: moving the window of the filtered launch splash / advertisement
+                        // activity is not allowed. Moving it changes the activity configuration,
+                        // which may crash the ad page (e.g. SplashActivity) and leave the
+                        // app unable to start again.
+                        && !DragPositioningCallbackUtility.isDragDisabledForTopActivity(taskInfo);
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
                 if (dragAllowed) {
@@ -803,6 +808,14 @@ public class DesktopModeTouchEventListener
         final int action = e.getActionMasked();
         if (mIsDragging || (action != MotionEvent.ACTION_UP
                 && action != MotionEvent.ACTION_CANCEL)) {
+            return false;
+        }
+        // OEM: double-tap maximizes/restores the window, which changes the activity
+        // configuration and crashes the filtered launch splash / advertisement activity
+        // (e.g. SplashActivity). Ignore the gesture entirely.
+        final WindowDecorationWrapper doubleTapDecoration = mWindowDecorationFinder.apply(mTaskId);
+        if (doubleTapDecoration != null && DragPositioningCallbackUtility
+                .isDragDisabledForTopActivity(doubleTapDecoration.getTaskInfo())) {
             return false;
         }
         final DesktopRepository desktopRepository = mDesktopUserRepositories.getCurrent();

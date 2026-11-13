@@ -100,5 +100,12 @@
             <activity name="">{"ratio":"4:5"}</activity>
         </package>
     </item>
-
+    <item
+        isdel="false"
+        key_code="forcedPortraitMode"
+        update_date="2026-11-13">
+	<package name="net.csdn.csdnplus">
+	    <activity name="SplashActivity">true</activity>
+	</package>
+    </item>
 </items>
