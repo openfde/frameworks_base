@@ -149,6 +149,8 @@ public class CaptionWindowDecorViewModel implements WindowDecorViewModel, FocusT
             DesktopConfig desktopConfig,
             InteractionJankMonitor interactionJankMonitor) {
         mContext = context;
+        // OEM: provide the context used to query the compatible config ("forcedPortraitMode").
+        DragPositioningCallbackUtility.initCompatibleConfig(context);
         mMainExecutor = shellExecutor;
         mMainHandler = mainHandler;
         mBgExecutor = bgExecutor;
@@ -415,6 +417,11 @@ public class CaptionWindowDecorViewModel implements WindowDecorViewModel, FocusT
                 mTaskOperations.minimizeTask(mTaskToken, mTaskId, /* isLastTask= */ false);
             } else if (id == R.id.maximize_window) {
                 RunningTaskInfo taskInfo = mTaskOrganizer.getRunningTaskInfo(mTaskId);
+                // OEM: maximize/restore changes the activity configuration, which crashes the
+                // filtered launch splash / advertisement activity (e.g. SplashActivity).
+                if (DragPositioningCallbackUtility.isDragDisabledForTopActivity(taskInfo)) {
+                    return;
+                }
                 final DisplayAreaInfo rootDisplayAreaInfo =
                         mRootTaskDisplayAreaOrganizer.getDisplayAreaInfo(taskInfo.displayId);
                 mTaskOperations.maximizeTask(taskInfo,
@@ -494,6 +501,11 @@ public class CaptionWindowDecorViewModel implements WindowDecorViewModel, FocusT
         public boolean handleMotionEvent(@Nullable View v, MotionEvent e) {
             final RunningTaskInfo taskInfo = mTaskOrganizer.getRunningTaskInfo(mTaskId);
             if (taskInfo.getWindowingMode() == WINDOWING_MODE_FULLSCREEN) {
+                return false;
+            }
+            // OEM: moving the window of the filtered launch splash / advertisement activity is
+            // not allowed, because the configuration change may crash the ad page.
+            if (DragPositioningCallbackUtility.isDragDisabledForTopActivity(taskInfo)) {
                 return false;
             }
             switch (e.getActionMasked()) {

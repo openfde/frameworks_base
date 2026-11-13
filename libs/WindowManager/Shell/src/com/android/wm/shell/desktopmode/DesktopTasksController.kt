@@ -707,6 +707,11 @@ class DesktopTasksController(
         transitionSource: DesktopModeTransitionSource,
     ) {
         getFocusedDesktopTask(displayId = displayId, userId = userId)?.let {
+            // OEM: entering fullscreen changes the activity configuration, which crashes the
+            // filtered launch splash / advertisement activity (e.g. SplashActivity).
+            if (DragPositioningCallbackUtility.isDragDisabledForTopActivity(it)) {
+                return
+            }
             // Desktop -> Fullscreen.
             moveDesktopTaskToFullscreen(it, displayId, transitionSource)
             return
@@ -717,6 +722,10 @@ class DesktopTasksController(
             // Fullscreen -> Desktop.
             1 -> {
                 val focusedTask = allFocusedTasks.single()
+                // OEM: see the comment above.
+                if (DragPositioningCallbackUtility.isDragDisabledForTopActivity(focusedTask)) {
+                    return
+                }
                 // No-op toggling to Desktop via keyboard shortcut if we are mid-dragging the same
                 // task to Desktop
                 if (
@@ -3276,6 +3285,11 @@ class DesktopTasksController(
      * bounds otherwise).
      */
     fun toggleDesktopTaskSize(taskInfo: RunningTaskInfo, interaction: ToggleTaskSizeInteraction) {
+        // OEM: maximize/restore changes the activity configuration, which crashes the filtered
+        // launch splash / advertisement activity (e.g. SplashActivity).
+        if (DragPositioningCallbackUtility.isDragDisabledForTopActivity(taskInfo)) {
+            return
+        }
         val repository = userRepositories.getProfile(taskInfo.userId)
         val currentTaskBounds = taskInfo.configuration.windowConfiguration.bounds
         val deskId = repository.getDeskIdForTask(taskInfo.taskId)

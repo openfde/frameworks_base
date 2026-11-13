@@ -33,6 +33,8 @@ import android.app.ActivityTaskManager;
 import android.app.TaskInfo;
 import android.app.WindowConfiguration;
 import android.app.WindowConfiguration.WindowingMode;
+import android.content.ComponentName;
+import android.content.pm.ActivityInfo;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
@@ -367,6 +369,15 @@ public class CaptionWindowDecoration extends WindowDecoration<WindowDecorLinearL
             return;
         }
 
+        // OEM: the launch splash/advertisement activity of filtered apps must not
+        // be resized by dragging the window edges. The window can still be moved by dragging
+        // the caption bar. Once the top activity changes, relayout() runs again and the drag
+        // resize listener is restored automatically.
+        if (isDragResizeDisabledForTopActivity()) {
+            closeDragResizeListener();
+            return;
+        }
+
         if (oldDecorationSurface != mDecorationContainerSurface || mDragResizeListener == null) {
             closeDragResizeListener();
             mDragResizeListener = new DragResizeInputListener(
@@ -490,6 +501,15 @@ public class CaptionWindowDecoration extends WindowDecoration<WindowDecorLinearL
     boolean isHandlingDragResize() {
         return mDragResizeListener != null && mDragResizeListener.isHandlingDragResize();
     }
+
+    // OEM start: disable drag-resize for launch splash / advertisement activities.
+    // Delegates to the compatible-config based check shared by all window decorations
+    // ("forcedPortraitMode" key), ported from the Android 14 implementation.
+    /** Whether the current top activity must not be resized by dragging the window edges. */
+    private boolean isDragResizeDisabledForTopActivity() {
+        return DragPositioningCallbackUtility.isDragDisabledForTopActivity(mTaskInfo);
+    }
+    // OEM end
 
     private void closeDragResizeListener() {
         if (mDragResizeListener == null) {

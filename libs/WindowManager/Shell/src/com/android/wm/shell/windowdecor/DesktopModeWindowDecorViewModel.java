@@ -473,6 +473,8 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
             SnapController snapController,
             DecorThemeUtil.Factory decorThemeUtilFactory) {
         mContext = context;
+        // OEM: provide the context used to query the compatible config ("forcedPortraitMode").
+        DragPositioningCallbackUtility.initCompatibleConfig(context);
         mMainExecutor = shellExecutor;
         mMainHandler = mainHandler;
         mMainChoreographer = mainChoreographer;
@@ -870,6 +872,14 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         if (decoration == null) {
             return;
         }
+        // OEM: maximize/restore changes the activity configuration, which crashes the filtered
+        // launch splash / advertisement activity (e.g. SplashActivity). Ignore the gesture
+        // regardless of where it comes from (double-tap on the caption, maximize button, layout
+        // menu or accessibility action).
+        if (DragPositioningCallbackUtility.isDragDisabledForTopActivity(
+                decoration.getTaskInfo())) {
+            return;
+        }
         final ToggleTaskSizeInteraction interaction =
                 createToggleSizeInteraction(decoration, source, inputMethod);
         if (interaction == null) {
@@ -963,6 +973,12 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
     public void onSnapResize(int taskId, boolean left, InputMethod inputMethod, boolean fromMenu) {
         final WindowDecorationWrapper decoration = mWindowDecorByTaskId.get(taskId);
         if (decoration == null) {
+            return;
+        }
+        // OEM: snapping changes the activity configuration, which crashes the filtered launch
+        // splash / advertisement activity (e.g. SplashActivity), so ignore it.
+        if (DragPositioningCallbackUtility.isDragDisabledForTopActivity(
+                decoration.getTaskInfo())) {
             return;
         }
 
@@ -1061,6 +1077,15 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
     private void moveToFullscreen(int taskId) {
         final WindowDecorationWrapper decoration = mWindowDecorByTaskId.get(taskId);
         if (decoration == null) {
+            return;
+        }
+        // OEM: entering fullscreen changes the activity configuration, which crashes the
+        // filtered launch splash / advertisement activity (e.g. SplashActivity). This is
+        // the shared entry for F11 (PhoneWindowManager#toggleFullscreenFreeform ->
+        // TASK_CAPTION_OPERATION operation 2), the app handle menu and keyboard shortcuts.
+        if (DragPositioningCallbackUtility.isDragDisabledForTopActivity(
+                decoration.getTaskInfo())) {
+            Log.d(TAG, "moveToFullscreen ignored for filtered splash activity, taskId=" + taskId);
             return;
         }
         if (isTaskInSplitScreen(taskId)) {
@@ -2338,6 +2363,10 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         public void onImmersiveOrRestore(@NonNull ActivityManager.RunningTaskInfo taskInfo) {
             WdLog.logD(TAG, "Using DefaultWindowDecorationActions to enter or restore from "
                     + "immersive for task=%d", taskInfo.taskId);
+            // OEM: size / window-mode changes are ignored for the filtered splash/ad activity.
+            if (isSizeChangeDisabledForTask(taskInfo)) {
+                return;
+            }
             mViewModel.onEnterOrExitImmersive(taskInfo);
         }
 
@@ -2345,6 +2374,9 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         public void onLeftSnap(int taskId,
                 @NonNull DesktopModeEventLogger.Companion.InputMethod inputMethod) {
             WdLog.logD(TAG, "Using DefaultWindowDecorationActions to snap left task=%d", taskId);
+            if (isSizeChangeDisabledForTask(taskId)) {
+                return;
+            }
             mViewModel.onSnapResize(taskId, /* isLeft= */ true, inputMethod, /* fromMenu= */ true);
         }
 
@@ -2352,6 +2384,9 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         public void onRightSnap(int taskId,
                 @NonNull DesktopModeEventLogger.Companion.InputMethod inputMethod) {
             WdLog.logD(TAG, "Using DefaultWindowDecorationActions to snap right task=%d", taskId);
+            if (isSizeChangeDisabledForTask(taskId)) {
+                return;
+            }
             mViewModel.onSnapResize(taskId, /* isLeft= */ false, inputMethod, /* fromMenu= */ true);
         }
 
@@ -2359,6 +2394,9 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         public void onToFullscreen(int taskId) {
             WdLog.logD(TAG, "Using DefaultWindowDecorationActions to enter fullscreen for task=%d",
                     taskId);
+            if (isSizeChangeDisabledForTask(taskId)) {
+                return;
+            }
             mViewModel.moveToFullscreen(taskId);
         }
 
@@ -2366,6 +2404,9 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         public void onToSplitScreen(int taskId) {
             WdLog.logD(TAG, "Using DefaultWindowDecorationActions to enter split for task=%d",
                     taskId);
+            if (isSizeChangeDisabledForTask(taskId)) {
+                return;
+            }
             mViewModel.moveToSplit(taskId);
         }
 
@@ -2380,7 +2421,26 @@ public class DesktopModeWindowDecorViewModel implements WindowDecorViewModel,
         public void onToFloat(int taskId) {
             WdLog.logD(TAG, "Using DefaultWindowDecorationActions to enter float for task=%d",
                     taskId);
+            if (isSizeChangeDisabledForTask(taskId)) {
+                return;
+            }
             mViewModel.moveToFloat(taskId);
+        }
+
+        /**
+         * OEM: whether window size / window mode changes must be ignored for the task, so that
+         * the launch splash / advertisement activity (e.g. SplashActivity) is not restarted
+         * by a configuration change, which would crash it.
+         */
+        private boolean isSizeChangeDisabledForTask(int taskId) {
+            final WindowDecorationWrapper decoration =
+                    mViewModel.mWindowDecorByTaskId.get(taskId);
+            return decoration != null && DragPositioningCallbackUtility
+                    .isDragDisabledForTopActivity(decoration.getTaskInfo());
+        }
+
+        private boolean isSizeChangeDisabledForTask(@NonNull RunningTaskInfo taskInfo) {
+            return DragPositioningCallbackUtility.isDragDisabledForTopActivity(taskInfo);
         }
 
         @Override

@@ -38,13 +38,21 @@ import static com.android.wm.shell.windowdecor.DragPositioningCallback.INPUT_MET
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.ActivityManager.RunningTaskInfo;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.graphics.PointF;
 import android.graphics.Rect;
+import android.os.SystemProperties;
+import android.text.TextUtils;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceControl;
 import android.window.DesktopModeFlags;
 
+import com.android.internal.util.CompatibleConfig;
 import com.android.window.flags.Flags;
 import com.android.wm.shell.R;
 import com.android.wm.shell.common.DisplayController;
@@ -58,6 +66,88 @@ import com.android.wm.shell.pinnedlayer.phone.PinnedLayerController;
  * and applying that change to the task bounds when applicable.
  */
 public class DragPositioningCallbackUtility {
+    private static final String TAG = "DragPositioningCallbackUtility";
+
+    // OEM start: disable window drag (move) and drag-resize for launch splash / advertisement
+    // activities, ported from Android 14 CaptionWindowDecoration. The filtered activities are
+    // configured in the compatible config (key code "forcedPortraitMode") instead of being
+    // hard-coded. Matching logic (same as Android 14):
+    //   1. package-level config: forcedPortraitMode = "true" for the package, or the package
+    //      matches the "com.fde.record.package" system property;
+    //   2. otherwise activity-level config: forcedPortraitMode = "true" for the package and
+    //      the short activity class name (the part after the last '.').
+    // The result is cached per top activity and refreshed whenever the top activity changes,
+    // same as the mTopActivity/mDragResizeable cache in the Android 14 implementation.
+    private static final String KEY_FORCED_PORTRAIT_MODE = "forcedPortraitMode";
+    private static Context sCompatibleConfigContext;
+    @Nullable
+    private static ComponentName sCachedTopActivity;
+    private static boolean sCachedDisabled;
+
+    /** Initializes the context used to query the compatible config. Called by the decor VMs. */
+    public static void initCompatibleConfig(Context context) {
+        if (sCompatibleConfigContext == null && context != null) {
+            sCompatibleConfigContext = context.getApplicationContext();
+        }
+    }
+
+    /** Whether window drag (move) and drag-resize must be ignored for the top activity. */
+    public static boolean isDragDisabledForTopActivity(@NonNull RunningTaskInfo taskInfo) {
+        final ComponentName component = getTopActivityComponent(taskInfo);
+        if (component == null) {
+            return false;
+        }
+        if (component.equals(sCachedTopActivity)) {
+            return sCachedDisabled;
+        }
+        final boolean disabled = queryDragDisabled(component);
+        sCachedTopActivity = component;
+        sCachedDisabled = disabled;
+        if (disabled) {
+            Log.d(TAG, "drag disabled for " + component.flattenToShortString());
+        }
+        return disabled;
+    }
+
+    private static ComponentName getTopActivityComponent(@NonNull RunningTaskInfo taskInfo) {
+        final ActivityInfo topActivityInfo = taskInfo.topActivityInfo;
+        if (topActivityInfo != null && topActivityInfo.getComponentName() != null) {
+            return topActivityInfo.getComponentName();
+        }
+        return taskInfo.topActivity;
+    }
+
+    private static boolean queryDragDisabled(@NonNull ComponentName component) {
+        if (sCompatibleConfigContext == null) {
+            return false;
+        }
+        final String packageName = component.getPackageName();
+        final String recordPackageName = SystemProperties.get("com.fde.record.package", "null");
+        // Package-level config (empty activity name), same as Android 14.
+        if (TextUtils.equals(recordPackageName, packageName)
+                || TextUtils.equals(CompatibleConfig.queryStringValueData(sCompatibleConfigContext,
+                        KEY_FORCED_PORTRAIT_MODE, packageName, ""), "true")) {
+            return true;
+        }
+        // Activity-level config uses the short class name, same as Android 14.
+        final String activityName = extractActivityName(component.getClassName());
+        return TextUtils.equals(CompatibleConfig.queryStringValueData(sCompatibleConfigContext,
+                KEY_FORCED_PORTRAIT_MODE, packageName, activityName), "true");
+    }
+
+    /** Returns the part of the class name after the last '.', same as Android 14. */
+    private static String extractActivityName(String fullClassName) {
+        if (fullClassName == null || fullClassName.isEmpty()) {
+            return "";
+        }
+        final int lastDotIndex = fullClassName.lastIndexOf('.');
+        if (lastDotIndex == -1) {
+            return fullClassName;
+        }
+        return fullClassName.substring(lastDotIndex + 1);
+    }
+    // OEM end
+
     /**
      * Determine the delta between input's current point and the input start point.
      *
@@ -95,6 +185,13 @@ public class DragPositioningCallbackUtility {
         // If task is being dragged rather than resized, return since this method only handles
         // with resizing
         if (ctrlType == CTRL_TYPE_UNDEFINED) {
+            return;
+        }
+
+        // OEM: resize gestures on the filtered launch splash / advertisement activities are
+        // no-ops. The bounds stay untouched and result.boundsChanged stays false.
+        if (isDragDisabledForTopActivity(windowDecoration.getTaskInfo())) {
+            repositionTaskBounds.set(taskBoundsAtDragStart);
             return;
         }
 
