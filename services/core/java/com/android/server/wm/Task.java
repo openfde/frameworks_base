@@ -467,6 +467,11 @@ class Task extends TaskFragment {
     // {@link ActivityInfo#FLAG_SUPPORTS_PICTURE_IN_PICTURE} flag of the root activity.
     boolean mSupportsPictureInPicture;
 
+    // FDE: whether this task is a warm host. Decided from the launch intent in
+    // the constructor because the freeform minimum size may already be applied
+    // before the ActivityRecord is attached.
+    private boolean mFdeWarmHost;
+
     // Whether the task is currently being drag-resized
     private boolean mDragResizing;
 
@@ -757,6 +762,13 @@ class Task extends TaskFragment {
             mComplexMinWidth = complexMinWidth;
             mComplexMinHeight = complexMinHeight;
         }
+        // FDE: warm host flag on the task. Same source as the ActivityRecord
+        // flag, but the task may need to compute bounds (freeform minimum size)
+        // before the activity is attached, so keep a copy here to avoid
+        // ordering-dependent misses.
+        mFdeWarmHost = intent != null
+                && intent.getBooleanExtra(ActivityRecord.FDE_WARM_HOST_EXTRA, false)
+                && !intent.getBooleanExtra(ActivityRecord.FDE_WARM_CLAIM_EXTRA, false);
         mAtmService.getTaskChangeNotificationController().notifyTaskCreated(taskId, realActivity);
         mHandler = new ActivityTaskHandler(mTaskSupervisor.mLooper);
         mCurrentUser = mAtmService.mAmInternal.getCurrentUserId();
@@ -1590,6 +1602,28 @@ class Task extends TaskFragment {
         return getRootActivity(true /*ignoreRelinquishIdentity*/, false /*setToBottomIfNone*/);
     }
 
+    /**
+     * FDE: whether this task is a warm host.
+     *
+     * <p>A warm host is a pre-created, not yet claimed shell for an X window. It
+     * must stay invisible to the user and out of task lists/recents. The check
+     * uses the task flag or the root activity flag; both are cleared on claim,
+     * after which the task is a normal task.
+     */
+    boolean isFdeWarmHost() {
+        if (mFdeWarmHost) {
+            return true;
+        }
+        final ActivityRecord root = getRootActivity(false /*ignoreRelinquishIdentity*/,
+                false /*setToBottomIfNone*/);
+        return root != null && root.isFdeWarmHost();
+    }
+
+    /** FDE: clear the task-level flag on claim. */
+    void setFdeWarmHost(boolean warmHost) {
+        mFdeWarmHost = warmHost;
+    }
+
     ActivityRecord getRootActivity(boolean setToBottomIfNone) {
         return getRootActivity(false /*ignoreRelinquishIdentity*/, setToBottomIfNone);
     }
@@ -2421,6 +2455,14 @@ class Task extends TaskFragment {
 
     void adjustForMinimalTaskDimensions(@NonNull Rect bounds, @NonNull Rect previousBounds,
             @NonNull Configuration parentConfig) {
+        // FDE: skip the freeform minimum size for warm host tasks.
+        // They are pre-created 1x1 shells that are invisible and not
+        // interactive, so there is no reason to clamp them to 220dp. Once
+        // claimed the flag is cleared and the normal constraint applies again.
+        // Switch: persist.fde.warm.size
+        if (isFdeWarmHost() && FdeWarmHostConfig.size()) {
+            return;
+        }
         // If the task has no requested minimal size, we'd like to enforce a minimal size
         // so that the user can not render the task fragment too small to manipulate. We don't need
         // to do this for the root pinned task as the bounds are controlled by the system.

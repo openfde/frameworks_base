@@ -109,6 +109,7 @@ import android.app.ProfilerInfo;
 import android.app.WaitResult;
 import android.app.WindowConfiguration;
 import android.app.WindowConfiguration.WindowingMode;
+import android.graphics.Rect;
 import android.app.compat.CompatChanges;
 import android.compat.annotation.ChangeId;
 import android.compat.annotation.Overridable;
@@ -3441,6 +3442,39 @@ class ActivityStarter {
     private void deliverNewIntent(ActivityRecord activity, NeededUriGrants intentGrants) {
         if (mIntentDelivered) {
             return;
+        }
+
+        // FDE: claim a warm host.
+        // FDE uses setLaunchTaskId() to deliver the new window intent into the
+        // warm task, which goes through this "reuse activity + deliver intent"
+        // path. After the claim the activity is a normal window.
+        if (activity.isFdeWarmHost()
+                && mStartActivity.intent.getBooleanExtra(
+                        ActivityRecord.FDE_WARM_CLAIM_EXTRA, false)) {
+            activity.setFdeWarmHost(false);
+            final Task task = activity.getTask();
+            Rect claimBounds = null;
+            if (task != null) {
+                task.setFdeWarmHost(false);
+                // A warm task is 1x1 and so is its last-non-fullscreen bounds.
+                // Clearing the flag alone would make the system "restore" that
+                // 1x1 later and freeform would clamp it to 220x220 in the
+                // bottom-left corner, losing the real geometry. Apply the target
+                // bounds provided by FDE and update last-non-fullscreen so the
+                // task cannot be restored back to 1x1.
+                // mOptions.getLaunchBounds() is already null here (setTargetTask()
+                // clears it), hence the extra carried in the intent.
+                claimBounds = mStartActivity.intent.getParcelableExtra(
+                        ActivityRecord.FDE_WARM_CLAIM_BOUNDS_EXTRA);
+                if (claimBounds != null && !claimBounds.isEmpty()) {
+                    task.setBounds(claimBounds);
+                    task.setLastNonFullscreenBounds(claimBounds);
+                }
+            }
+            Slog.i(TAG, "FDE warm host claimed task=" + (task != null ? task.mTaskId : -1)
+                    + " claimBounds=" + claimBounds
+                    + " taskBounds=" + (task != null ? task.getBounds() : null)
+                    + " activity=" + activity);
         }
 
         activity.logStartActivity(EventLogTags.WM_NEW_INTENT, activity.getTask());

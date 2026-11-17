@@ -2682,6 +2682,17 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             flags |= (allowed ? RunningTasks.FLAG_ALLOWED : 0);
             mRootWindowContainer.getRunningTasks(
                     maxNum, list, flags, callingUid, callingProfileIds, displayId);
+            // FDE: warm hosts must not appear in any task list. The task bar
+            // (taskplugin) and recents (systemuiplugin) both go through
+            // ActivityManager.getRunningTasks -> this API, so filter them here
+            // and keep the app side free of hiding hacks.
+            // Switch: persist.fde.warm.tasks
+            if (!list.isEmpty() && FdeWarmHostConfig.tasks()) {
+                list.removeIf(info -> {
+                    final Task task = mRootWindowContainer.anyTaskForId(info.taskId);
+                    return task != null && task.isFdeWarmHost();
+                });
+            }
         }
 
         return list;
