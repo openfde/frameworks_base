@@ -11314,6 +11314,13 @@
         <meta-data
             android:name="com.android.server.patch.34957421"
             android:value="true" />
+            
+         <provider
+            android:name="com.android.internal.util.CompatibleContentProvider"
+            android:authorities="com.android.compatibleprovider"
+			      android:enabled="true"
+            android:exported="true">
+        </provider>	
 
     </application>
 
