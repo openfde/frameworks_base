@@ -23,8 +23,6 @@ import androidx.compose.ui.unit.dp
 
 internal fun PaddingValues.horizontalValues(): PaddingValues = HorizontalPaddingValues(this)
 
-internal fun PaddingValues.verticalValues(): PaddingValues = VerticalPaddingValues(this)
-
 private class HorizontalPaddingValues(private val paddingValues: PaddingValues) : PaddingValues {
     override fun calculateLeftPadding(layoutDirection: LayoutDirection) =
         paddingValues.calculateLeftPadding(layoutDirection)
@@ -35,14 +33,4 @@ private class HorizontalPaddingValues(private val paddingValues: PaddingValues) 
         paddingValues.calculateRightPadding(layoutDirection)
 
     override fun calculateBottomPadding() = 0.dp
-}
-
-private class VerticalPaddingValues(private val paddingValues: PaddingValues) : PaddingValues {
-    override fun calculateLeftPadding(layoutDirection: LayoutDirection) = 0.dp
-
-    override fun calculateTopPadding(): Dp = paddingValues.calculateTopPadding()
-
-    override fun calculateRightPadding(layoutDirection: LayoutDirection) = 0.dp
-
-    override fun calculateBottomPadding() = paddingValues.calculateBottomPadding()
 }

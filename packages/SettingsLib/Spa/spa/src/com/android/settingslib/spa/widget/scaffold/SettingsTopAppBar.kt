@@ -18,20 +18,17 @@ package com.android.settingslib.spa.widget.scaffold
 
 import android.os.Build
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.window.embedding.ActivityEmbeddingController
 import com.android.settingslib.spa.framework.compose.localActivity
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.padding
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 internal fun SettingsTopAppBar(
     title: String,
-    scrollBehavior: TopAppBarScrollBehavior,
     isFirstLayerPageWhenEmbedded: Boolean,
     actions: @Composable RowScope.() -> Unit,
 ) {
@@ -40,7 +37,6 @@ internal fun SettingsTopAppBar(
         modifier = Modifier.padding(end = 160.dp),
         navigationIcon = { NavigationIcon(isFirstLayerPageWhenEmbedded) },
         actions = actions,
-        scrollBehavior = scrollBehavior,
     )
 }
 
@@ -62,8 +58,3 @@ private fun shouldShowNavigateBack(isFirstLayerPageWhenEmbedded: Boolean): Boole
             }
         }
     }
-
-@OptIn(ExperimentalMaterial3Api::class)
-internal fun TopAppBarScrollBehavior.collapse() {
-    with(state) { heightOffset = heightOffsetLimit }
-}

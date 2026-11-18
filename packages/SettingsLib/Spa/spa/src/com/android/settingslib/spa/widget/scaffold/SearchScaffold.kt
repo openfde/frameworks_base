@@ -37,8 +37,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,7 +49,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.ImeAction
@@ -83,15 +80,12 @@ fun SearchScaffold(
     var isSearchMode by rememberSaveable { mutableStateOf(false) }
     val viewModel: SearchScaffoldViewModel = viewModel()
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             SearchableTopAppBar(
                 title = title,
                 isFirstLayerPageWhenEmbedded = isFirstLayerPageWhenEmbedded,
                 actions = actions,
-                scrollBehavior = scrollBehavior,
                 isSearchMode = isSearchMode,
                 onSearchModeChange = { isSearchMode = it },
                 searchState = viewModel.searchState,
@@ -124,7 +118,6 @@ private fun SearchableTopAppBar(
     title: String,
     isFirstLayerPageWhenEmbedded: Boolean,
     actions: @Composable RowScope.() -> Unit,
-    scrollBehavior: TopAppBarScrollBehavior,
     isSearchMode: Boolean,
     onSearchModeChange: (Boolean) -> Unit,
     searchState: TextFieldState,
@@ -136,11 +129,8 @@ private fun SearchableTopAppBar(
             actions = actions,
         )
     } else {
-        SettingsTopAppBar(title, scrollBehavior, isFirstLayerPageWhenEmbedded) {
-            SearchAction {
-                scrollBehavior.collapse()
-                onSearchModeChange(true)
-            }
+        SettingsTopAppBar(title, isFirstLayerPageWhenEmbedded) {
+            SearchAction { onSearchModeChange(true) }
             actions()
         }
     }

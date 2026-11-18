@@ -16,19 +16,9 @@
 
 package com.android.settingslib.spa.widget.scaffold
 
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.AnimationState
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.animateDecay
-import androidx.compose.animation.core.animateTo
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -37,27 +27,14 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarScrollBehavior
-import androidx.compose.material3.TopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
-import androidx.compose.runtime.ProvidedValue
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -70,7 +47,6 @@ import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
@@ -81,16 +57,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.android.settingslib.spa.framework.theme.SettingsDimension
 import com.android.settingslib.spa.framework.theme.SettingsSpace
 import com.android.settingslib.spa.framework.theme.isSpaExpressiveEnabled
 import com.android.settingslib.spa.framework.theme.settingsBackground
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
-import androidx.compose.ui.unit.sp
 
 private val safeDrawingWindowInsets: WindowInsets
     @Composable
@@ -130,51 +103,33 @@ internal fun CustomizedTopAppBarWithTitleScalable(
     )
 }
 
-/** The customized LargeTopAppBar for Settings. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+/**
+ * The customized LargeTopAppBar for Settings. Always rendered as a regular single-line toolbar.
+ *
+ * It never collapses on scroll: the toolbar stays pinned regardless of the page's scroll state.
+ */
 @Composable
 internal fun CustomizedLargeTopAppBar(
     title: String,
     modifier: Modifier = Modifier,
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
-    scrollBehavior: TopAppBarScrollBehavior? = null,
-
 ) {
-    TwoRowsTopAppBar(
+    SingleRowTopAppBar(
         title = {
-            Title(
-                title = title,
-                maxLines = 3,
-                paddingStart =
-                    if (isSpaExpressiveEnabled) 0.dp else SettingsDimension.itemPaddingAround,
-            )
-        },
-        titleTextStyle =
-           MaterialTheme.typography.headlineSmall.copy(
-            fontSize = 16.sp
-        ),
-        smallTitleTextStyle =
-            MaterialTheme.typography.headlineSmall.copy(
-            fontSize = 16.sp
-        ),
-        titleBottomPadding = LargeTitleBottomPadding,
-        smallTitle = {
             Title(
                 title = title,
                 maxLines = 1,
                 paddingStart =
-                    if (isSpaExpressiveEnabled) SettingsSpace.extraSmall6
-                    else SettingsDimension.itemPaddingAround,
+                    if (isSpaExpressiveEnabled) 0.dp else SettingsDimension.itemPaddingAround,
             )
         },
+        titleTextStyle = MaterialTheme.typography.titleMedium,
         modifier = modifier,
         navigationIcon = navigationIcon,
         actions = actions,
-        colors = topAppBarColors(),
         windowInsets = safeDrawingWindowInsets,
-        pinnedHeight = ContainerHeight,
-        scrollBehavior = scrollBehavior,
+        colors = topAppBarColors(),
     )
 }
 
@@ -282,13 +237,14 @@ internal class TopAppBarColors(
  * bar composables.
  */
 @Composable
-private fun SingleRowTopAppBar(
+internal fun SingleRowTopAppBar(
     title: @Composable () -> Unit,
     titleTextStyle: TextStyle,
     navigationIcon: @Composable () -> Unit,
     actions: @Composable (RowScope.() -> Unit),
     windowInsets: WindowInsets,
     colors: TopAppBarColors,
+    modifier: Modifier = Modifier,
     titleScaleDisabled: Boolean = true,
 ) {
     // Wrap the given actions in a Row.
@@ -304,7 +260,8 @@ private fun SingleRowTopAppBar(
     // Compose a Surface with a TopAppBarLayout content.
     Box(
         modifier =
-            Modifier.drawBehind { drawRect(color = colors.scrolledContainerColor) }
+            modifier
+                .drawBehind { drawRect(color = colors.scrolledContainerColor) }
                 .semantics { isTraversalGroup = true }
                 .pointerInput(Unit) {}
     ) {
@@ -332,177 +289,6 @@ private fun SingleRowTopAppBar(
 }
 
 /**
- * A two-rows top app bar that is designed to be called by the Large and Medium top app bar
- * composables.
- *
- * @throws [IllegalArgumentException] if the given [MaxHeightWithoutTitle] is equal or smaller than
- *   the [pinnedHeight]
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TwoRowsTopAppBar(
-    modifier: Modifier = Modifier,
-    title: @Composable () -> Unit,
-    titleTextStyle: TextStyle,
-    titleBottomPadding: Dp,
-    smallTitle: @Composable () -> Unit,
-    smallTitleTextStyle: TextStyle,
-    navigationIcon: @Composable () -> Unit,
-    actions: @Composable RowScope.() -> Unit,
-    windowInsets: WindowInsets,
-    colors: TopAppBarColors,
-    pinnedHeight: Dp,
-    scrollBehavior: TopAppBarScrollBehavior?,
-) {
-    if (MaxHeightWithoutTitle <= pinnedHeight) {
-        throw IllegalArgumentException(
-            "A TwoRowsTopAppBar max height should be greater than its pinned height"
-        )
-    }
-    val pinnedHeightPx: Float
-    val titleBottomPaddingPx: Int
-    val defaultMaxHeightPx: Float
-    val density = LocalDensity.current
-    density.run {
-        pinnedHeightPx = pinnedHeight.toPx()
-        titleBottomPaddingPx = titleBottomPadding.roundToPx()
-        defaultMaxHeightPx = (MaxHeightWithoutTitle + DefaultTitleHeight).toPx()
-    }
-
-    val maxHeightPx = remember(density) { mutableFloatStateOf(defaultMaxHeightPx) }
-
-    // Sets the app bar's height offset limit to hide just the bottom title area and keep top title
-    // visible when collapsed.
-    val heightOffsetLimit = pinnedHeightPx - maxHeightPx.floatValue
-    scrollBehavior?.state?.heightOffsetLimit = heightOffsetLimit
-    if (isSpaExpressiveEnabled) {
-        var hasCollapsedInitially by rememberSaveable(heightOffsetLimit) { mutableStateOf(false) }
-        LaunchedEffect(heightOffsetLimit) {
-            if (!hasCollapsedInitially) {
-                scrollBehavior?.collapse()
-                hasCollapsedInitially = true
-            }
-        }
-    }
-
-    // Obtain the container Color from the TopAppBarColors using the `collapsedFraction`, as the
-    // bottom part of this TwoRowsTopAppBar changes color at the same rate the app bar expands or
-    // collapse.
-    // This will potentially animate or interpolate a transition between the container color and the
-    // container's scrolled color according to the app bar's scroll state.
-    val colorTransitionFraction = { scrollBehavior?.state?.collapsedFraction ?: 0f }
-    val appBarContainerColor = { colors.containerColor(colorTransitionFraction()) }
-
-    // Wrap the given actions in a Row.
-    val actionsRow =
-        @Composable {
-            Row(
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-                content = actions,
-            )
-        }
-    val topTitleAlpha = { TopTitleAlphaEasing.transform(colorTransitionFraction()) }
-    val bottomTitleAlpha = { 1f - colorTransitionFraction() }
-    // Hide the top row title semantics when its alpha value goes below 0.5 threshold.
-    // Hide the bottom row title semantics when the top title semantics are active.
-    val hideTopRowSemantics by
-        remember(colorTransitionFraction) { derivedStateOf { colorTransitionFraction() < 0.5f } }
-    val hideBottomRowSemantics = !hideTopRowSemantics
-
-    // Set up support for resizing the top app bar when vertically dragging the bar itself.
-    val appBarDragModifier =
-        if (scrollBehavior != null && !scrollBehavior.isPinned) {
-            Modifier.draggable(
-                orientation = Orientation.Vertical,
-                state =
-                    rememberDraggableState { delta -> scrollBehavior.state.heightOffset += delta },
-                onDragStopped = { velocity ->
-                    settleAppBar(
-                        scrollBehavior.state,
-                        velocity,
-                        scrollBehavior.flingAnimationSpec,
-                        scrollBehavior.snapAnimationSpec,
-                    )
-                },
-            )
-        } else {
-            Modifier
-        }
-
-    Box(
-        modifier =
-            modifier
-                .then(appBarDragModifier)
-                .drawBehind { drawRect(color = appBarContainerColor()) }
-                .semantics { isTraversalGroup = true }
-                .pointerInput(Unit) {}
-    ) {
-        Column {
-            TopAppBarLayout(
-                modifier =
-                    Modifier.windowInsetsPadding(windowInsets)
-                        // clip after padding so we don't show the title over the inset area
-                        .clipToBounds(),
-                heightPx = pinnedHeightPx,
-                navigationIconContentColor = colors.navigationIconContentColor,
-                titleContentColor = colors.titleContentColor,
-                actionIconContentColor = colors.actionIconContentColor,
-                title = smallTitle,
-                titleTextStyle = smallTitleTextStyle,
-                titleAlpha = topTitleAlpha,
-                titleVerticalArrangement = Arrangement.Center,
-                titleBottomPadding = 0,
-                hideTitleSemantics = hideTopRowSemantics,
-                navigationIcon = navigationIcon,
-                actions = actionsRow,
-            )
-            TopAppBarLayout(
-                modifier =
-                    Modifier
-                        // only apply the horizontal sides of the window insets padding, since the
-                        // top
-                        // padding will always be applied by the layout above
-                        .windowInsetsPadding(windowInsets.only(WindowInsetsSides.Horizontal))
-                        .clipToBounds(),
-                heightPx =
-                    maxHeightPx.floatValue - pinnedHeightPx +
-                        (scrollBehavior?.state?.heightOffset ?: 0f),
-                navigationIconContentColor = colors.navigationIconContentColor,
-                titleContentColor = colors.titleContentColor,
-                actionIconContentColor = colors.actionIconContentColor,
-                title = {
-                    Box(
-                        modifier =
-                            Modifier.onGloballyPositioned { coordinates ->
-                                val measuredMaxHeightPx =
-                                    density.run {
-                                        MaxHeightWithoutTitle.toPx() +
-                                            coordinates.size.height.toFloat()
-                                    }
-                                // Allow larger max height for multi-line title, but do not reduce
-                                // max height to prevent flaky.
-                                if (measuredMaxHeightPx > defaultMaxHeightPx) {
-                                    maxHeightPx.floatValue = measuredMaxHeightPx
-                                }
-                            }
-                    ) {
-                        title()
-                    }
-                },
-                titleTextStyle = titleTextStyle,
-                titleAlpha = bottomTitleAlpha,
-                titleVerticalArrangement = Arrangement.Bottom,
-                titleBottomPadding = titleBottomPaddingPx,
-                hideTitleSemantics = hideBottomRowSemantics,
-                navigationIcon = {},
-                actions = {},
-            )
-        }
-    }
-}
-
-/**
  * The base [Layout] for all top app bars. This function lays out a top app bar navigation icon
  * (leading icon), a title (header), and action icons (trailing icons). Note that the navigation and
  * the actions are optional.
@@ -522,9 +308,8 @@ private fun TwoRowsTopAppBar(
  * @param titleVerticalArrangement the title's vertical arrangement
  * @param titleBottomPadding the title's bottom padding
  * @param hideTitleSemantics hides the title node from the semantic tree. Apply this boolean when
- *   this layout is part of a [TwoRowsTopAppBar] to hide the title's semantics from accessibility
- *   services. This is needed to avoid having multiple titles visible to accessibility services at
- *   the same time, when animating between collapsed / expanded states.
+ *   this layout is part of a [SingleRowTopAppBar] to hide the title's semantics from accessibility
+ *   services.
  * @param navigationIcon a navigation icon [Composable]
  * @param actions actions [Composable]
  * @param titleScaleDisabled whether the title font scaling is disabled. Default is disabled.
@@ -654,73 +439,7 @@ private fun TopAppBarLayout(
     }
 }
 
-/**
- * Settles the app bar by flinging, in case the given velocity is greater than zero, and snapping
- * after the fling settles.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-internal suspend fun settleAppBar(
-    state: TopAppBarState,
-    velocity: Float,
-    flingAnimationSpec: DecayAnimationSpec<Float>?,
-    snapAnimationSpec: AnimationSpec<Float>?,
-): Velocity {
-    // Check if the app bar is completely collapsed/expanded. If so, no need to settle the app bar,
-    // and just return Zero Velocity.
-    // Note that we don't check for 0f due to float precision with the collapsedFraction
-    // calculation.
-    if (state.collapsedFraction < 0.01f || state.collapsedFraction == 1f) {
-        return Velocity.Zero
-    }
-    var remainingVelocity = velocity
-    // In case there is an initial velocity that was left after a previous user fling, animate to
-    // continue the motion to expand or collapse the app bar.
-    if (flingAnimationSpec != null && abs(velocity) > 1f) {
-        var lastValue = 0f
-        AnimationState(initialValue = 0f, initialVelocity = velocity).animateDecay(
-            flingAnimationSpec
-        ) {
-            val delta = value - lastValue
-            val initialHeightOffset = state.heightOffset
-            state.heightOffset = initialHeightOffset + delta
-            val consumed = abs(initialHeightOffset - state.heightOffset)
-            lastValue = value
-            remainingVelocity = this.velocity
-            // avoid rounding errors and stop if anything is unconsumed
-            if (abs(delta - consumed) > 0.5f) this.cancelAnimation()
-        }
-    }
-    // Snap if animation specs were provided.
-    if (snapAnimationSpec != null) {
-        if (state.heightOffset < 0 && state.heightOffset > state.heightOffsetLimit) {
-            AnimationState(initialValue = state.heightOffset).animateTo(
-                if (state.collapsedFraction < 0.5f) {
-                    0f
-                } else {
-                    state.heightOffsetLimit
-                },
-                animationSpec = snapAnimationSpec,
-            ) {
-                state.heightOffset = value
-            }
-        }
-    }
-
-    return Velocity(0f, remainingVelocity)
-}
-
-@Composable
-internal fun localDensityDisableFontScale(): ProvidedValue<Density> =
-    LocalDensity provides with(LocalDensity.current) { Density(density = density, fontScale = 1f) }
-
-// An easing function used to compute the alpha value that is applied to the top title part of a
-// Medium or Large app bar.
-private val TopTitleAlphaEasing = CubicBezierEasing(.8f, 0f, .8f, .15f)
-
-internal val MaxHeightWithoutTitle = 124.dp
-internal val DefaultTitleHeight = 52.dp
 internal val ContainerHeight = 56.dp
-private val LargeTitleBottomPadding = 28.dp
 private val TopAppBarHorizontalPadding = 4.dp
 
 // A title inset when the App-Bar is a Medium or Large one. Also used to size a spacer when the
