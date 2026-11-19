@@ -83,6 +83,8 @@ public class ToastPresenter {
         View view = LayoutInflater.from(context).inflate(TEXT_TOAST_LAYOUT_WITH_ICON, null);
         TextView textView = view.findViewById(com.android.internal.R.id.message);
         textView.setText(text);
+        textView.setTextSize(17.f);
+        textView.setPadding(16, 8, 16, 8);
         ImageView imageView = view.findViewById(com.android.internal.R.id.icon);
         if (imageView != null) {
             imageView.setImageDrawable(icon);
@@ -173,7 +175,7 @@ public class ToastPresenter {
             params.verticalWeight = 1.0f;
         }
         params.x = xOffset;
-        params.y = yOffset;
+        params.y = yOffset +60;
         params.horizontalMargin = horizontalMargin;
         params.verticalMargin = verticalMargin;
         params.packageName = mContextPackageName;
