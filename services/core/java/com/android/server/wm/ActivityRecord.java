@@ -730,6 +730,37 @@ final class ActivityRecord extends WindowToken {
      * Whether the activity is to be displayed. See {@link android.R.attr#windowNoDisplay}.
      */
     private boolean mNoDisplay;
+
+    /* ---------------------------------------------------------------------
+     * FDE warm host
+     *
+     * Every FDE X window is hosted in a MainActivity. A cold launch costs
+     * 100~300ms because AMS has to create the Task/ActivityRecord, run
+     * onCreate/layout and wait for the SurfaceView. FDE therefore pre-creates a
+     * few "warm host" activities (1x1, transparent, not focusable) while idle
+     * and claims one when an X window shows up.
+     *
+     * For Android a warm host must behave like "a task that does not exist":
+     * not in the task bar, not in recents, not part of focus switching. All
+     * those checks go through this flag instead of FDE hacking visibility or
+     * calling moveTaskToBack, which would break the activity lifecycle.
+     *
+     * The flag comes from {@link #FDE_WARM_HOST_EXTRA} in the launch intent;
+     * the claim intent carries {@link #FDE_WARM_CLAIM_EXTRA} on the same path
+     * and ActivityStarter clears the flag.
+     * --------------------------------------------------------------------- */
+    public static final String FDE_WARM_HOST_EXTRA = "fde.warm_host";
+    public static final String FDE_WARM_CLAIM_EXTRA = "fde.warm_claim";
+    /**
+     * Target task bounds sent by FDE on claim.
+     *
+     * <p>ActivityOptions.getLaunchBounds() cannot be used here: ActivityStarter
+     * clears mOptions in setTargetTask(), so it is already null when
+     * deliverNewIntent() runs.
+     */
+    public static final String FDE_WARM_CLAIM_BOUNDS_EXTRA = "fde.warm_claim_bounds";
+    private boolean mFdeWarmHost;
+
     final boolean mShowForAllUsers;
     // TODO: Make this final
     int mTargetSdk;
@@ -1100,6 +1131,7 @@ final class ActivityRecord extends WindowToken {
                 pw.print(" idle="); pw.println(idle);
         pw.print(prefix); pw.print("occludesParent="); pw.print(occludesParent());
                 pw.print(" mNoDisplay="); pw.print(mNoDisplay);
+                pw.print(" mFdeWarmHost="); pw.print(mFdeWarmHost);
                 pw.print(" immersive="); pw.print(immersive);
                 pw.print(" launchMode="); pw.println(launchMode);
         pw.print(prefix); pw.print("mActivityType=");
@@ -1882,6 +1914,12 @@ final class ActivityRecord extends WindowToken {
         mUserId = UserHandle.getUserId(info.getUid());
         packageName = info.applicationInfo.packageName;
         intent = _intent;
+
+        // FDE warm host: only affects task-list visibility / focusability.
+        // A claim intent is treated as a normal activity.
+        mFdeWarmHost = _intent != null
+                && _intent.getBooleanExtra(FDE_WARM_HOST_EXTRA, false)
+                && !_intent.getBooleanExtra(FDE_WARM_CLAIM_EXTRA, false);
 
         // If the class name in the intent doesn't match that of the target, this is probably an
         // alias. We have to create a new ComponentName object to keep track of the real activity
@@ -3143,7 +3181,25 @@ final class ActivityRecord extends WindowToken {
 
     @Override
     boolean isFocusable() {
+        // FDE: intentionally unchanged.
+        //
+        // Returning false for warm hosts (or for 1dp tasks) made them never
+        // resume, so the claim was handled as an "activity restart" and the
+        // window/surface got recreated (screen flash, graphics buffer churn,
+        // occasionally a gralloc crash). The warm window already sets
+        // FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCHABLE with alpha=0 in the app, so
+        // input focus never lands on it and framework changes are unnecessary.
         return super.isFocusable() && canReceiveKeys();
+    }
+
+    /** FDE: whether this is still an unclaimed warm host. */
+    boolean isFdeWarmHost() {
+        return mFdeWarmHost;
+    }
+
+    /** FDE: clear the flag on claim; the activity behaves normally afterwards. */
+    void setFdeWarmHost(boolean warmHost) {
+        mFdeWarmHost = warmHost;
     }
 
     boolean canReceiveKeys() {

@@ -1198,6 +1198,15 @@ class RecentTasks {
     void add(Task task) {
         if (DEBUG_RECENTS_TRIM_TASKS) Slog.d(TAG, "add: task=" + task);
 
+        // FDE: warm hosts never enter recents. Their only purpose is to have
+        // the activity (and its surface) ready in advance; the flag is cleared
+        // on claim and the task then behaves like any other task.
+        // Switch: persist.fde.warm.recents
+        if (task.isFdeWarmHost() && FdeWarmHostConfig.recents()) {
+            if (DEBUG_RECENTS) Slog.d(TAG_RECENTS, "addRecent: skip warm host " + task);
+            return;
+        }
+
         final boolean isAffiliated = task.mAffiliatedTaskId != task.mTaskId
                 || task.mNextAffiliateTaskId != INVALID_TASK_ID
                 || task.mPrevAffiliateTaskId != INVALID_TASK_ID;

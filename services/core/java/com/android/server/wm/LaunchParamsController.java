@@ -146,6 +146,18 @@ class LaunchParamsController {
         calculate(task, layout, activity, source, options, null /* request */, PHASE_BOUNDS,
                 mTmpParams);
 
+        // FDE: sync the warm host flag onto the Task before launch bounds are
+        // applied. When the task is created the ActivityRecord may not be
+        // attached yet, so Task.adjustForMinimalTaskDimensions() cannot see the
+        // flag and freeform would clamp the 1x1 task to 220x220. The activity is
+        // always available here, which makes it the reliable source.
+        // Switch: persist.fde.warm.size (only used by the 1dp size feature)
+        if (FdeWarmHostConfig.size() && activity != null && activity.isFdeWarmHost()) {
+            task.setFdeWarmHost(true);
+            Slog.i(TAG_ATM, "FDE warm host layout task=" + task.mTaskId
+                    + " requestedBounds=" + mTmpParams.mBounds);
+        }
+
         // No changes, return.
         if (mTmpParams.isEmpty()) {
             return false;
