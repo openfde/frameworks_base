@@ -22,6 +22,15 @@
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowAnimationStyle">@null</item>
+        <!-- fde start: let the dialog be sized from its content. DecorView.onMeasure() turns
+             windowMinWidthMajor / windowMinWidthMinor into a hard minimum of 65% / 95% of the
+             hosting window width (in landscape it picks windowMinWidthMajor), so on a desktop
+             sized task the install confirm dialog became 65% of the whole screen. With the
+             minimum removed, ViewRootImpl.measureHierarchy() measures the WRAP_CONTENT window
+             at config_prefDialogWidth and only grows it when the content does not fit. -->
+        <item name="android:windowMinWidthMajor">@null</item>
+        <item name="android:windowMinWidthMinor">@null</item>
+        <!-- fde end -->
         <item name="textAppearanceInstallerAppLabel">@style/TextAppearance.PackageInstaller.AppLabel</item>
         <item name="textAppearanceInstallerCustomMessage">@style/TextAppearance.PackageInstaller.CustomMessage</item>
         <item name="textAppearanceInstallerKeepDataHeading">@style/TextAppearance.PackageInstaller.KeepData.Heading</item>
@@ -32,6 +41,12 @@
     <style name="Theme.AlertDialogActivity.Material" parent="@style/Theme.Material3.DayNight.Dialog.Alert">
         <item name="android:backgroundDimAmount">@dimen/alert_dialog_dim_amount</item>
         <item name="materialAlertDialogTheme">@style/Theme.MaterialAlertDialog</item>
+        <!-- fde start: this style is applied on top of Theme.AlertDialogActivity at runtime
+             (InstallLaunch.onCreate -> theme.applyStyle). Repeat the "no percentage minimum
+             width" override here so it also wins over the Material dialog theme chain. -->
+        <item name="android:windowMinWidthMajor">@null</item>
+        <item name="android:windowMinWidthMinor">@null</item>
+        <!-- fde end -->
         <item name="textAppearanceInstallerAppLabel">@style/TextAppearance.PackageInstaller.Material.AppLabel</item>
         <item name="textAppearanceInstallerCustomMessage">@style/TextAppearance.PackageInstaller.Material.CustomMessage</item>
         <item name="textAppearanceInstallerKeepDataHeading">@style/TextAppearance.PackageInstaller.Material.KeepData.Heading</item>
@@ -42,7 +57,12 @@
     <style name="Theme.MaterialAlertDialog" parent="@style/ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="android:background">@color/surfaceContainerHighColor</item>
         <item name="android:backgroundDimAmount">@dimen/alert_dialog_dim_amount</item>
-        <item name="android:windowMinWidthMinor">@dimen/alert_dialog_min_width_minor</item>
+        <!-- fde start: same as Theme.AlertDialogActivity - drop the percentage minimum width
+             (this style used to force 96.5% of the hosting window) so the dialog hugs its
+             content instead of being stretched by the theme. -->
+        <item name="android:windowMinWidthMajor">@null</item>
+        <item name="android:windowMinWidthMinor">@null</item>
+        <!-- fde end -->
         <item name="buttonBarStyle">@style/Widget.PackageInstaller.Material.ButtonBar</item>
         <item name="buttonBarPositiveButtonStyle">@style/Widget.PackageInstaller.Material.Button.Colored</item>
         <item name="buttonBarNegativeButtonStyle">@style/Widget.PackageInstaller.Material.Button.Outlined</item>
