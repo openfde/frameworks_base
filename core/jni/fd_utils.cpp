@@ -50,7 +50,13 @@ static const char* kPathAllowlist[] = {
         "/dev/blkio/tasks",
         "/metadata/aconfig/maps/system.package.map",
         "/metadata/aconfig/maps/system.flag.map",
-        "/metadata/aconfig/boot/system.val"
+        "/metadata/aconfig/boot/system.val",
+        "/dev/dri/card0",
+        "/dev/jmgpu",
+        "/dev/nvidiactl",
+        "/dev/nvidia0",
+        "/dev/dri/renderD128",
+        "/dev/ftg340"
 };
 
 static const char kFdPath[] = "/proc/self/fd";

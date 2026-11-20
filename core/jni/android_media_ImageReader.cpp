@@ -451,6 +451,8 @@ static void ImageReader_init(JNIEnv* env, jobject thiz, jobject weakThiz, jint w
 #ifdef __ANDROID__
     uint64_t consumerUsage =
             android_hardware_HardwareBuffer_convertToGrallocUsageBits(ndkUsage);
+    // add GRALLOC_USAGE_PRIVATE_1 for hybris
+    consumerUsage |= GRALLOC_USAGE_PRIVATE_1;
 #else
     uint64_t consumerUsage = 0;
 #endif
