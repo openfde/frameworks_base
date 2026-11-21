@@ -37,6 +37,15 @@ private constructor(
     @InsetsSource.Flags private val flags: Int = 0,
     private val shouldAddCaptionInset: Boolean = false,
     private val appBoundsExclusion: AppBoundsExclusion? = null,
+    /**
+     * Height of the caption bar inset actually reported to apps. A negative value means "the full
+     * caption height" (i.e. [frame].height).
+     *
+     * It is smaller than the caption height only for apps that add their own status bar height
+     * placeholder inside their content: the placeholder then ends up hidden behind the caption bar
+     * instead of being pushed below it. See config_desktopCaptionInsetCompensationPackages.
+     */
+    private val captionInsetHeight: Int = -1,
 ) {
     private sealed class Frame {
         abstract val height: Int
@@ -48,6 +57,14 @@ private constructor(
 
     private data class AppBoundsExclusion(val taskFrame: Rect)
 
+    /** The captionBar inset height that is published to apps. */
+    private val reportedCaptionHeight: Int
+        get() = if (captionInsetHeight >= 0) captionInsetHeight else frame.height
+
+    /** The height of the gesture area of the caption; always the full caption height. */
+    private val gestureHeight: Int
+        get() = frame.height
+
     constructor(
         token: WindowContainerToken,
         owner: Binder,
@@ -58,6 +75,7 @@ private constructor(
         @InsetsSource.Flags flags: Int = 0,
         shouldAddCaptionInset: Boolean = false,
         excludedFromAppBounds: Boolean = false,
+        captionInsetHeight: Int = -1,
     ) : this(
         token,
         owner,
@@ -67,6 +85,7 @@ private constructor(
         flags,
         shouldAddCaptionInset,
         if (excludedFromAppBounds) AppBoundsExclusion(checkNotNull(taskFrame)) else null,
+        captionInsetHeight,
     )
 
     /** Updates the caption insets. */
@@ -74,7 +93,8 @@ private constructor(
         if (!shouldAddCaptionInset) return
         logD(
             TAG,
-            "update insets for wc=%s with frame=%s, rects=%s, appBoundsExclusion=%s",
+            "update insets for wc=%s with frame=%s, rects=%s, appBoundsExclusion=%s, "
+                    + "captionInsetHeight=%d",
             token,
             frame,
             if (com.android.window.flags.Flags.improveFluidResizingPerformance()) {
@@ -83,6 +103,7 @@ private constructor(
                 boundingRects
             },
             appBoundsExclusion,
+            reportedCaptionHeight,
         )
         if (com.android.window.flags.Flags.improveFluidResizingPerformance()) {
             val rects: Array<InsetsBoundingRect>? =
@@ -94,7 +115,7 @@ private constructor(
                         owner,
                         INDEX,
                         WindowInsets.Type.captionBar(),
-                        frame.rect,
+                        captionBarRect(frame.rect),
                         rects,
                         flags,
                     )
@@ -109,7 +130,7 @@ private constructor(
                     )
                 }
                 is Frame.Relative -> {
-                    val insets = Insets.of(0, frame.height, 0, 0)
+                    val insets = Insets.of(0, reportedCaptionHeight, 0, 0)
                     wct.addInsetsSource(
                         token,
                         owner,
@@ -124,7 +145,7 @@ private constructor(
                         owner,
                         INDEX,
                         WindowInsets.Type.mandatorySystemGestures(),
-                        insets,
+                        Insets.of(0, gestureHeight, 0, 0),
                         rects,
                         /* flags= */ 0,
                     )
@@ -140,7 +161,7 @@ private constructor(
                         owner,
                         INDEX,
                         WindowInsets.Type.captionBar(),
-                        frame.rect,
+                        captionBarRect(frame.rect),
                         rects,
                         flags,
                     )
@@ -155,13 +176,12 @@ private constructor(
                     )
                 }
                 is Frame.Relative -> {
-                    val insets = Insets.of(0, frame.height, 0, 0)
                     wct.addInsetsSource(
                         token,
                         owner,
                         INDEX,
                         WindowInsets.Type.captionBar(),
-                        insets,
+                        Insets.of(0, reportedCaptionHeight, 0, 0),
                         rects,
                         flags,
                     )
@@ -170,7 +190,7 @@ private constructor(
                         owner,
                         INDEX,
                         WindowInsets.Type.mandatorySystemGestures(),
-                        insets,
+                        Insets.of(0, gestureHeight, 0, 0),
                         rects,
                         /* flags= */ 0,
                     )
@@ -184,6 +204,14 @@ private constructor(
             }
         }
     }
+
+    /** The captionBar source rect, clamped to [reportedCaptionHeight] if needed. */
+    private fun captionBarRect(rect: Rect): Rect =
+        if (captionInsetHeight in 0 until rect.height()) {
+            Rect(rect).apply { bottom = top + captionInsetHeight }
+        } else {
+            rect
+        }
 
     /** Removes the caption insets. */
     fun remove(wct: WindowContainerTransaction) {

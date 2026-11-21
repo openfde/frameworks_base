@@ -7789,6 +7789,29 @@
     <!-- List of packages which default to launch in fullscreen on desktop. -->
     <string-array name="config_desktopLaunchInFullscreenPackages" translatable="false"/>
 
+    <!-- List of apps (either "package" or "package/.ActivityClassName") that reserve the status bar
+         height inside their own content (typically a status_bar_height sized spacer view) because
+         they assume they are drawn below the system status bar.
+
+         A desktop window is not covered by the system status bar; the only thing at the top is the
+         window decoration caption bar, whose height is reported to apps as the captionBar inset and
+         force consumed by DecorView. For the apps listed here that means their own placeholder is
+         pushed *below* the caption bar and shows up as an ugly gap between the caption and the
+         app's real header. For those apps the captionBar inset published by the shell is reduced by
+         the status bar height so that their private placeholder ends up hidden behind the caption
+         bar, exactly like it is on a phone.
+
+         Only apps that are known to add such a placeholder should be listed here: for any other app
+         the reduced inset would let content slide under the caption bar. -->
+    <string-array name="config_desktopCaptionInsetCompensationPackages" translatable="false">
+        <!-- 京东: home header carries its own 30dp "status bar" spacer -->
+        <item>com.jingdong.app.mall</item>
+        <!-- 应用宝: StatusBarSizeView inside the home page -->
+        <item>com.tencent.android.qqdownloader</item>
+        <!-- NativeDemo inset repro cases (test only) -->
+        <item>com.fde.nativeDemo/.insetdemo.StatusBarSpacerCaseActivity</item>
+    </string-array>
+
     <!-- Frame rate compatibility value for Wallpaper
          FRAME_RATE_COMPATIBILITY_MIN (102) is used by default for lower power consumption -->
     <integer name="config_wallpaperFrameRateCompatibility">102</integer>

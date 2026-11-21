@@ -35,6 +35,7 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.Resources;
 import android.provider.Settings;
 
 import com.android.internal.R;
@@ -60,6 +61,8 @@ public class DesktopModeCompatPolicy {
     private PackageManager mPackageManager = null;
     @NonNull private final List<String> mConfigHomeFreeformActivities;
     @NonNull private final List<String> mConfigLaunchInFullscreenPackages;
+    @NonNull private final List<String> mConfigCaptionInsetCompensationPackages;
+    private final int mStatusBarHeightPx;
 
     public Supplier<String> mDefaultHomePackageSupplier;
 
@@ -78,6 +81,16 @@ public class DesktopModeCompatPolicy {
         mConfigLaunchInFullscreenPackages =
                 Arrays.asList(context.getResources().getStringArray(
                         R.array.config_desktopLaunchInFullscreenPackages));
+        mConfigCaptionInsetCompensationPackages =
+                Arrays.asList(context.getResources().getStringArray(
+                        R.array.config_desktopCaptionInsetCompensationPackages));
+        // This is the value an app gets when it looks up "status_bar_height" itself, which is what
+        // the apps listed above use to size their own placeholder.
+        final Resources res = context.getResources();
+        final int statusBarHeightId = res.getIdentifier("status_bar_height", "dimen", "android");
+        mStatusBarHeightPx = statusBarHeightId > 0
+                ? res.getDimensionPixelSize(statusBarHeightId)
+                : res.getDimensionPixelSize(R.dimen.status_bar_height_default);
     }
 
     public void setDefaultHomePackageSupplier(
@@ -251,6 +264,60 @@ public class DesktopModeCompatPolicy {
      */
     public boolean isTransparentTask(@NonNull TaskInfo task) {
         return isTransparentTask(task.isActivityStackTransparent, task.numActivities);
+    }
+
+    /**
+     * Returns the number of pixels that the caption bar inset should be reduced by for the given
+     * task, so that an app's own status-bar-height placeholder ends up hidden behind the window
+     * decoration caption bar instead of showing up as a gap between the caption and the app's
+     * content.
+     *
+     * <p>Only apps listed in {@code config_desktopCaptionInsetCompensationPackages} get a non-zero
+     * value. For every other app reducing the inset would let content slide under the caption bar.
+     */
+    public int getCaptionInsetCompensationPx(@NonNull TaskInfo taskInfo) {
+        final ActivityInfo info = taskInfo.topActivityInfo;
+        if (info == null || info.packageName == null) {
+            return 0;
+        }
+        return isCaptionInsetCompensationEnabled(info.packageName, info.name)
+                ? mStatusBarHeightPx : 0;
+    }
+
+    private boolean isCaptionInsetCompensationEnabled(@NonNull String packageName,
+            @Nullable String className) {
+        for (int i = 0; i < mConfigCaptionInsetCompensationPackages.size(); i++) {
+            if (matchesComponent(mConfigCaptionInsetCompensationPackages.get(i), packageName,
+                    className)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Matches a config entry against a component; entry is "pkg" or "pkg/.Class". */
+    private static boolean matchesComponent(@NonNull String entry, @NonNull String packageName,
+            @Nullable String className) {
+        final String trimmed = entry.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        final int slash = trimmed.indexOf('/');
+        if (slash < 0) {
+            // Package level entry.
+            return trimmed.equals(packageName);
+        }
+        if (!trimmed.substring(0, slash).equals(packageName)) {
+            return false;
+        }
+        if (className == null) {
+            return false;
+        }
+        String entryClass = trimmed.substring(slash + 1);
+        if (entryClass.startsWith(".")) {
+            entryClass = packageName + entryClass;
+        }
+        return entryClass.equals(className);
     }
 
     /** Returns true if the package should be launched in fullscreen by default when in desktop. */

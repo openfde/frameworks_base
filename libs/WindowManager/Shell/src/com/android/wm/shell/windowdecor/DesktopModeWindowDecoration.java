@@ -405,6 +405,13 @@ public class DesktopModeWindowDecoration extends WindowDecoration<WindowDecorLin
         return mLastValidDragArea;
     }
 
+    @Override
+    protected int getCaptionInsetCompensationPx() {
+        // Some apps reserve the status bar height inside their own content; shrink the caption inset
+        // for them so their placeholder hides behind the caption bar instead of showing a gap.
+        return mDesktopModeCompatPolicy.getCaptionInsetCompensationPx(mTaskInfo);
+    }
+
     /**
      * Adds a drag resize observer that gets notified on the task being drag resized.
      *

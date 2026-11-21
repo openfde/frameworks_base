@@ -511,6 +511,17 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
         final Rect captionInsetsRect = new Rect(taskBounds);
         captionInsetsRect.bottom = captionInsetsRect.top + outResult.mCaptionHeight;
 
+        // Some apps reserve the status bar height inside their own content. Shrinking the published
+        // caption inset by that amount hides their placeholder behind the caption bar. The caption
+        // bounding rects are dropped in that case because they are derived from the real caption
+        // frame and would no longer match the reported inset.
+        final int compensation = Math.max(0,
+                Math.min(getCaptionInsetCompensationPx(), outResult.mCaptionHeight));
+        final boolean compensateInset = compensation > 0;
+        // Height of the captionBar inset as reported to apps (the full caption height, or less for
+        // the apps listed in config_desktopCaptionInsetCompensationPackages).
+        final int captionInsetHeight = outResult.mCaptionHeight - compensation;
+
         final WindowDecorationInsets newInsets =
                 com.android.window.flags.Flags.improveFluidResizingPerformance()
                         ? new WindowDecorationInsets(
@@ -520,25 +531,29 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
                                 // present finer insets than traditional |Insets| to apps about
                                 // where their content is occluded.
                                 // These are in coordinates relative to the caption frame.
-                                CaptionRegionHelper.calculateInsetsBoundingRectsInsets(
-                                        decorWindowContext,
-                                        localCaptionBounds,
-                                        params.mOccludingElementsCalculator.get()),
+                                compensateInset
+                                        ? Collections.emptyList()
+                                        : CaptionRegionHelper.calculateInsetsBoundingRectsInsets(
+                                                decorWindowContext,
+                                                localCaptionBounds,
+                                                params.mOccludingElementsCalculator.get()),
                                 params.mInsetSourceFlags, params.mIsInsetSource,
-                                params.mShouldSetAppBounds)
+                                params.mShouldSetAppBounds, captionInsetHeight)
                         : new WindowDecorationInsets(
                                 mTaskInfo.token, mOwner, captionInsetsRect, taskBounds,
                                 // Caption bounding rectangles: these are optional, and are used to
                                 // present finer insets than traditional |Insets| to apps about
                                 // where their content is occluded.
                                 // These are in coordinates relative to the caption frame.
-                                CaptionRegionHelper.calculateBoundingRectsInsets(
-                                        decorWindowContext,
-                                        localCaptionBounds,
-                                        params.mOccludingElementsCalculator.get()),
+                                compensateInset
+                                        ? Collections.emptyList()
+                                        : CaptionRegionHelper.calculateBoundingRectsInsets(
+                                                decorWindowContext,
+                                                localCaptionBounds,
+                                                params.mOccludingElementsCalculator.get()),
                                 Collections.emptyList(),
                                 params.mInsetSourceFlags, params.mIsInsetSource,
-                                params.mShouldSetAppBounds);
+                                params.mShouldSetAppBounds, captionInsetHeight);
         if (!newInsets.equals(mWindowDecorationInsets)) {
             // Add or update this caption as an insets source.
             mWindowDecorationInsets = newInsets;
@@ -805,6 +820,17 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
     }
 
     /**
+     * Returns the number of pixels to subtract from the caption inset published to apps.
+     *
+     * <p>Used for apps that reserve the status bar height inside their own content (see
+     * {@code config_desktopCaptionInsetCompensationPackages}): shrinking the inset by that amount
+     * hides their placeholder behind the caption bar instead of pushing it below.
+     */
+    protected int getCaptionInsetCompensationPx() {
+        return 0;
+    }
+
+    /**
      * Adds caption inset source to a WCT
      */
     public void addCaptionInset(WindowContainerTransaction wct) {
@@ -813,12 +839,15 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
             return;
         }
 
+        final int captionInsetHeight = captionHeight
+                - Math.max(0, Math.min(getCaptionInsetCompensationPx(), captionHeight));
         final Rect captionInsets = new Rect(0, 0, 0, captionHeight);
         final WindowDecorationInsets newInsets = new WindowDecorationInsets(mTaskInfo.token,
                 mOwner, captionInsets, null  /* taskFrame */,
                 Collections.emptyList() /* boundingRects */,
                 Collections.emptyList() /* insetsBoundingRects */, 0 /* flags */,
-                true /* shouldAddCaptionInset */, false /* excludedFromAppBounds */);
+                true /* shouldAddCaptionInset */, false /* excludedFromAppBounds */,
+                captionInsetHeight /* captionInsetHeight */);
         if (!newInsets.equals(mWindowDecorationInsets)) {
             mWindowDecorationInsets = newInsets;
             mWindowDecorationInsets.update(wct);
