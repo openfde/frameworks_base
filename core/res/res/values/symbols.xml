@@ -6309,6 +6309,10 @@
   <!-- List of packages which default to launch in fullscreen on desktop. -->
   <java-symbol type="array" name="config_desktopLaunchInFullscreenPackages" />
 
+  <!-- Apps that reserve the status bar height inside their own content; the caption bar inset
+       reported to them is reduced by the status bar height. -->
+  <java-symbol type="array" name="config_desktopCaptionInsetCompensationPackages" />
+
   <!-- Frame rate compatibility value for Wallpaper -->
   <java-symbol type="integer" name="config_wallpaperFrameRateCompatibility" />
 

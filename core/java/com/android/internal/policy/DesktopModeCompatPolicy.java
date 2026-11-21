@@ -35,12 +35,17 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.Resources;
+import android.os.SystemProperties;
 import android.provider.Settings;
+import android.util.Slog;
 
 import com.android.internal.R;
 import com.android.window.flags.Flags;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +53,8 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 public class DesktopModeCompatPolicy {
+    private static final String TAG = "DesktopModeCompatPolicy";
+
     @NonNull
     private final Context mContext;
     @NonNull
@@ -60,6 +67,8 @@ public class DesktopModeCompatPolicy {
     private PackageManager mPackageManager = null;
     @NonNull private final List<String> mConfigHomeFreeformActivities;
     @NonNull private final List<String> mConfigLaunchInFullscreenPackages;
+    @NonNull private final List<String> mConfigCaptionInsetCompensationPackages;
+    private final int mStatusBarHeightPx;
 
     public Supplier<String> mDefaultHomePackageSupplier;
 
@@ -78,6 +87,16 @@ public class DesktopModeCompatPolicy {
         mConfigLaunchInFullscreenPackages =
                 Arrays.asList(context.getResources().getStringArray(
                         R.array.config_desktopLaunchInFullscreenPackages));
+        mConfigCaptionInsetCompensationPackages =
+                Arrays.asList(context.getResources().getStringArray(
+                        R.array.config_desktopCaptionInsetCompensationPackages));
+        // This is the value an app gets when it looks up "status_bar_height" itself, which is what
+        // the apps listed above use to size their own placeholder.
+        final Resources res = context.getResources();
+        final int statusBarHeightId = res.getIdentifier("status_bar_height", "dimen", "android");
+        mStatusBarHeightPx = statusBarHeightId > 0
+                ? res.getDimensionPixelSize(statusBarHeightId)
+                : res.getDimensionPixelSize(R.dimen.status_bar_height_default);
     }
 
     public void setDefaultHomePackageSupplier(
@@ -251,6 +270,214 @@ public class DesktopModeCompatPolicy {
      */
     public boolean isTransparentTask(@NonNull TaskInfo task) {
         return isTransparentTask(task.isActivityStackTransparent, task.numActivities);
+    }
+
+    /**
+     * System property that controls, at runtime, which apps get the caption inset compensation
+     * described in {@link #getCaptionInsetCompensationPx(TaskInfo)}.
+     *
+     * <p>Accepted values (entries are "package" or "package/.Class", separated by comma, colon,
+     * semicolon or whitespace):
+     * <ul>
+     *   <li>empty / unset: only the apps listed in
+     *       {@code config_desktopCaptionInsetCompensationPackages}</li>
+     *   <li>{@code none} or {@code 0}: disable the compensation completely (kill switch)</li>
+     *   <li>{@code default} or {@code config}: back to the config list only (same as unset); use
+     *       this instead of clearing the property, {@code adb shell} drops empty arguments on some
+     *       platforms</li>
+     *   <li>{@code all}: compensate every app. Debug only: content of apps that do not reserve the
+     *       status bar height by themselves slides under the caption bar.</li>
+     *   <li>otherwise: entries are added on top of the config list; a leading '-' removes an app
+     *       (e.g. {@code -com.jingdong.app.mall})</li>
+     * </ul>
+     *
+     * <p>Example:
+     * <pre>
+     * adb shell setprop persist.wm.debug.desktop_caption_inset_compensation \
+     *     com.jingdong.app.mall,com.tencent.android.qqdownloader
+     * </pre>
+     *
+     * <p>The new value is picked up by the next window decoration relayout (focus or size change),
+     * so after changing it, refocus the window or resize it once.
+     */
+    public static final String PROP_CAPTION_INSET_COMPENSATION =
+            "persist.wm.debug.desktop_caption_inset_compensation";
+
+    private static final String PROP_VALUE_ALL = "all";
+    private static final String PROP_VALUE_NONE = "none";
+    private static final String PROP_VALUE_OFF = "0";
+    private static final String PROP_VALUE_DEFAULT = "default";
+    private static final String PROP_VALUE_CONFIG = "config";
+
+    @Nullable private String mPropValueCache;
+    @NonNull private List<String> mPropEntries = Collections.emptyList();
+    @NonNull private List<String> mPropExcludedEntries = Collections.emptyList();
+    private boolean mPropCompensateAll;
+    private boolean mPropDisabled;
+
+    /**
+     * Returns the number of pixels that the caption bar inset should be reduced by for the given
+     * task, so that an app's own status-bar-height placeholder ends up hidden behind the window
+     * decoration caption bar instead of showing up as a gap between the caption and the app's
+     * content.
+     *
+     * <p>The set of apps that get a non-zero value is
+     * {@code config_desktopCaptionInsetCompensationPackages} plus whatever
+     * {@link #PROP_CAPTION_INSET_COMPENSATION} adds at runtime. For any other app reducing the
+     * inset would let content slide under the caption bar.
+     */
+    public int getCaptionInsetCompensationPx(@NonNull TaskInfo taskInfo) {
+        if (mStatusBarHeightPx <= 0) {
+            return 0;
+        }
+        // Only windows of the desktop (freeform) windowing mode are covered by the caption bar
+        // overlay; fullscreen/split windows keep the regular system bar behavior.
+        if (taskInfo.getWindowingMode() != WindowConfiguration.WINDOWING_MODE_FREEFORM) {
+            return 0;
+        }
+        refreshRuntimeEntriesIfNeeded();
+        if (mPropDisabled) {
+            return 0;
+        }
+        final ComponentName component = getTopComponent(taskInfo);
+        if (component == null) {
+            return 0;
+        }
+        if (matchesAny(mPropExcludedEntries, component)) {
+            return 0;
+        }
+        if (!mPropCompensateAll
+                && !matchesAny(mConfigCaptionInsetCompensationPackages, component)
+                && !matchesAny(mPropEntries, component)) {
+            return 0;
+        }
+        Slog.d(TAG, "Reducing the caption inset by " + mStatusBarHeightPx + "px for task "
+                + taskInfo.taskId + " (" + component + ")");
+        return mStatusBarHeightPx;
+    }
+
+    /**
+     * Returns the component of the top activity of the task.
+     *
+     * <p>Note: the {@link TaskInfo}s delivered to the shell do not always carry
+     * {@link TaskInfo#topActivityInfo}, so the component names have to be used as a fallback (the
+     * shell itself relies on {@link TaskInfo#baseActivity}).
+     */
+    @Nullable
+    private static ComponentName getTopComponent(@NonNull TaskInfo taskInfo) {
+        final ActivityInfo info = taskInfo.topActivityInfo;
+        if (info != null && info.packageName != null && info.name != null) {
+            return new ComponentName(info.packageName, info.name);
+        }
+        if (taskInfo.topActivity != null) {
+            return taskInfo.topActivity;
+        }
+        return taskInfo.baseActivity;
+    }
+
+    /** Reads the runtime entries from {@link #PROP_CAPTION_INSET_COMPENSATION} when it changed. */
+    private void refreshRuntimeEntriesIfNeeded() {
+        final String value;
+        try {
+            value = SystemProperties.get(PROP_CAPTION_INSET_COMPENSATION, "");
+        } catch (RuntimeException e) {
+            return;
+        }
+        if (value.equals(mPropValueCache)) {
+            return;
+        }
+        mPropValueCache = value;
+        mPropEntries = Collections.emptyList();
+        mPropExcludedEntries = Collections.emptyList();
+        mPropCompensateAll = false;
+        mPropDisabled = false;
+
+        final String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            Slog.d(TAG, "Caption inset compensation: config list only");
+            return;
+        }
+        if (trimmed.equalsIgnoreCase(PROP_VALUE_NONE) || trimmed.equals(PROP_VALUE_OFF)) {
+            mPropDisabled = true;
+            Slog.d(TAG, "Caption inset compensation: disabled by "
+                    + PROP_CAPTION_INSET_COMPENSATION);
+            return;
+        }
+        if (trimmed.equalsIgnoreCase(PROP_VALUE_DEFAULT)
+                || trimmed.equalsIgnoreCase(PROP_VALUE_CONFIG)) {
+            // Same as unset: only the config list applies. Lets the property be reset without
+            // having to clear it (adb shell drops empty arguments on some platforms).
+            Slog.d(TAG, "Caption inset compensation: config list only (via "
+                    + PROP_CAPTION_INSET_COMPENSATION + ")");
+            return;
+        }
+        if (trimmed.equalsIgnoreCase(PROP_VALUE_ALL)) {
+            mPropCompensateAll = true;
+            Slog.d(TAG, "Caption inset compensation: ALL apps via "
+                    + PROP_CAPTION_INSET_COMPENSATION);
+            return;
+        }
+        final String[] parts = trimmed.split("[,:;\\s]+");
+        final ArrayList<String> entries = new ArrayList<>(parts.length);
+        final ArrayList<String> excluded = new ArrayList<>();
+        for (String part : parts) {
+            if (part.isEmpty()) {
+                continue;
+            }
+            final boolean excludedEntry = part.charAt(0) == '-';
+            final String entry = excludedEntry ? part.substring(1) : part;
+            if (entry.isEmpty()) {
+                continue;
+            }
+            final List<String> target = excludedEntry ? excluded : entries;
+            if (!target.contains(entry)) {
+                target.add(entry);
+            }
+        }
+        mPropEntries = entries;
+        mPropExcludedEntries = excluded;
+        Slog.d(TAG, "Caption inset compensation via " + PROP_CAPTION_INSET_COMPENSATION
+                + ": +" + entries + " -" + excluded);
+    }
+
+    private static boolean matchesAny(@NonNull List<String> entries,
+            @NonNull ComponentName component) {
+        final String packageName = component.getPackageName();
+        if (packageName == null) {
+            return false;
+        }
+        final String className = component.getClassName();
+        for (int i = 0; i < entries.size(); i++) {
+            if (matchesComponent(entries.get(i), packageName, className)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Matches a config entry against a component; entry is "pkg" or "pkg/.Class". */
+    private static boolean matchesComponent(@NonNull String entry, @NonNull String packageName,
+            @Nullable String className) {
+        final String trimmed = entry.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        final int slash = trimmed.indexOf('/');
+        if (slash < 0) {
+            // Package level entry.
+            return trimmed.equals(packageName);
+        }
+        if (!trimmed.substring(0, slash).equals(packageName)) {
+            return false;
+        }
+        if (className == null) {
+            return false;
+        }
+        String entryClass = trimmed.substring(slash + 1);
+        if (entryClass.startsWith(".")) {
+            entryClass = packageName + entryClass;
+        }
+        return entryClass.equals(className);
     }
 
     /** Returns true if the package should be launched in fullscreen by default when in desktop. */

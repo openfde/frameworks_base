@@ -1293,8 +1293,8 @@ constructor(
 
     override fun createCaptionController(
         captionType: CaptionController.CaptionType
-    ): CaptionController<WindowDecorLinearLayout>? =
-        when (captionType) {
+    ): CaptionController<WindowDecorLinearLayout>? {
+        val controller = when (captionType) {
             CaptionController.CaptionType.APP_HEADER -> {
                 AppHeaderController(
                     taskInfo = taskInfo,
@@ -1426,4 +1426,12 @@ constructor(
 
             CaptionController.CaptionType.NO_CAPTION -> null
         }
+        // Some apps reserve the status bar height inside their own content; let the caption
+        // controller shrink the caption inset for them so their placeholder hides behind the
+        // caption bar. See DesktopModeCompatPolicy#getCaptionInsetCompensationPx.
+        controller?.setCaptionInsetCompensationProvider {
+            desktopModeCompatPolicy.getCaptionInsetCompensationPx(taskInfo)
+        }
+        return controller
+    }
 }
