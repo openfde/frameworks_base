@@ -91,6 +91,7 @@ import android.view.PendingInsetsController;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.ViewParent;
 import android.view.ViewRootImpl;
 import android.view.ViewStub;
 import android.view.ViewTreeObserver;
@@ -1182,23 +1183,18 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
         final Insets consumedInsets = mLastInsets != null
                 ? mLastInsets.getInsets(consumingTypes) : Insets.NONE;
 
-        if (mContentRoot != null
-                && mContentRoot.getLayoutParams() instanceof MarginLayoutParams) {
-            MarginLayoutParams lp = (MarginLayoutParams) mContentRoot.getLayoutParams();
-            if (lp.topMargin != consumedInsets.top || lp.rightMargin != consumedInsets.right
-                    || lp.bottomMargin != consumedInsets.bottom || lp.leftMargin !=
-                    consumedInsets.left) {
-                lp.topMargin = consumedInsets.top;
-                lp.rightMargin = consumedInsets.right;
-                lp.bottomMargin = consumedInsets.bottom;
-                lp.leftMargin = consumedInsets.left;
-                mContentRoot.setLayoutParams(lp);
-
-                if (insets == null) {
-                    // The insets have changed, but we're not currently in the process
-                    // of dispatching them.
-                    requestApplyInsets();
-                }
+        if (mContentRoot != null) {
+            // Some apps (e.g. those using a swipe-back wrapper) re-parent the content root into a
+            // container of their own. Such containers frequently lay their children out without
+            // honoring LayoutParams margins, which would silently drop the insets consumed here
+            // and let the content slide under the system bars / the window decoration caption bar.
+            // In that case the consumed insets are applied to the outermost view hosting the
+            // content root instead.
+            final View insetTarget = findInsetTargetView();
+            applyConsumedInsets(insetTarget, consumedInsets, insets);
+            if (insetTarget != null && insetTarget != mContentRoot) {
+                // The content root is now laid out by its new parent; don't apply the margins twice.
+                applyConsumedInsets(mContentRoot, Insets.NONE, insets);
             }
             if (insets != null && !Insets.NONE.equals(consumedInsets)) {
                 insets = insets.inset(consumedInsets);
@@ -1213,6 +1209,57 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
         updateBackgroundDrawable();
 
         return insets;
+    }
+
+    /**
+     * Returns the view that the consumed insets should be applied to as margins.
+     *
+     * <p>Normally that is {@link #mContentRoot}. However, an app is free to move the content root
+     * into a container of its own (a common pattern for swipe-back wrappers); when that happens the
+     * outermost view of that container that is a direct child of this DecorView is used instead, so
+     * that containers which ignore {@link MarginLayoutParams} on layout cannot swallow the insets.
+     */
+    @Nullable
+    private View findInsetTargetView() {
+        View target = mContentRoot;
+        while (target != null) {
+            final ViewParent parent = target.getParent();
+            if (parent == this) {
+                return target;
+            }
+            if (!(parent instanceof View)) {
+                // The content root is not part of this DecorView (yet/anymore); keep legacy behavior.
+                return mContentRoot;
+            }
+            target = (View) parent;
+        }
+        return mContentRoot;
+    }
+
+    /**
+     * Applies {@code consumedInsets} as margins of {@code view}, when it supports margins.
+     */
+    private void applyConsumedInsets(@Nullable View view, @NonNull Insets consumedInsets,
+            @Nullable WindowInsets insets) {
+        if (view == null || !(view.getLayoutParams() instanceof MarginLayoutParams)) {
+            return;
+        }
+        final MarginLayoutParams lp = (MarginLayoutParams) view.getLayoutParams();
+        if (lp.topMargin != consumedInsets.top || lp.rightMargin != consumedInsets.right
+                || lp.bottomMargin != consumedInsets.bottom
+                || lp.leftMargin != consumedInsets.left) {
+            lp.topMargin = consumedInsets.top;
+            lp.rightMargin = consumedInsets.right;
+            lp.bottomMargin = consumedInsets.bottom;
+            lp.leftMargin = consumedInsets.left;
+            view.setLayoutParams(lp);
+
+            if (insets == null) {
+                // The insets have changed, but we're not currently in the process
+                // of dispatching them.
+                requestApplyInsets();
+            }
+        }
     }
 
     /**

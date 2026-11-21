@@ -77,6 +77,27 @@ abstract class CaptionController<T>(
     var setExcludeLayerJob: Job? = null
 
     /**
+     * Provider of the number of pixels to subtract from the caption inset published to apps.
+     *
+     * Used for apps that reserve the status bar height inside their own content (see
+     * com.android.internal.policy.DesktopModeCompatPolicy#getCaptionInsetCompensationPx):
+     * shrinking the inset by that amount hides their placeholder behind the caption bar instead of
+     * pushing it below the caption.
+     */
+    private var captionInsetCompensationProvider: () -> Int = { 0 }
+
+    /** Sets the provider described by [captionInsetCompensationProvider]. */
+    fun setCaptionInsetCompensationProvider(provider: () -> Int) {
+        captionInsetCompensationProvider = provider
+    }
+
+    /** The captionBar inset height published to apps; never more than [captionHeight]. */
+    private fun captionInsetHeight(captionHeight: Int): Int {
+        val compensation = captionInsetCompensationProvider().coerceIn(0, captionHeight)
+        return captionHeight - compensation
+    }
+
+    /**
      * Whether this class is receiving a gesture started inside the root view through
      * [injectMotionEvent]
      */
@@ -337,6 +358,7 @@ abstract class CaptionController<T>(
                 flags = 0,
                 shouldAddCaptionInset = true,
                 excludedFromAppBounds = false,
+                captionInsetHeight = captionInsetHeight(captionHeight),
             )
         if (newInsets != windowDecorationInsets) {
             windowDecorationInsets = newInsets.apply { update(wct) }
@@ -362,11 +384,19 @@ abstract class CaptionController<T>(
         val captionInsetsRect = Rect(taskBounds)
         captionInsetsRect.bottom = captionInsetsRect.top + captionHeight
 
+        // The inset published to apps may be smaller than the caption for apps that reserve the
+        // status bar height inside their own content (see captionInsetCompensationProvider).
+        val insetHeight = captionInsetHeight(captionHeight)
+        val compensateInset = insetHeight < captionHeight
+
         // Caption bounding rectangles: these are optional, and are used to present finer
         // insets than traditional |Insets| to apps about where their content is occluded.
-        // These are in coordinates relative to the caption frame.
+        // These are in coordinates relative to the caption frame. They are dropped when the inset
+        // is compensated because they are derived from the real caption frame.
         val boundingRects =
-            if (!com.android.window.flags.Flags.improveFluidResizingPerformance()) {
+            if (compensateInset) {
+                emptyList()
+            } else if (!com.android.window.flags.Flags.improveFluidResizingPerformance()) {
                 CaptionRegionHelper.calculateBoundingRectsInsets(
                     context = decorWindowContext,
                     captionFrame = localCaptionBounds,
@@ -376,7 +406,9 @@ abstract class CaptionController<T>(
                 emptyList()
             }
         val insetsBoundingRects =
-            if (com.android.window.flags.Flags.improveFluidResizingPerformance()) {
+            if (compensateInset) {
+                emptyList()
+            } else if (com.android.window.flags.Flags.improveFluidResizingPerformance()) {
                 CaptionRegionHelper.calculateInsetsBoundingRectsInsets(
                     context = decorWindowContext,
                     captionFrame = localCaptionBounds,
@@ -397,6 +429,7 @@ abstract class CaptionController<T>(
                 params.insetSourceFlags,
                 params.isInsetSource,
                 params.shouldSetAppBounds,
+                insetHeight,
             )
         if (newInsets != captionInsets) {
             // Add or update this caption as an insets source.
