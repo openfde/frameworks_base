@@ -532,7 +532,7 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
                                 // where their content is occluded.
                                 // These are in coordinates relative to the caption frame.
                                 compensateInset
-                                        ? Collections.emptyList()
+                                        ? Collections.<InsetsBoundingRect>emptyList()
                                         : CaptionRegionHelper.calculateInsetsBoundingRectsInsets(
                                                 decorWindowContext,
                                                 localCaptionBounds,
@@ -546,7 +546,7 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
                                 // where their content is occluded.
                                 // These are in coordinates relative to the caption frame.
                                 compensateInset
-                                        ? Collections.emptyList()
+                                        ? Collections.<Rect>emptyList()
                                         : CaptionRegionHelper.calculateBoundingRectsInsets(
                                                 decorWindowContext,
                                                 localCaptionBounds,
