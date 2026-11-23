@@ -93,10 +93,10 @@ private constructor(
                         token,
                         owner,
                         INDEX,
-                        WindowInsets.Type.captionBar(),
+                        WindowInsets.Type.statusBars(),
                         frame.rect,
                         rects,
-                        flags,
+                        InsetsSource.FLAG_FORCE_CONSUMING,
                     )
                     wct.addInsetsSource(
                         token,
@@ -114,10 +114,10 @@ private constructor(
                         token,
                         owner,
                         INDEX,
-                        WindowInsets.Type.captionBar(),
+                        WindowInsets.Type.statusBars(),
                         insets,
                         rects,
-                        flags,
+                        InsetsSource.FLAG_FORCE_CONSUMING,
                     )
                     wct.addInsetsSource(
                         token,
@@ -139,10 +139,10 @@ private constructor(
                         token,
                         owner,
                         INDEX,
-                        WindowInsets.Type.captionBar(),
+                        WindowInsets.Type.statusBars(),
                         frame.rect,
                         rects,
-                        flags,
+                        InsetsSource.FLAG_FORCE_CONSUMING,
                     )
                     wct.addInsetsSource(
                         token,
@@ -160,10 +160,10 @@ private constructor(
                         token,
                         owner,
                         INDEX,
-                        WindowInsets.Type.captionBar(),
+                        WindowInsets.Type.statusBars(),
                         insets,
                         rects,
-                        flags,
+                        InsetsSource.FLAG_FORCE_CONSUMING,
                     )
                     wct.addInsetsSource(
                         token,
@@ -187,7 +187,7 @@ private constructor(
 
     /** Removes the caption insets. */
     fun remove(wct: WindowContainerTransaction) {
-        wct.removeInsetsSource(token, owner, INDEX, WindowInsets.Type.captionBar())
+        wct.removeInsetsSource(token, owner, INDEX, WindowInsets.Type.statusBars())
         wct.removeInsetsSource(token, owner, INDEX, WindowInsets.Type.mandatorySystemGestures())
         if (!Flags.refactorCaptionSandboxingToCore()) {
             appBoundsExclusion?.let { wct.setAppBounds(token, Rect()) }
