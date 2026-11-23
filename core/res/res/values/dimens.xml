@@ -1175,7 +1175,7 @@
     <!-- Default height of desktop view's header for desktop tasks on launch. -->
     <dimen name="desktop_view_default_header_height">40dp</dimen>
     <!-- Default height of desktop view's large header for desktop tasks on launch. -->
-    <dimen name="desktop_view_default_large_header_height">48dp</dimen>
+    <dimen name="desktop_view_default_large_header_height">30dp</dimen>
 
     <!-- The cascading offset in desktop mode. -->
     <dimen name="desktop_mode_cascading_offset">60dp</dimen>
