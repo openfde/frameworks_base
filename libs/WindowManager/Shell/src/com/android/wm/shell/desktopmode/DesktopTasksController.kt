@@ -1822,20 +1822,16 @@ class DesktopTasksController(
         if (repository.getDeskIdForTask(taskId) == deskId) {
             return false
         }
-        if (task.windowingMode != WINDOWING_MODE_FREEFORM) {
-            return false
-        }
         val targetDisplayId = repository.getDisplayForDesk(deskId)
         if (targetDisplayId == INVALID_DISPLAY) {
             return false
         }
         val taskBounds = Rect(task.configuration.windowConfiguration.bounds)
-        if (taskBounds.isEmpty()) {
-            return false
-        }
         val wct = WindowContainerTransaction()
         desksOrganizer.moveTaskToDesk(wct, deskId, task)
-        wct.setBounds(task.token, taskBounds)
+        if (!taskBounds.isEmpty()) {
+            wct.setBounds(task.token, taskBounds)
+        }
         val transition = transitions.startTransition(TRANSIT_CHANGE, wct, null)
         desksTransitionObserver.addPendingTransition(
             DeskTransition.AddTaskToDesk(
