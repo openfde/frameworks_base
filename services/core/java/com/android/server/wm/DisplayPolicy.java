@@ -345,6 +345,8 @@ public class DisplayPolicy {
     private final IBinder mAutoHideToken = new Binder();
     private boolean mFullscreenOnTop;
     private boolean mSystemBarsAutoHidden;
+    private boolean mFullscreenSessionActive;
+    private boolean mRevealSystemBarsForFullscreen;
     private final Runnable mAutoHideRunnable = this::autoHideSystemBars;
     private final Runnable mShowSystemBarsRunnable = this::showSystemBarsAfterAutoHide;
     // fde end
@@ -3001,7 +3003,11 @@ public class DisplayPolicy {
     }
 
     private void updateAutoHideState() {
-        final boolean fullscreenOnTop = !hasVisibleNonFullscreenFreeformTask()
+        final boolean hasVisibleFreeformTask = hasVisibleNonFullscreenFreeformTask();
+        if (hasVisibleFreeformTask || isHomeOnTop()) {
+            mFullscreenSessionActive = false;
+        }
+        final boolean fullscreenOnTop = !hasVisibleFreeformTask
                 && !mInFreeformMode
                 && mFocusedWindow != null
                 && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_STANDARD
@@ -3017,6 +3023,8 @@ public class DisplayPolicy {
         mHandler.removeCallbacks(mAutoHideRunnable);
         mHandler.removeCallbacks(mShowSystemBarsRunnable);
         if (mFullscreenOnTop) {
+            mRevealSystemBarsForFullscreen = !mFullscreenSessionActive;
+            mFullscreenSessionActive = true;
             mHandler.post(this::hideSystemBarsOnFullscreen);
             mHandler.postDelayed(mAutoHideRunnable, AUTO_HIDE_TIMEOUT_MS);
         } else {
@@ -3028,10 +3036,10 @@ public class DisplayPolicy {
     }
 
     /**
-     * Hides the system bar insets as soon as a fullscreen app takes over. The bars are no longer
-     * revealed here: the only manual reveal is the top-edge mouse hover handled by
-     * requestTransientBars. This keeps the app edge-to-edge without popping the status bar and
-     * the dock when a video page hides the bars or when navigating back inside the app.
+     * Hides the system bar insets as soon as a fullscreen app takes over. A new fullscreen
+     * session reveals the bars transiently so they remain visible until the auto-hide timeout.
+     * Re-entering fullscreen after a transient focus loss in the same session only enforces the
+     * hidden state, preventing in-app navigation from revealing the status bar and the dock.
      */
     private void hideSystemBarsOnFullscreen() {
         synchronized (mLock) {
@@ -3041,6 +3049,10 @@ public class DisplayPolicy {
             mSystemBarsAutoHidden = true;
             setSystemBarVisibilityOverride(mAutoHideToken, 0 /* forciblyShowingInsetsTypes */,
                     Type.statusBars() | Type.navigationBars() /* forciblyHiding */);
+            if (mRevealSystemBarsForFullscreen) {
+                getInsetsPolicy().showTransientForAutoHide(
+                        Type.statusBars() | Type.navigationBars());
+            }
         }
     }
 
