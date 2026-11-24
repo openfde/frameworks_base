@@ -41,6 +41,7 @@ import android.app.ActivityThread;
 import android.app.KeyguardManager;
 import android.app.WindowConfiguration;
 import android.compat.annotation.UnsupportedAppUsage;
+import android.content.Context;
 import android.content.res.CompatibilityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -122,6 +123,20 @@ public final class Display {
 
     // Temporary display metrics structure used for compatibility mode.
     private final DisplayMetrics mTempMetrics = new DisplayMetrics();
+
+    /**
+     * When {@code true}, size-related queries on this {@link Display} ({@link #getWidth},
+     * {@link #getHeight}, {@link #getSize(Point)}, {@link #getRectSize(Rect)},
+     * {@link #getMetrics}, {@link #getRealSize(Point)} and {@link #getRealMetrics}) report the
+     * bounds of the calling app's current window instead of the display-based size, as long as
+     * the window can be resolved and does not cover the whole display. When the window cannot be
+     * resolved (e.g. no activity in the process, or the context has no window), the original
+     * display-based logic is used as a fallback.
+     */
+    private static final boolean USE_CURRENT_WINDOW_BOUNDS = true;
+
+    // Temporary point reused by getCurrentWindowSizeLocked(). Only accessed with mLock held.
+    private final Point mTempWindowSize = new Point();
 
     // We cache the app width and height properties briefly between calls
     // to getHeight() and getWidth() to ensure that applications perceive
@@ -1035,9 +1050,14 @@ public final class Display {
     public void getSize(Point outSize) {
         synchronized (mLock) {
             updateDisplayInfoLocked();
-            mDisplayInfo.getAppMetrics(mTempMetrics, getDisplayAdjustments());
-            outSize.x = mTempMetrics.widthPixels;
-            outSize.y = mTempMetrics.heightPixels;
+            final Point windowSize = getCurrentWindowSizeLocked();
+            if (windowSize == null) {
+                mDisplayInfo.getAppMetrics(mTempMetrics, getDisplayAdjustments());
+                outSize.x = mTempMetrics.widthPixels;
+                outSize.y = mTempMetrics.heightPixels;
+            } else {
+                outSize.set(windowSize.x, windowSize.y);
+            }
         }
     }
 
@@ -1053,8 +1073,13 @@ public final class Display {
     public void getRectSize(Rect outSize) {
         synchronized (mLock) {
             updateDisplayInfoLocked();
-            mDisplayInfo.getAppMetrics(mTempMetrics, getDisplayAdjustments());
-            outSize.set(0, 0, mTempMetrics.widthPixels, mTempMetrics.heightPixels);
+            final Point windowSize = getCurrentWindowSizeLocked();
+            if (windowSize == null) {
+                mDisplayInfo.getAppMetrics(mTempMetrics, getDisplayAdjustments());
+                outSize.set(0, 0, mTempMetrics.widthPixels, mTempMetrics.heightPixels);
+            } else {
+                outSize.set(0, 0, windowSize.x, windowSize.y);
+            }
         }
     }
 
@@ -1130,6 +1155,10 @@ public final class Display {
     @Deprecated
     public int getWidth() {
         synchronized (mLock) {
+            final Point windowSize = getCurrentWindowSizeLocked();
+            if (windowSize != null) {
+                return windowSize.x;
+            }
             updateCachedAppSizeIfNeededLocked();
             return mCachedAppWidthCompat;
         }
@@ -1141,6 +1170,10 @@ public final class Display {
     @Deprecated
     public int getHeight() {
         synchronized (mLock) {
+            final Point windowSize = getCurrentWindowSizeLocked();
+            if (windowSize != null) {
+                return windowSize.y;
+            }
             updateCachedAppSizeIfNeededLocked();
             return mCachedAppHeightCompat;
         }
@@ -2012,6 +2045,13 @@ public final class Display {
         synchronized (mLock) {
             updateDisplayInfoLocked();
             mDisplayInfo.getAppMetrics(outMetrics, getDisplayAdjustments());
+            final Point windowSize = getCurrentWindowSizeLocked();
+            if (windowSize != null) {
+                outMetrics.widthPixels = windowSize.x;
+                outMetrics.heightPixels = windowSize.y;
+                outMetrics.noncompatWidthPixels = windowSize.x;
+                outMetrics.noncompatHeightPixels = windowSize.y;
+            }
         }
     }
 
@@ -2082,6 +2122,10 @@ public final class Display {
             if (rotation != mDisplayInfo.rotation) {
                 adjustSize(outSize, mDisplayInfo.rotation, rotation);
             }
+            final Point windowSize = getCurrentWindowSizeLocked();
+            if (windowSize != null) {
+                outSize.set(windowSize.x, windowSize.y);
+            }
         }
     }
 
@@ -2151,6 +2195,13 @@ public final class Display {
             final @Surface.Rotation int rotation = getLocalRotation();
             if (rotation != mDisplayInfo.rotation) {
                 adjustMetrics(outMetrics, mDisplayInfo.rotation, rotation);
+            }
+            final Point windowSize = getCurrentWindowSizeLocked();
+            if (windowSize != null) {
+                outMetrics.widthPixels = windowSize.x;
+                outMetrics.heightPixels = windowSize.y;
+                outMetrics.noncompatWidthPixels = windowSize.x;
+                outMetrics.noncompatHeightPixels = windowSize.y;
             }
         }
     }
@@ -2299,6 +2350,92 @@ public final class Display {
             mCachedAppHeightCompat = mTempMetrics.heightPixels;
             mLastCachedAppSizeUpdate = now;
         }
+    }
+
+    /**
+     * Tries to resolve the size of the calling app's current window on this display.
+     *
+     * <p>The window is resolved from the window context of the calling app: first the
+     * {@link Resources} attached to this {@link Display} (i.e. the context this Display was
+     * obtained from, e.g. an Activity or a context created via
+     * {@link android.hardware.display.DisplayManager#createDisplayContext}), and, if none is
+     * available, the current (top) activity of the calling process. The window bounds are read
+     * from the context's {@link WindowConfiguration}, which the window manager keeps in sync
+     * with the actual window frame.
+     *
+     * @return the window size in pixels, or {@code null} if the window cannot be resolved or
+     *     covers the whole display; in that case the original display-based logic should be
+     *     used as a fallback.
+     *
+     * @hide
+     */
+    @Nullable
+    private Point getCurrentWindowSizeLocked() {
+        if (!USE_CURRENT_WINDOW_BOUNDS) {
+            return null;
+        }
+        updateDisplayInfoLocked();
+        final WindowConfiguration windowConfiguration = getCurrentWindowConfiguration();
+        if (windowConfiguration == null) {
+            return null;
+        }
+        final Rect bounds = windowConfiguration.getBounds();
+        if (bounds == null || bounds.isEmpty()
+                || bounds.width() <= 0 || bounds.height() <= 0) {
+            return null;
+        }
+        if (coversDisplayLocked(bounds)) {
+            // The window occupies the whole display; keep the original display-based size.
+            return null;
+        }
+        mTempWindowSize.set(bounds.width(), bounds.height());
+        return mTempWindowSize;
+    }
+
+    /**
+     * Returns the {@link WindowConfiguration} describing the calling app's current window on
+     * this display, or {@code null} if it cannot be determined.
+     *
+     * @hide
+     */
+    @Nullable
+    private WindowConfiguration getCurrentWindowConfiguration() {
+        // Prefer the Resources attached to this Display, i.e. the context this Display was
+        // obtained from. All creation paths (DisplayManager#getOrCreateDisplay,
+        // ResourcesManager#getAdjustedDisplay) only attach the context's Resources when the
+        // context belongs to this display, so no display id check is needed here.
+        if (mResources != null) {
+            return mResources.getConfiguration().windowConfiguration;
+        }
+        // Otherwise fall back to the current (top) activity of the calling process.
+        final ActivityThread activityThread = ActivityThread.currentActivityThread();
+        if (activityThread == null) {
+            return null;
+        }
+        final Context context = activityThread.getTopActivityContext();
+        if (context == null || context.getDisplayId() != mDisplayId) {
+            return null;
+        }
+        return context.getResources().getConfiguration().windowConfiguration;
+    }
+
+    /**
+     * Returns {@code true} if the given window bounds cover the whole display in the current
+     * orientation.
+     *
+     * @hide
+     */
+    private boolean coversDisplayLocked(Rect bounds) {
+        int displayWidth = mDisplayInfo.logicalWidth;
+        int displayHeight = mDisplayInfo.logicalHeight;
+        final @Surface.Rotation int rotation = getLocalRotation();
+        if (rotation != mDisplayInfo.rotation && !noFlip(mDisplayInfo.rotation, rotation)) {
+            // Swap width/height to match the local rotation.
+            final int tmp = displayWidth;
+            displayWidth = displayHeight;
+            displayHeight = tmp;
+        }
+        return bounds.width() >= displayWidth && bounds.height() >= displayHeight;
     }
 
     /** Returns {@code false} if the width and height of display should swap. */

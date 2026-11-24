@@ -3146,6 +3146,24 @@ public final class ActivityThread extends ClientTransactionHandler
         return sCurrentActivityThread;
     }
 
+    /**
+     * Returns the context of the most recently launched (top) activity in the current
+     * process, or {@code null} if the process has no activities.
+     *
+     * @hide
+     */
+    public Context getTopActivityContext() {
+        synchronized (mActivities) {
+            for (int i = mActivities.size() - 1; i >= 0; i--) {
+                final Context activity = mActivities.valueAt(i).activity;
+                if (activity != null) {
+                    return activity;
+                }
+            }
+        }
+        return null;
+    }
+
     public static boolean isSystem() {
         return (sCurrentActivityThread != null) ? sCurrentActivityThread.mSystemThread : false;
     }
