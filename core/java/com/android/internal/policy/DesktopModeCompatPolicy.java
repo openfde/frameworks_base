@@ -303,6 +303,16 @@ public class DesktopModeCompatPolicy {
     public static final String PROP_CAPTION_INSET_COMPENSATION =
             "persist.wm.debug.desktop_caption_inset_compensation";
 
+    /**
+     * Master switch for the caption inset compensation implemented below.
+     *
+     * <p>Currently disabled: the behaviour is being replaced by making the status bar height that
+     * apps read resolve to 0 for freeform windows. The whole implementation - config array,
+     * runtime property and the shell side hook in CaptionController - is kept, so flipping this to
+     * {@code true} brings the previous behaviour back without any other change.
+     */
+    private static final boolean ENABLE_CAPTION_INSET_COMPENSATION = false;
+
     private static final String PROP_VALUE_ALL = "all";
     private static final String PROP_VALUE_NONE = "none";
     private static final String PROP_VALUE_OFF = "0";
@@ -327,7 +337,7 @@ public class DesktopModeCompatPolicy {
      * inset would let content slide under the caption bar.
      */
     public int getCaptionInsetCompensationPx(@NonNull TaskInfo taskInfo) {
-        if (mStatusBarHeightPx <= 0) {
+        if (!ENABLE_CAPTION_INSET_COMPENSATION || mStatusBarHeightPx <= 0) {
             return 0;
         }
         // Only windows of the desktop (freeform) windowing mode are covered by the caption bar
