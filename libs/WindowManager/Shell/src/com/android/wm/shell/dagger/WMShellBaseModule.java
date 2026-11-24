@@ -103,7 +103,6 @@ import com.android.wm.shell.compatui.impl.DefaultCompatUIComponentFactory;
 import com.android.wm.shell.compatui.impl.DefaultCompatUIHandler;
 import com.android.wm.shell.compatui.impl.DefaultComponentIdGenerator;
 import com.android.wm.shell.dagger.hierarchy.ContainerHierarchyCreateTriggerOverride;
-import com.android.wm.shell.desktopmode.DeskStripController;
 import com.android.wm.shell.desktopmode.DesktopTasksController;
 import com.android.wm.shell.desktopmode.DesktopUserRepositories;
 import com.android.wm.shell.desktopmode.api.DesktopMode;
@@ -1168,9 +1167,6 @@ public abstract class WMShellBaseModule {
     @BindsOptionalOf
     @DynamicOverride
     abstract DesktopTasksController optionalDesktopTasksController();
-
-    @BindsOptionalOf
-    abstract DeskStripController optionalDeskStripController();
 
     @WMSingleton
     @Provides

@@ -25,6 +25,7 @@ import com.android.wm.shell.common.ShellExecutor;
 import com.android.wm.shell.common.suppliers.TransactionSupplier;
 import com.android.wm.shell.dagger.DynamicOverride;
 import com.android.wm.shell.dagger.WMSingleton;
+import com.android.wm.shell.desktopmode.DeskStripController;
 import com.android.wm.shell.desktopmode.DesktopModeShellCommandHandler;
 import com.android.wm.shell.desktopmode.DesktopTasksController;
 import com.android.wm.shell.desktopmode.DesktopUserRepositories;
@@ -70,6 +71,15 @@ public class DesktopModule {
     ) {
         return new DesksController(shellController, userRepositories,
                 desktopConfig, desktopState, displayController, desksOrganizer, shellTaskOrganizer);
+    }
+
+    @WMSingleton
+    @Provides
+    static Optional<DeskStripController> provideOptionalDeskStripController(
+            DeskStripController deskStripController) {
+        // DeskStripController has an @Inject constructor, so it is always present. Expose it as an
+        // Optional so that DesktopTasksController can keep a no-op default for tests.
+        return Optional.of(deskStripController);
     }
 
     @WMSingleton
