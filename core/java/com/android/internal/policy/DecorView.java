@@ -76,6 +76,7 @@ import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Pair;
+import android.util.Slog;
 import android.util.TypedValue;
 import android.view.ActionMode;
 import android.view.ContextThemeWrapper;
@@ -130,6 +131,15 @@ import java.util.function.Consumer;
 /** @hide */
 public class DecorView extends FrameLayout implements RootViewSurfaceTaker, WindowCallbacks {
     private static final String TAG = "DecorView";
+
+    /**
+     * Log tag for the insets/caption consumption decision in {@link #updateColorViews}.
+     *
+     * <p>Debug aid for windows whose content ends up under the window decoration caption bar:
+     * enable with {@code adb shell setprop log.tag.DecorInsets DEBUG} and restart the app, then
+     * {@code adb logcat -s DecorInsets}. It prints why the captionBar inset was (not) consumed.
+     */
+    private static final String TAG_INSETS = "DecorInsets";
 
     private static final boolean DEBUG_MEASURE = false;
 
@@ -1183,6 +1193,18 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
         final Insets consumedInsets = mLastInsets != null
                 ? mLastInsets.getInsets(consumingTypes) : Insets.NONE;
 
+        if (Log.isLoggable(TAG_INSETS, Log.DEBUG)) {
+            Slog.d(TAG_INSETS, attrs.getTitle() + ": fullscreen=" + fullscreen
+                    + " hideCaptionBar=" + hideCaptionBar
+                    + " requested=[" + insetsTypesToString(requestedVisibleTypes) + "]"
+                    + " forceConsuming=[" + insetsTypesToString(mLastForceConsumingTypes) + "]"
+                    + " forceOpaqueCaption=" + mLastForceConsumingOpaqueCaptionBar
+                    + " opaqueCaption=" + isOpaqueCaptionBar
+                    + " appearance=0x" + Integer.toHexString(appearance)
+                    + " consuming=[" + insetsTypesToString(consumingTypes) + "]"
+                    + " consumed=" + consumedInsets);
+        }
+
         if (mContentRoot != null) {
             // Some apps (e.g. those using a swipe-back wrapper) re-parent the content root into a
             // container of their own. Such containers frequently lay their children out without
@@ -1260,6 +1282,36 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
                 requestApplyInsets();
             }
         }
+    }
+
+    /** Debug helper for {@link #TAG_INSETS}: names the inset types we care about. */
+    private static String insetsTypesToString(int types) {
+        if (types == 0) {
+            return "none";
+        }
+        final StringBuilder sb = new StringBuilder();
+        if ((types & WindowInsets.Type.statusBars()) != 0) {
+            sb.append("statusBars ");
+        }
+        if ((types & WindowInsets.Type.navigationBars()) != 0) {
+            sb.append("navigationBars ");
+        }
+        if ((types & WindowInsets.Type.captionBar()) != 0) {
+            sb.append("captionBar ");
+        }
+        if ((types & WindowInsets.Type.ime()) != 0) {
+            sb.append("ime ");
+        }
+        if ((types & WindowInsets.Type.systemGestures()) != 0) {
+            sb.append("systemGestures ");
+        }
+        if ((types & WindowInsets.Type.mandatorySystemGestures()) != 0) {
+            sb.append("mandatorySystemGestures ");
+        }
+        if ((types & WindowInsets.Type.tappableElement()) != 0) {
+            sb.append("tappableElement ");
+        }
+        return sb.toString().trim();
     }
 
     /**
