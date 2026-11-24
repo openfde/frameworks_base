@@ -16,6 +16,7 @@
 
 package com.android.internal.policy;
 
+import static android.app.WindowConfiguration.WINDOWING_MODE_FREEFORM;
 import static android.content.pm.ActivityInfo.INSETS_DECOUPLED_CONFIGURATION_ENFORCED;
 import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 import static android.content.res.Configuration.ORIENTATION_PORTRAIT;
@@ -24,8 +25,13 @@ import android.annotation.NonNull;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Rect;
+import android.os.Process;
+import android.os.SystemProperties;
 import android.view.Gravity;
+import android.view.WindowConfiguration;
 import android.window.DesktopModeFlags;
+
+import com.android.internal.R;
 
 /**
  * Utility functions for app compat in desktop windowing used by both window manager and System UI.
@@ -89,6 +95,56 @@ public final class DesktopModeCompatUtils {
     public static @Configuration.Orientation int computeConfigOrientation(@NonNull Rect rect) {
         return rect.height() >= rect.width()
                 ? ORIENTATION_PORTRAIT : ORIENTATION_LANDSCAPE;
+    }
+
+    /**
+     * Runtime switch for {@link #shouldZeroStatusBarHeight(int, Configuration)}, so the behaviour
+     * can be A/B tested without rebuilding:
+     *
+     * <pre>
+     * adb shell setprop persist.wm.debug.desktop_zero_status_bar_height false
+     * </pre>
+     */
+    public static final String PROP_ZERO_STATUS_BAR_HEIGHT_IN_FREEFORM =
+            "persist.wm.debug.desktop_zero_status_bar_height";
+
+    /**
+     * Whether the given resource should resolve to 0 for the given configuration.
+     *
+     * <p>Desktop (freeform) windows are not covered by the system status bar - the only thing on
+     * top of them is the window decoration caption bar, which is reported to apps as the
+     * {@code captionBar} inset. Apps written for the phone full screen model still reserve
+     * {@code @android:dimen/status_bar_height} inside their own content, and that placeholder then
+     * shows up as a gap between the caption bar and the app's own header. Making the resource
+     * resolve to 0 for those windows removes the placeholder at its source, i.e. without having to
+     * maintain a list of apps.
+     *
+     * <p>Windows that still reach the top of the display (maximized or immersive windows that are
+     * covered by the real status bar) keep the real value.
+     */
+    public static boolean shouldZeroStatusBarHeight(int resId, @NonNull Configuration config) {
+        // Cheap id check first: this runs for every resource lookup that resolves a value.
+        if (resId != R.dimen.status_bar_height
+                && resId != R.dimen.status_bar_height_portrait
+                && resId != R.dimen.status_bar_height_landscape
+                && resId != R.dimen.status_bar_height_default) {
+            return false;
+        }
+        // Only app processes: system components (SystemUI, WMS) legitimately ask for the real
+        // status bar height while laying out a per-window context.
+        if (Process.myUid() < Process.FIRST_APPLICATION_UID) {
+            return false;
+        }
+        if (!SystemProperties.getBoolean(PROP_ZERO_STATUS_BAR_HEIGHT_IN_FREEFORM, true)) {
+            return false;
+        }
+        final WindowConfiguration winConfig = config.windowConfiguration;
+        if (winConfig.getWindowingMode() != WINDOWING_MODE_FREEFORM) {
+            return false;
+        }
+        // Only when the window does not reach the top of the display, so the real status bar cannot
+        // overlap it. Desktop windows are laid out below the status bar.
+        return winConfig.getBounds().top > 0;
     }
 
     private static boolean isConfigurationDecoupled(@NonNull ActivityInfo info,
