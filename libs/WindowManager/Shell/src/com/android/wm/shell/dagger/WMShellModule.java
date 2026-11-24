@@ -98,7 +98,6 @@ import com.android.wm.shell.dagger.hierarchy.HandheldContainersModule;
 import com.android.wm.shell.dagger.pinnedlayer.PinnedLayerModule;
 import com.android.wm.shell.dagger.pip.PipModule;
 import com.android.wm.shell.desktopmode.CloseDesktopTaskTransitionHandler;
-import com.android.wm.shell.desktopmode.DeskStripController;
 import com.android.wm.shell.desktopmode.DesktopActivityOrientationChangeHandler;
 import com.android.wm.shell.desktopmode.DesktopAnimationConfiguration;
 import com.android.wm.shell.desktopmode.DesktopBackNavTransitionObserver;
@@ -893,8 +892,7 @@ public abstract class WMShellModule {
             Optional<DesktopTasksTransitionObserver> desktopTasksTransitionObserver,
             SnapController snapController,
             DesktopRemoteListener desktopRemoteListener,
-            DesktopWallpaperActivityUtils desktopWallpaperActivityUtils,
-            Optional<DeskStripController> deskStripController) {
+            DesktopWallpaperActivityUtils desktopWallpaperActivityUtils) {
         return new DesktopTasksController(
                 context,
                 desktopAnimationConfiguration,
@@ -957,8 +955,7 @@ public abstract class WMShellModule {
                 desktopTasksTransitionObserver.get(),
                 snapController,
                 desktopRemoteListener,
-                desktopWallpaperActivityUtils,
-                deskStripController);
+                desktopWallpaperActivityUtils);
     }
 
     @WMSingleton

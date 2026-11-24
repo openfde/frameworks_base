@@ -363,28 +363,6 @@ class DesktopRepository(
     /** Returns all the ids of all desks in all displays. */
     fun getAllDeskIds(): Set<Int> = desktopData.desksSequence().map { desk -> desk.deskId }.toSet()
 
-    /**
-     * Returns the ordered desks of [displayId] with their task membership.
-     *
-     * The returned list is ordered from the first to the last desk of the display, and includes
-     * empty desks. It is a snapshot intended for UI that renders the desk list (e.g. the desk
-     * strip); tasks that are being closed are excluded.
-     */
-    fun getDeskSummaries(displayId: Int): List<DeskSummary> {
-        val activeDeskId = desktopData.getActiveDesk(displayId)?.deskId
-        return desktopData.getOrderedDesks(displayId).mapIndexed { index, desk ->
-            DeskSummary(
-                deskId = desk.deskId,
-                position = index,
-                isActive = desk.deskId == activeDeskId,
-                taskIds = desk.freeformTasksInZOrder.filter { taskId ->
-                    taskId !in desk.closingTasks
-                },
-                minimizedTaskIds = desk.minimizedTasks.toSet(),
-            )
-        }
-    }
-
     /** Returns all the desks in all displays. */
     @VisibleForTesting fun getAllDesks(): List<Desk> = desktopData.desksSequence().toList()
 

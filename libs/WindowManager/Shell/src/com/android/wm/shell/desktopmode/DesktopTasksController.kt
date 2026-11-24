@@ -296,7 +296,6 @@ class DesktopTasksController(
     private val snapController: SnapController,
     private val desktopRemoteListener: DesktopRemoteListener,
     private val desktopWallpaperActivityUtils: DesktopWallpaperActivityUtils,
-    private val deskStripController: Optional<DeskStripController> = Optional.empty(),
 ) :
     RemoteCallable<DesktopTasksController>,
     DragAndDropController.DragAndDropListener,
@@ -585,7 +584,6 @@ class DesktopTasksController(
         desksOrganizer.setBackPressOnDeskListener { task ->
             minimizeTask(task, MinimizeReason.KEY_GESTURE)
         }
-        deskStripController.orElse(null)?.onInit(this)
         desktopScrimController.onInit()
     }
 
@@ -1720,73 +1718,6 @@ class DesktopTasksController(
         }
         logW("moveTaskToDesk taskId=%d not found", taskId)
         return false
-    }
-
-    /**
-     * Moves a running freeform task to [deskId] **without activating** the desk and without
-     * changing the active desk of any display.
-     *
-     * This is used by the desk strip when the user drops a window on a desk thumbnail: the window
-     * moves to the target desk (which may be a background desk) while the user stays on the desk
-     * they were working on.
-     *
-     * @param task the running task to move.
-     * @param deskId the target desk id.
-     * @param taskBounds the bounds the task should have in the target desk. For a same-display
-     *   move this is normally the task bounds from before the drag, so the window does not end up
-     *   at the strip location.
-     * @return true if the move was started, false if it was a no-op or the desk does not exist.
-     */
-    fun moveTaskToDeskWithoutActivation(
-        task: RunningTaskInfo,
-        deskId: Int,
-        taskBounds: Rect,
-    ): Boolean {
-        if (lockTaskChangeListener.isTaskLocked) {
-            return false
-        }
-        val repository = userRepositories.getProfile(task.userId)
-        if (deskId !in repository.getAllDeskIds()) {
-            logW("moveTaskToDeskWithoutActivation desk=%d not found", deskId)
-            return false
-        }
-        if (repository.getDeskIdForTask(task.taskId) == deskId) {
-            // The task is already in the target desk, nothing to do.
-            return false
-        }
-        if (task.windowingMode != WINDOWING_MODE_FREEFORM) {
-            logW(
-                "moveTaskToDeskWithoutActivation task=%d is not freeform (mode=%d)",
-                task.taskId,
-                task.windowingMode,
-            )
-            return false
-        }
-        val targetDisplayId = repository.getDisplayForDesk(deskId)
-        logD(
-            "moveTaskToDeskWithoutActivation task=%d desk=%d display=%d bounds=%s",
-            task.taskId,
-            deskId,
-            targetDisplayId,
-            taskBounds,
-        )
-        val wct = WindowContainerTransaction()
-        desksOrganizer.moveTaskToDesk(wct, deskId, task)
-        wct.setBounds(task.token, taskBounds)
-        val transition = transitions.startTransition(TRANSIT_CHANGE, wct, null)
-        desksTransitionObserver.addPendingTransition(
-            DeskTransition.AddTaskToDesk(
-                token = transition,
-                userId = task.userId,
-                displayId = targetDisplayId,
-                deskId = deskId,
-                taskId = task.taskId,
-                taskBounds = taskBounds,
-                minimized = false,
-            )
-        )
-        desktopScrimController.updateDesktopScrimIfNeeded(targetDisplayId, task.userId)
-        return true
     }
 
     private fun moveBackgroundTaskToDesktop(
@@ -6952,8 +6883,6 @@ class DesktopTasksController(
     ) {
         if (taskInfo.windowingMode != WINDOWING_MODE_FREEFORM) return
         snapController.removeTaskIfTiled(taskInfo.displayId, taskInfo.taskId)
-        // FDE: highlight the desk thumbnail under the dragged window, if any.
-        deskStripController.orElse(null)?.onWindowDragMove(displayId, inputX, inputY)
 
         val indicator =
             getOrCreateVisualIndicator(
@@ -7052,56 +6981,6 @@ class DesktopTasksController(
     ): Boolean {
         if (taskInfo.configuration.windowConfiguration.windowingMode != WINDOWING_MODE_FREEFORM) {
             return true
-        }
-
-        // FDE: a window dropped on a desk thumbnail is moved to that desk instead of being
-        // positioned at the drop location. This is handled before the regular drag-end logic so
-        // that the normal "drop to tile/maximize" indicators are not triggered by the strip.
-        val strip = deskStripController.orElse(null)
-        if (strip != null) {
-            if (motionEvent.actionMasked == MotionEvent.ACTION_CANCEL) {
-                strip.onWindowDragCancel()
-            } else {
-                val dropDeskId =
-                    strip.onWindowDragEnd(
-                        motionEvent.displayId,
-                        motionEvent.rawX,
-                        motionEvent.rawY,
-                    )
-                if (dropDeskId != null) {
-                    // The task surface is hidden (moved off-screen) while the drag indicator
-                    // mirrors it. Put it back at the drag start position before moving it so that
-                    // the window does not animate in from outside the display, and let the caller
-                    // clean up the drag indicator mirrors by returning true.
-                    val t = transactionPool.acquire()
-                    t.setPosition(
-                        taskSurface,
-                        dragStartBounds.left.toFloat(),
-                        dragStartBounds.top.toFloat(),
-                    )
-                    t.apply()
-                    transactionPool.release(t)
-                    val repository = userRepositories.getProfile(taskInfo.userId)
-                    if (repository.getDeskIdForTask(taskInfo.taskId) == dropDeskId) {
-                        // Dropped on the desk the window already belongs to: treat it as a
-                        // cancelled drag and keep the window where it was before the drag started.
-                        releaseVisualIndicator()
-                        return true
-                    }
-                    val targetBounds = Rect(taskInfo.configuration.windowConfiguration.bounds)
-                    val moved =
-                        moveTaskToDeskWithoutActivation(
-                            task = taskInfo,
-                            deskId = dropDeskId,
-                            taskBounds = targetBounds,
-                        )
-                    releaseVisualIndicator()
-                    if (moved) {
-                        strip.onTaskMovedToDesk(dropDeskId)
-                    }
-                    return true
-                }
-            }
         }
 
         val indicator = getVisualIndicator() ?: return true

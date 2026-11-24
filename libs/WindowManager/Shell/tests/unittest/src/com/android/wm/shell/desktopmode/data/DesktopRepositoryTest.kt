@@ -1738,40 +1738,6 @@ class DesktopRepositoryTest : ShellTestCase() {
     }
 
     @Test
-    fun getDeskSummaries_returnsOrderedDesksWithTasksAndActiveState() {
-        repo.addDesk(DEFAULT_DISPLAY, deskId = 6)
-        repo.addDesk(DEFAULT_DISPLAY, deskId = 7)
-        repo.addTaskToDesk(
-            DEFAULT_DISPLAY,
-            deskId = 6,
-            taskId = 10,
-            isVisible = true,
-            taskBounds = TEST_TASK_BOUNDS,
-        )
-        repo.addTaskToDesk(
-            DEFAULT_DISPLAY,
-            deskId = 6,
-            taskId = 11,
-            isVisible = true,
-            taskBounds = TEST_TASK_BOUNDS,
-        )
-        repo.minimizeTaskInDesk(DEFAULT_DISPLAY, deskId = 6, taskId = 11)
-        repo.setActiveDesk(DEFAULT_DISPLAY, deskId = 7)
-
-        val summaries = repo.getDeskSummaries(DEFAULT_DISPLAY)
-
-        assertThat(summaries.map { it.deskId })
-            .containsExactly(DEFAULT_DESKTOP_ID, 6, 7)
-            .inOrder()
-        assertThat(summaries.map { it.position }).containsExactly(0, 1, 2).inOrder()
-        assertThat(summaries[1].taskIds).containsExactly(11, 10).inOrder()
-        assertThat(summaries[1].minimizedTaskIds).containsExactly(11)
-        assertThat(summaries[2].isActive).isTrue()
-        assertThat(summaries[0].isActive).isFalse()
-        assertThat(summaries[2].taskIds).isEmpty()
-    }
-
-    @Test
     @EnableFlags(
         Flags.FLAG_ENABLE_DISPLAY_DISCONNECT_INTERACTION,
     )
