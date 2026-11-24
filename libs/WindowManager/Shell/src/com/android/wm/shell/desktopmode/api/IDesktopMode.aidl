@@ -116,4 +116,12 @@ interface IDesktopMode {
 
     /** Start a transition when launching an intent in desktop mode */
     void startLaunchIntentTransition(in PendingIntent pendingIntent, in Bundle options, in int displayId);
+
+    /**
+     * Moves the task to the given desk without activating that desk.
+     *
+     * The task keeps its current bounds, so moving a window between desks does not resize it. This
+     * is used by the Launcher overview desk strip when a window is dragged onto another desk.
+     */
+    oneway void moveTaskToDeskWithoutActivation(int taskId, int deskId);
 }

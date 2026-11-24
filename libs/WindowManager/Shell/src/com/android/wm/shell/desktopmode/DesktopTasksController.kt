@@ -1803,6 +1803,54 @@ class DesktopTasksController(
         return true
     }
 
+    /**
+     * Moves the running task to another desk without changing the active desk.
+     *
+     * Unlike [moveTaskToDesk], this does not activate the target desk, so the overview (or the
+     * currently active desktop) stays where it is. The task keeps its current bounds, which keeps
+     * the window size unchanged.
+     */
+    fun moveTaskToDeskWithoutActivation(taskId: Int, deskId: Int): Boolean {
+        if (lockTaskChangeListener.isTaskLocked) {
+            return false
+        }
+        val task = shellTaskOrganizer.getRunningTaskInfo(taskId) ?: return false
+        val repository = userRepositories.getProfile(task.userId)
+        if (deskId !in repository.getAllDeskIds()) {
+            return false
+        }
+        if (repository.getDeskIdForTask(taskId) == deskId) {
+            return false
+        }
+        if (task.windowingMode != WINDOWING_MODE_FREEFORM) {
+            return false
+        }
+        val targetDisplayId = repository.getDisplayForDesk(deskId)
+        if (targetDisplayId == INVALID_DISPLAY) {
+            return false
+        }
+        val taskBounds = Rect(task.bounds)
+        if (taskBounds.isEmpty) {
+            return false
+        }
+        val wct = WindowContainerTransaction()
+        desksOrganizer.moveTaskToDesk(wct, deskId, task)
+        wct.setBounds(task.token, taskBounds)
+        val transition = transitions.startTransition(TRANSIT_CHANGE, wct, null)
+        desksTransitionObserver.addPendingTransition(
+            DeskTransition.AddTaskToDesk(
+                token = transition,
+                userId = task.userId,
+                displayId = targetDisplayId,
+                deskId = deskId,
+                taskId = taskId,
+                taskBounds = taskBounds,
+                minimized = false,
+            )
+        )
+        return true
+    }
+
     /** Moves a running task to desktop. */
     private fun moveRunningTaskToDesk(
         task: RunningTaskInfo,
@@ -7615,6 +7663,12 @@ class DesktopTasksController(
         override fun moveTaskToDesk(taskId: Int, deskId: Int) {
             executeRemoteCallWithTaskPermission(controller, "moveTaskToDesk") { c ->
                 c.moveTaskToDesk(taskId,deskId,transitionSource = ADB_COMMAND)
+            }
+        }
+
+        override fun moveTaskToDeskWithoutActivation(taskId: Int, deskId: Int) {
+            executeRemoteCallWithTaskPermission(controller, "moveTaskToDeskWithoutActivation") { c ->
+                c.moveTaskToDeskWithoutActivation(taskId, deskId)
             }
         }
 
