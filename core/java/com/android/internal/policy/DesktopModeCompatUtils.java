@@ -22,13 +22,13 @@ import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 import static android.content.res.Configuration.ORIENTATION_PORTRAIT;
 
 import android.annotation.NonNull;
+import android.app.WindowConfiguration;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.os.Process;
 import android.os.SystemProperties;
 import android.view.Gravity;
-import android.view.WindowConfiguration;
 import android.window.DesktopModeFlags;
 
 import com.android.internal.R;
