@@ -2867,14 +2867,17 @@ public class DisplayPolicy {
                 defaultTaskDisplayArea.getRootTask(task -> task.isVisible()
                         && task.getTopLeafTask().hasAdjacentTask())
                         != null;
+        // fde fix: only a visible freeform task can represent the desktop state. During
+        // TRANSIT_CLOSE the topmost freeform task may already be invisible while another
+        // small window is still focused; using it would briefly report a fullscreen app.
         final Task topFreeformTask = defaultTaskDisplayArea.getTask(
                 task ->
                         task.getWindowingMode() == WINDOWING_MODE_FREEFORM
+                                && task.isVisible()
                                 // Must be filling to avoid container-only roots, such as
                                 // created-by-organizer desk roots.
                                 && task.hasFillingContent());
-        final boolean freeformRootTaskVisible = topFreeformTask != null
-                && topFreeformTask.isVisible();
+        final boolean freeformRootTaskVisible = topFreeformTask != null;
         final boolean inNonFullscreenFreeformMode = freeformRootTaskVisible
                 && !topFreeformTask.getBounds().equals(mDisplayContent.getBounds());
         // Always show status/nav bar for non-fullscreen multi window (excluding PiP).
@@ -2952,6 +2955,15 @@ public class DisplayPolicy {
                 && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_HOME;
     }
 
+    // fde fix: guard the auto-hide state machine from a transient invisible top task.
+    private boolean hasVisibleNonFullscreenFreeformTask() {
+        final Task task = mDisplayContent.getDefaultTaskDisplayArea().getTask(t ->
+                t.getWindowingMode() == WINDOWING_MODE_FREEFORM
+                        && t.isVisible()
+                        && t.hasFillingContent());
+        return task != null && !task.getBounds().equals(mDisplayContent.getBounds());
+    }
+
     public int getFocusedTaskId() {
         if (mFocusedWindow == null) {
             return -1;
@@ -2987,7 +2999,8 @@ public class DisplayPolicy {
     }
 
     private void updateAutoHideState() {
-        final boolean fullscreenOnTop = !mInFreeformMode
+        final boolean fullscreenOnTop = !hasVisibleNonFullscreenFreeformTask()
+                && !mInFreeformMode
                 && mFocusedWindow != null
                 && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_STANDARD
                 // fde start: a transparent/dialog activity (e.g. the intent resolver) does not
