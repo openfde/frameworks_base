@@ -18,4 +18,12 @@
 <resources>
     <!-- Toast shown when switching desks: index of the newly activated desk. -->
     <string name="desk_switch_toast">Desktop %1$d</string>
+    <!-- Name of a desk in the desk strip: its one-based index. -->
+    <string name="desk_strip_item_name">Desktop %1$d</string>
+    <!-- Badge shown on the first desk of a display, which cannot be moved. -->
+    <string name="desk_strip_main_badge">Main</string>
+    <!-- Accessibility description of the desk strip. -->
+    <string name="desk_strip_accessibility">Virtual desktops</string>
+    <!-- Toast shown when a window was moved to another desk: index of the target desk. -->
+    <string name="desk_moved_toast">Moved to desktop %1$d</string>
 </resources>

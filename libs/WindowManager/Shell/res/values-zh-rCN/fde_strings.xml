@@ -17,4 +17,8 @@
 -->
 <resources>
     <string name="desk_switch_toast">桌面%1$d</string>
+    <string name="desk_strip_item_name">桌面%1$d</string>
+    <string name="desk_strip_main_badge">主</string>
+    <string name="desk_strip_accessibility">虚拟桌面</string>
+    <string name="desk_moved_toast">已移动到 桌面%1$d</string>
 </resources>
