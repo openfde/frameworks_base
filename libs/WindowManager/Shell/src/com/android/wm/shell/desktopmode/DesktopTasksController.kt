@@ -1829,8 +1829,8 @@ class DesktopTasksController(
         if (targetDisplayId == INVALID_DISPLAY) {
             return false
         }
-        val taskBounds = Rect(task.bounds)
-        if (taskBounds.isEmpty) {
+        val taskBounds = Rect(task.configuration.windowConfiguration.bounds)
+        if (taskBounds.isEmpty()) {
             return false
         }
         val wct = WindowContainerTransaction()
