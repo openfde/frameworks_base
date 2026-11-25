@@ -834,7 +834,7 @@ constructor(
                     " windowingMode=${taskInfo.configuration.windowConfiguration.windowingMode}" +
                     " isFreeform=${taskInfo.isFreeform} isFullscreen=${taskInfo.isFullscreen}" +
                     " isVisible=${taskInfo.isVisible} isStatusBarVisible=$isStatusBarVisible" +
-                    " requestingImmersive=${requestingImmersive}",
+                    " requestingImmersive=${taskInfo.requestingImmersive}",
             )
         }
 
