@@ -50,6 +50,8 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.Process;
 import android.os.SystemProperties;
+import android.util.Log;
+import android.util.Slog;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
 import android.util.proto.ProtoOutputStream;
@@ -83,6 +85,17 @@ public class InsetsState implements Parcelable {
      */
     public static final String PROP_CAPTION_INSET_FRAMEWORK_ONLY =
             "persist.wm.debug.desktop_caption_inset_framework_only";
+
+    /**
+     * Debug aid for the desktop caption inset handing: logs the first caption source an app
+     * process sees, with its flags and whether it is hidden from the app.
+     *
+     * <pre>
+     * adb shell setprop log.tag.CaptionHide DEBUG
+     * </pre>
+     */
+    private static final String TAG_CAPTION_INSET_STATE = "CaptionHide";
+    private static boolean sLoggedCaptionInsetLookup;
 
     private static final Rect[] EMPTY_RECTS = new Rect[0];
 
@@ -199,6 +212,17 @@ public class InsetsState implements Parcelable {
                             && (flags & (InsetsSource.FLAG_FORCE_CONSUMING
                                     | FLAG_FORCE_CONSUMING_OPAQUE_CAPTION_BAR)) != 0
                             && isDesktopCaptionInsetFrameworkOnly();
+
+            if (type == WindowInsets.Type.captionBar()
+                    && !sLoggedCaptionInsetLookup
+                    && Log.isLoggable(TAG_CAPTION_INSET_STATE, Log.DEBUG)) {
+                sLoggedCaptionInsetLookup = true;
+                Slog.d(TAG_CAPTION_INSET_STATE, "caption source seen: uid=" + Process.myUid()
+                        + " flags=0x" + Integer.toHexString(flags)
+                        + " visible=" + source.isVisible()
+                        + " hideFromApp=" + frameworkConsumesCaptionInset
+                        + " insets=" + source.calculateInsets(relativeFrame, hostBounds, false));
+            }
 
             processSource(source, relativeFrame, hostBounds, false /* ignoreVisibility */,
                     typeInsetsMap, idSideMap, typeVisibilityMap, typeBoundingRectsMap,
