@@ -36,6 +36,8 @@ import android.window.DesktopModeFlags;
 
 import com.android.internal.R;
 
+import java.util.ArrayList;
+
 /**
  * Utility functions for app compat in desktop windowing used by both window manager and System UI.
  * @hide
@@ -55,8 +57,12 @@ public final class DesktopModeCompatUtils {
     private static final String TAG_STATUS_BAR_HEIGHT = "ZeroSbh";
 
     /** Keeps a chatty app from flooding logcat with lookups. */
-    private static final int MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS = 20;
+    private static final int MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS = 40;
+    /** Upper bound of distinct (resource, windowing mode, result) combinations being logged. */
+    private static final int MAX_LOOKUP_SIGNATURES = 40;
     private static int sStatusBarHeightLookupLogCount;
+    /** Already logged combinations, so each one is reported once instead of the first N lookups. */
+    private static final ArrayList<String> sLoggedLookupSignatures = new ArrayList<>();
 
     /**
      * Whether the caption insets should be excluded from configuration for system to handle.
@@ -184,16 +190,28 @@ public final class DesktopModeCompatUtils {
         if (sStatusBarHeightLookupLogCount >= MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS) {
             return;
         }
-        sStatusBarHeightLookupLogCount++;
         final WindowConfiguration winConfig = config.windowConfiguration;
+        final int windowingMode = winConfig.getWindowingMode();
+        // Log the first lookup of every distinct (res, windowing mode, result) combination instead
+        // of the first N lookups: an app typically reads the value once per screen, so a plain cap
+        // would hide the interesting reads behind the ones of the first screen.
+        final String signature = resId + "/" + windowingMode + "/" + result;
+        if (sLoggedLookupSignatures.contains(signature)) {
+            return;
+        }
+        if (sLoggedLookupSignatures.size() >= MAX_LOOKUP_SIGNATURES) {
+            return;
+        }
+        sLoggedLookupSignatures.add(signature);
+        sStatusBarHeightLookupLogCount++;
         Slog.d(TAG_STATUS_BAR_HEIGHT, "process=" + ActivityThread.currentProcessName()
                 + " uid=" + Process.myUid()
                 + " res=0x" + Integer.toHexString(resId)
-                + " mode=" + winConfig.getWindowingMode()
+                + " mode=" + windowingMode
                 + " bounds=" + winConfig.getBounds().toShortString()
                 + " zero=" + result
-                + (sStatusBarHeightLookupLogCount == MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS
-                        ? " (further lookups not logged)" : ""));
+                + (sStatusBarHeightLookupLogCount >= MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS
+                        ? " (no further lookups will be logged)" : ""));
     }
 
     private static boolean isConfigurationDecoupled(@NonNull ActivityInfo info,
