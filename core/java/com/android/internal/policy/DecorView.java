@@ -1203,7 +1203,9 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
                     + " appearance=0x" + Integer.toHexString(appearance)
                     + " consuming=[" + insetsTypesToString(consumingTypes) + "]"
                     + " consumed=" + consumedInsets
-                    + " insets=" + insets);
+                    + " dispatch=" + (insets != null)
+                    + " captionInset=" + (mLastInsets == null ? "null"
+                            : mLastInsets.getInsets(WindowInsets.Type.captionBar())));
         }
 
         if (mContentRoot != null) {
