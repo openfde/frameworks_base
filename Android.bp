@@ -254,6 +254,9 @@ java_library {
 
         "com.android.sysprop.localization",
         "PlatformProperties",
+
+        "vendor.openfde.window-V1.0-java",
+        "vendor.openfde.window-V1.1-java",
     ],
     sdk_version: "core_platform",
     installable: false,

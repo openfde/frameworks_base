@@ -125,6 +125,9 @@ import com.android.internal.widget.floatingtoolbar.FloatingToolbar;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import vendor.openfde.window.V1_1.IOpenfdeWindow;
+import android.os.RemoteException;
+import java.util.NoSuchElementException;
 
 /** @hide */
 public class DecorView extends FrameLayout implements RootViewSurfaceTaker, WindowCallbacks {
@@ -236,6 +239,8 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
     @UnsupportedAppUsage
     private PhoneWindow mWindow;
 
+    private IOpenfdeWindow mOpenfdeWindow;
+
     ViewGroup mContentRoot;
 
     private Rect mTempRect;
@@ -311,6 +316,9 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
                 WearGestureInterceptionDetector.isEnabled(context)
                         ? new WearGestureInterceptionDetector(context, this)
                         : null;
+        try {
+            mOpenfdeWindow = IOpenfdeWindow.getService(false /* retry */);
+        } catch (NoSuchElementException | RemoteException ignored) {}
     }
 
     void setBackgroundFallback(@Nullable Drawable fallbackDrawable) {
@@ -1962,9 +1970,16 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
 
     @Override
     public void dispatchPointerCaptureChanged(boolean hasCapture) {
+        Log.i("fde_DecorView", "dispatchPointerCaptureChanged hasCapture: " + hasCapture);
         super.dispatchPointerCaptureChanged(hasCapture);
         if (!mWindow.isDestroyed() && mWindow.getCallback() != null) {
             mWindow.getCallback().onPointerCaptureChanged(hasCapture);
+        }
+
+        if (mOpenfdeWindow != null) {
+            try {
+                mOpenfdeWindow.setPointerCapture(getContext().getPackageName(), hasCapture);
+            } catch (RemoteException ignored) {}
         }
     }
 
