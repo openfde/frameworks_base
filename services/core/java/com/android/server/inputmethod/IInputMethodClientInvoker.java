@@ -227,6 +227,24 @@ final class IInputMethodClientInvoker {
     }
 
     @AnyThread
+    void commitText(String text) {
+        try {
+            mTarget.commitText(text);
+        } catch (RemoteException e) {
+            logRemoteException(e);
+        }
+    }
+
+    @AnyThread
+    void sendKeyEvent(int action, int code) {
+        try {
+            mTarget.sendKeyEvent(action, code);
+        } catch (RemoteException e) {
+            logRemoteException(e);
+        }
+    }
+
+    @AnyThread
     void setInteractive(boolean interactive, boolean fullscreen) {
         if (mIsProxy) {
             setInteractiveInternal(interactive, fullscreen);

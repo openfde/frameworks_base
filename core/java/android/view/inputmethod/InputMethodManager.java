@@ -756,6 +756,8 @@ public final class InputMethodManager {
     private static final int MSG_SET_INTERACTIVE = 13;
     private static final int MSG_SET_VISIBILITY = 14;
     private static final int MSG_START_INPUT_RESULT = 40;
+    private static final int MSG_INPUT_BY_LINUX = 80;
+    private static final int MSG_KEYEVENT_BY_LINUX = 90;
 
     /**
      * Calling this will invalidate Local stylus handwriting availability Cache which
@@ -1520,6 +1522,39 @@ public final class InputMethodManager {
                     }
                     return;
                 }
+                case MSG_INPUT_BY_LINUX:{
+                    RemoteInputConnectionImpl ic = null;
+                    String text = String.valueOf(msg.obj);
+                    Log.w(TAG, "commitText MSG_INPUT_BY_LINUX: "+text);
+                    synchronized (mH) {
+                        if (mServedInputConnection != null) {
+                            ic = mServedInputConnection;
+                        }
+                    }
+                    if (ic != null) {
+                        ic.commitText(text,1);
+                    }
+
+                    return ;
+                }
+
+                case MSG_KEYEVENT_BY_LINUX:{
+                    RemoteInputConnectionImpl ic = null;
+                    int action = msg.arg1;
+                    int code =   msg.arg2;
+                    Log.w(TAG, "sendKeyEvent MSG_KEYEVENT_BY_LINUX: action "+action + ",code: "+code);
+                    synchronized (mH) {
+                        if (mServedInputConnection != null) {
+                            ic = mServedInputConnection;
+                        }
+                    }
+
+                    if (ic != null) {
+                        ic.sendKeyEvent(new KeyEvent(action,code));
+                    }
+
+                    return ;
+                }
             }
         }
     }
@@ -1590,6 +1625,18 @@ public final class InputMethodManager {
             ImeTracker.forLogging().onProgress(statsToken,
                     ImeTracker.PHASE_CLIENT_SET_IME_VISIBILITY);
             mH.obtainMessage(MSG_SET_VISIBILITY, args).sendToTarget();
+        }
+
+        @Override
+        public void commitText(String text) {
+            mH.obtainMessage(MSG_INPUT_BY_LINUX, text)
+                    .sendToTarget();
+        }
+
+        @Override
+        public void sendKeyEvent(int action, int code) {
+            mH.obtainMessage(MSG_KEYEVENT_BY_LINUX, action , code)
+                    .sendToTarget();
         }
 
         @Override

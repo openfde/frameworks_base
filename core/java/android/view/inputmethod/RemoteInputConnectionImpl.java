@@ -504,6 +504,28 @@ final class RemoteInputConnectionImpl extends IRemoteInputConnection.Stub {
         return true;
     }
 
+    @Dispatching(cancellable = false)
+    public void commitText(String text ,int code) {
+        dispatch(() -> {
+            final InputConnection ic = getInputConnection();
+            if (ic == null || mDeactivateRequested.get()) {
+                return;
+            }
+            ic.commitText(text,code);
+        });
+    }
+
+    @Dispatching(cancellable = false)
+    public void sendKeyEvent(KeyEvent event) {
+        dispatch(() -> {
+            final InputConnection ic = getInputConnection();
+            if (ic == null || mDeactivateRequested.get()) {
+                return;
+            }
+            ic.sendKeyEvent(event);
+        });
+    }
+
     @Dispatching(cancellable = true)
     @Override
     public void getTextAfterCursor(InputConnectionCommandHeader header, int length, int flags,

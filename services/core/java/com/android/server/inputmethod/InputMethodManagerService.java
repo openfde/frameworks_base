@@ -4744,6 +4744,38 @@ public final class InputMethodManagerService implements IInputMethodManagerImpl.
         mHandler.obtainMessage(MSG_REMOVE_IME_SURFACE_FROM_WINDOW, windowToken).sendToTarget();
     }
 
+    @Override
+    public void commitText(String text) {
+        try{
+            Slog.w(TAG, "commitText: "+text);
+            final var userData = getUserData(mCurrentImeUserId);
+            if (userData.mCurClient != null && userData.mCurClient.mClient != null) {
+                userData.mCurClient.mClient.commitText(text);
+            }else{
+                Slog.e(TAG, "commitText ---mCurClient is null ");
+            }
+        }catch(Exception e){
+            Slog.e(TAG, "commitText: "+e.toString());
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void sendKeyEvent(int action, int code) {
+        try{
+            final var userData = getUserData(mCurrentImeUserId);
+            Slog.w(TAG, "sendKeyEvent--action : "+action + ", code: "+code);
+            if (userData.mCurClient != null && userData.mCurClient.mClient != null) {
+                userData.mCurClient.mClient.sendKeyEvent(action, code);
+            }else{
+                Slog.e(TAG, "sendKeyEvent ---mCurClient is null ");
+            }
+        }catch(Exception e){
+            Slog.e(TAG, "sendKeyEvent: "+e.toString());
+            e.printStackTrace();
+        }
+    }
+
     private void registerDeviceListenerAndCheckStylusSupport() {
         final InputManager im = mContext.getSystemService(InputManager.class);
         final IntArray stylusIds = getStylusInputDeviceIds(im);
