@@ -23,6 +23,7 @@ import android.graphics.Region
 import android.graphics.RegionIterator
 import android.os.Binder
 import android.os.Trace
+import android.util.Log
 import android.view.Display
 import android.view.MotionEvent
 import android.view.SurfaceControl
@@ -375,6 +376,13 @@ abstract class CaptionController<T>(
         localCaptionBounds: Rect,
     ) {
         if (!isCaptionVisible || !params.isInsetSource) {
+            if (captionInsets != null && Log.isLoggable(TAG_CAPTION_INSET, Log.DEBUG)) {
+                Log.d(
+                    TAG_CAPTION_INSET,
+                    "task=${taskInfo.taskId} removing caption inset source:" +
+                        " isCaptionVisible=$isCaptionVisible isInsetSource=${params.isInsetSource}",
+                )
+            }
             captionInsets?.remove(wct)
             captionInsets = null
         }
@@ -569,6 +577,9 @@ abstract class CaptionController<T>(
 
     companion object {
         private const val TAG = "CaptionController"
+
+/** Debug aid for caption inset add/remove decisions; setprop log.tag.CaptionInset DEBUG. */
+private const val TAG_CAPTION_INSET = "CaptionInset"
 
         /**
          * The Z-order of the caption surface.

@@ -109,6 +109,7 @@ import com.android.wm.shell.windowdecor.extension.getDimensionPixelSize
 import com.android.wm.shell.windowdecor.extension.isDragResizable
 import com.android.wm.shell.windowdecor.extension.isFullscreen
 import com.android.wm.shell.windowdecor.extension.isTransparentCaptionBarAppearance
+import com.android.wm.shell.windowdecor.extension.requestingImmersive
 import com.android.wm.shell.windowdecor.viewholder.AppHeaderViewHolder
 import com.android.wm.shell.windowdecor.viewholder.FullscreenHeaderViewHolder
 import kotlinx.coroutines.CoroutineScope
@@ -117,6 +118,9 @@ import kotlinx.coroutines.launch
 
 // fde start MAGIC WINDOW -> parallel world
 private const val TAG = "DefaultWindowDecoration"
+
+/** Debug aid for the caption inset decision; setprop log.tag.CaptionInset DEBUG. */
+private const val TAG_CAPTION_INSET = "CaptionInset"
 /** Fallback pane ratio (4:5) used until the task reports the configured ratio. */
 private const val DEFAULT_DIVIDER_RATIO = 5f / 9f
 /**
@@ -819,6 +823,20 @@ constructor(
             } else {
                 shouldShowCaption(taskInfo, lockTaskChangeListener.isTaskLocked)
             }
+
+        if (Log.isLoggable(TAG_CAPTION_INSET, Log.DEBUG)) {
+            Log.d(
+                TAG_CAPTION_INSET,
+                "task=${taskInfo.taskId} captionType=$captionType isAppHeader=$isAppHeader" +
+                    " inFullImmersive=$inFullImmersive isPinnedLayer=$isPinnedLayer" +
+                    " isBottomSplit=$isBottomSplit isInsetSource=$isInsetSource" +
+                    " isCaptionVisible=$isCaptionVisible shouldCreateCaption=$shouldCreateCaption" +
+                    " windowingMode=${taskInfo.configuration.windowConfiguration.windowingMode}" +
+                    " isFreeform=${taskInfo.isFreeform} isFullscreen=${taskInfo.isFullscreen}" +
+                    " isVisible=${taskInfo.isVisible} isStatusBarVisible=$isStatusBarVisible" +
+                    " requestingImmersive=${requestingImmersive}",
+            )
+        }
 
         // Task outline (i.e. corner radius and shadows) should update when a task is in desktop
         // windowing with non-fullscreen bounds
