@@ -48,6 +48,7 @@
         android:layout_marginStart="1dp">
         <ImageView
             android:id="@+id/application_icon"
+            android:visibility="gone"
             android:layout_width="@dimen/desktop_mode_caption_icon_radius"
             android:layout_height="@dimen/desktop_mode_caption_icon_radius"
             android:layout_gravity="center_vertical"
