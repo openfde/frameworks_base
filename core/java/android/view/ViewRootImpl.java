@@ -3793,7 +3793,7 @@ public final class ViewRootImpl implements ViewParent,
      * Returns the caption bar height that the framework applies as window content padding for a
      * desktop window, or 0 if this window has no window decoration caption.
      */
-    int getDesktopCaptionInsetTop() {
+    public int getDesktopCaptionInsetTop() {
         return mDesktopCaptionInsetTop;
     }
 
