@@ -22,12 +22,15 @@ import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 import static android.content.res.Configuration.ORIENTATION_PORTRAIT;
 
 import android.annotation.NonNull;
+import android.app.ActivityThread;
 import android.app.WindowConfiguration;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.os.Process;
 import android.os.SystemProperties;
+import android.util.Log;
+import android.util.Slog;
 import android.view.Gravity;
 import android.window.DesktopModeFlags;
 
@@ -38,6 +41,22 @@ import com.android.internal.R;
  * @hide
  */
 public final class DesktopModeCompatUtils {
+
+    /**
+     * Debug aid: logs every lookup of the status bar height resources, to tell which apps read
+     * them at runtime (covered by the zeroing below) from the ones that get the value through
+     * another path (XML references, values cached at process start, ...).
+     *
+     * <pre>
+     * adb shell setprop log.tag.ZeroSbh DEBUG
+     * adb logcat -s ZeroSbh
+     * </pre>
+     */
+    private static final String TAG_STATUS_BAR_HEIGHT = "ZeroSbh";
+
+    /** Keeps a chatty app from flooding logcat with lookups. */
+    private static final int MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS = 20;
+    private static int sStatusBarHeightLookupLogCount;
 
     /**
      * Whether the caption insets should be excluded from configuration for system to handle.
@@ -130,6 +149,14 @@ public final class DesktopModeCompatUtils {
                 && resId != R.dimen.status_bar_height_default) {
             return false;
         }
+        final boolean result = shouldZeroStatusBarHeightForConfig(config);
+        if (Log.isLoggable(TAG_STATUS_BAR_HEIGHT, Log.DEBUG)) {
+            logStatusBarHeightLookup(resId, config, result);
+        }
+        return result;
+    }
+
+    private static boolean shouldZeroStatusBarHeightForConfig(@NonNull Configuration config) {
         // Only app processes: system components (SystemUI, WMS) legitimately ask for the real
         // status bar height while laying out a per-window context.
         if (Process.myUid() < Process.FIRST_APPLICATION_UID) {
@@ -145,6 +172,28 @@ public final class DesktopModeCompatUtils {
         // Only when the window does not reach the top of the display, so the real status bar cannot
         // overlap it. Desktop windows are laid out below the status bar.
         return winConfig.getBounds().top > 0;
+    }
+
+    /**
+     * Logs a lookup of the status bar height resources, so it can be told apart which apps read
+     * them at runtime (and are therefore covered by the zeroing) from the ones that get the value
+     * through another path (XML references, values cached at process start, ...).
+     */
+    private static void logStatusBarHeightLookup(int resId, @NonNull Configuration config,
+            boolean result) {
+        if (sStatusBarHeightLookupLogCount >= MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS) {
+            return;
+        }
+        sStatusBarHeightLookupLogCount++;
+        final WindowConfiguration winConfig = config.windowConfiguration;
+        Slog.d(TAG_STATUS_BAR_HEIGHT, "process=" + ActivityThread.currentProcessName()
+                + " uid=" + Process.myUid()
+                + " res=0x" + Integer.toHexString(resId)
+                + " mode=" + winConfig.getWindowingMode()
+                + " bounds=" + winConfig.getBounds().toShortString()
+                + " zero=" + result
+                + (sStatusBarHeightLookupLogCount == MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS
+                        ? " (further lookups not logged)" : ""));
     }
 
     private static boolean isConfigurationDecoupled(@NonNull ActivityInfo info,

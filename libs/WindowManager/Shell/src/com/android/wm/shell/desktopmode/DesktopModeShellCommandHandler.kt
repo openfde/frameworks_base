@@ -17,6 +17,7 @@
 package com.android.wm.shell.desktopmode
 
 import android.app.ActivityTaskManager.INVALID_TASK_ID
+import android.util.Log
 import com.android.window.flags.Flags
 import com.android.wm.shell.desktopmode.DesktopModeEventLogger.Companion.EnterReason
 import com.android.wm.shell.desktopmode.DesktopModeEventLogger.Companion.ExitReason
@@ -58,6 +59,7 @@ class DesktopModeShellCommandHandler(
         }
         return when (args[0]) {
             "moveTaskToDesk" -> runMoveTaskToDesk(args, pw)
+            "moveTaskToDeskWithoutActivation" -> runMoveTaskToDeskWithoutActivation(args, pw)
             "moveToNextDisplay" -> runMoveToNextDisplay(args, pw)
             "createDesk" -> runCreateDesk(args, pw)
             "activateDesk" -> runActivateDesk(args, pw)
@@ -112,6 +114,51 @@ class DesktopModeShellCommandHandler(
             .get()
             .moveTaskToDesk(taskId = taskId, deskId = deskId, transitionSource = ADB_COMMAND)
         return true
+    }
+
+    private fun runMoveTaskToDeskWithoutActivation(
+        args: Array<String>,
+        pw: PrintWriter,
+    ): Boolean {
+        if (args.size < 2) {
+            pw.println("Error: task id should be provided as arguments")
+            return false
+        }
+        var taskId =
+            try {
+                args[1].toInt()
+            } catch (e: NumberFormatException) {
+                pw.println("Error: task id should be an integer")
+                return false
+            }
+        if (taskId == 0) {
+            taskId = focusTransitionObserver.globallyFocusedTaskId
+        }
+        if (taskId == INVALID_TASK_ID) {
+            pw.println("Error: no appropriate task found")
+            return false
+        }
+        if (args.size < 3) {
+            pw.println("Error: desk id should be provided as arguments")
+            return false
+        }
+        val deskId =
+            try {
+                args[2].toInt()
+            } catch (e: NumberFormatException) {
+                pw.println("Error: desk id should be an integer")
+                return false
+            }
+        Log.i("DeskPerf", "moveTaskToDeskWithoutActivation task=$taskId desk=$deskId")
+        val moved = controller.get().moveTaskToDeskWithoutActivation(taskId, deskId)
+        pw.println(
+            if (moved) {
+                "moved task $taskId to desk $deskId without activation"
+            } else {
+                "failed to move task $taskId to desk $deskId"
+            }
+        )
+        return moved
     }
 
     private fun runMoveToNextDisplay(args: Array<String>, pw: PrintWriter): Boolean {
@@ -332,6 +379,11 @@ class DesktopModeShellCommandHandler(
         pw.println("$prefix moveTaskToDesk <taskId|0> <deskId>")
         pw.println(
             "$prefix  Move a task with given id to the given desk and activate it. " +
+                "TaskId 0 means focused task on the default display."
+        )
+        pw.println("$prefix moveTaskToDeskWithoutActivation <taskId|0> <deskId>")
+        pw.println(
+            "$prefix  Move a task with given id to the given desk without activating it. " +
                 "TaskId 0 means focused task on the default display."
         )
         pw.println("$prefix moveToNextDisplay <taskId>")
