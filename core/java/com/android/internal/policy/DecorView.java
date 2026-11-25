@@ -1202,7 +1202,8 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
                     + " opaqueCaption=" + isOpaqueCaptionBar
                     + " appearance=0x" + Integer.toHexString(appearance)
                     + " consuming=[" + insetsTypesToString(consumingTypes) + "]"
-                    + " consumed=" + consumedInsets);
+                    + " consumed=" + consumedInsets
+                    + " insets=" + insets);
         }
 
         if (mContentRoot != null) {

@@ -834,7 +834,11 @@ constructor(
                     " windowingMode=${taskInfo.configuration.windowConfiguration.windowingMode}" +
                     " isFreeform=${taskInfo.isFreeform} isFullscreen=${taskInfo.isFullscreen}" +
                     " isVisible=${taskInfo.isVisible} isStatusBarVisible=$isStatusBarVisible" +
-                    " requestingImmersive=${taskInfo.requestingImmersive}",
+                    " requestingImmersive=${taskInfo.requestingImmersive}" +
+                    " transparentCaption=${taskInfo.isTransparentCaptionBarAppearance}" +
+                    " excludeCaptionFromAppBounds=$shouldExcludeCaptionFromAppBounds" +
+                    " shouldSetAppBounds=$shouldSetAppBounds" +
+                    " insetSourceFlags=0x${Integer.toHexString(insetSourceFlags)}",
             )
         }
 
