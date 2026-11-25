@@ -1232,12 +1232,15 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
                 ? mLastInsets.getInsets(consumingTypes & ~WindowInsets.Type.captionBar())
                 : Insets.NONE;
         if (consumingCaption && mLastInsets != null) {
-            // The caption inset of a desktop window is normally only visible to the framework (see
-            // InsetsState#PROP_CAPTION_INSET_FRAMEWORK_ONLY), so that apps which handle insets
-            // themselves don't reserve the space twice. Read the geometry ignoring its visibility so
-            // the content is still padded below the window decoration caption bar.
-            final Insets caption =
-                    mLastInsets.getInsetsIgnoringVisibility(WindowInsets.Type.captionBar());
+            // The caption inset of a desktop window is only visible to the framework (see
+            // ViewRootImpl#getWindowInsets): apps get an empty caption inset so those that handle
+            // insets themselves don't reserve the space twice. Take the height from the view root,
+            // which keeps the value of the inset source, and fall back to the reported geometry
+            // for windows without a decoration.
+            final int captionTop = viewRoot != null ? viewRoot.getDesktopCaptionInsetTop() : 0;
+            final Insets caption = captionTop > 0
+                    ? Insets.of(0, captionTop, 0, 0)
+                    : mLastInsets.getInsetsIgnoringVisibility(WindowInsets.Type.captionBar());
             if (!Insets.NONE.equals(caption)) {
                 consumedInsets = Insets.max(consumedInsets, caption);
             }

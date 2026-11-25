@@ -48,10 +48,6 @@ import android.graphics.Insets;
 import android.graphics.Rect;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Process;
-import android.os.SystemProperties;
-import android.util.Log;
-import android.util.Slog;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
 import android.util.proto.ProtoOutputStream;
@@ -71,33 +67,6 @@ import java.util.StringJoiner;
  * @hide
  */
 public class InsetsState implements Parcelable {
-
-    /**
-     * Whether the desktop window decoration caption inset is only used by the framework: the inset
-     * is turned into padding of the app window content by {@code DecorView}, so reporting it to
-     * apps as well makes apps that handle insets themselves reserve the same space twice. When
-     * enabled, apps see an empty caption inset while the geometry stays available through
-     * {@link WindowInsets#getInsetsIgnoringVisibility(int)} for the framework itself.
-     *
-     * <pre>
-     * adb shell setprop persist.wm.debug.desktop_caption_inset_framework_only false
-     * </pre>
-     */
-    public static final String PROP_CAPTION_INSET_FRAMEWORK_ONLY =
-            "persist.wm.debug.desktop_caption_inset_framework_only";
-
-    /**
-     * Debug aid for the desktop caption inset handing: logs the first caption source an app
-     * process sees, with its flags and whether it is hidden from the app.
-     *
-     * <pre>
-     * adb shell setprop log.tag.CaptionHide DEBUG
-     * </pre>
-     */
-    private static final String TAG_CAPTION_INSET_STATE = "CaptionHide";
-    private static boolean sLoggedCaptionInsetLookup;
-
-    private static final Rect[] EMPTY_RECTS = new Rect[0];
 
     @NonNull
     private final SparseArray<InsetsSource> mSources;
@@ -202,31 +171,8 @@ public class InsetsState implements Parcelable {
                 suppressScrimTypes |= type;
             }
 
-            // Desktop window decoration caption: the framework (DecorView) turns the caption inset
-            // into padding of the window content, so reporting it to apps as well makes apps that
-            // handle insets themselves reserve the space twice. Report it as empty to apps; the
-            // geometry stays available through WindowInsets#getInsetsIgnoringVisibility, which is
-            // what the framework uses for its own padding.
-            final boolean frameworkConsumesCaptionInset =
-                    type == WindowInsets.Type.captionBar()
-                            && (flags & (InsetsSource.FLAG_FORCE_CONSUMING
-                                    | FLAG_FORCE_CONSUMING_OPAQUE_CAPTION_BAR)) != 0
-                            && isDesktopCaptionInsetFrameworkOnly();
-
-            if (type == WindowInsets.Type.captionBar()
-                    && !sLoggedCaptionInsetLookup
-                    && Log.isLoggable(TAG_CAPTION_INSET_STATE, Log.DEBUG)) {
-                sLoggedCaptionInsetLookup = true;
-                Slog.d(TAG_CAPTION_INSET_STATE, "caption source seen: uid=" + Process.myUid()
-                        + " flags=0x" + Integer.toHexString(flags)
-                        + " visible=" + source.isVisible()
-                        + " hideFromApp=" + frameworkConsumesCaptionInset
-                        + " insets=" + source.calculateInsets(relativeFrame, hostBounds, false));
-            }
-
             processSource(source, relativeFrame, hostBounds, false /* ignoreVisibility */,
-                    typeInsetsMap, idSideMap, typeVisibilityMap, typeBoundingRectsMap,
-                    frameworkConsumesCaptionInset /* hideInsetsFromApps */);
+                    typeInsetsMap, idSideMap, typeVisibilityMap, typeBoundingRectsMap);
 
             // IME won't be reported in max insets as the size depends on the EditorInfo of the IME
             // target.
@@ -239,8 +185,7 @@ public class InsetsState implements Parcelable {
                 }
                 processSource(ignoringVisibilitySource, relativeFrameMax, hostBounds,
                         true /* ignoreVisibility */, typeMaxInsetsMap, null /* idSideMap */,
-                        null /* typeVisibilityMap */, typeMaxBoundingRectsMap,
-                        false /* hideInsetsFromApps */);
+                        null /* typeVisibilityMap */, typeMaxBoundingRectsMap);
             }
         }
         final int softInputAdjustMode = legacySoftInputMode & SOFT_INPUT_MASK_ADJUST;
@@ -424,16 +369,6 @@ public class InsetsState implements Parcelable {
         return blocked;
     }
 
-    /**
-     * Whether the desktop caption inset should be hidden from apps, because the framework converts
-     * it into window content padding (see DecorView#updateColorViews).
-     */
-    private static boolean isDesktopCaptionInsetFrameworkOnly() {
-        // Only app processes: system components compute their own insets and need the real value.
-        return Process.myUid() >= Process.FIRST_APPLICATION_UID
-                && SystemProperties.getBoolean(PROP_CAPTION_INSET_FRAMEWORK_ONLY, true);
-    }
-
     private static boolean canControlSource(@NonNull Rect frame, @Nullable Rect hostBounds,
             @NonNull InsetsSource source) {
         final Insets insets = source.calculateInsets(frame, hostBounds,
@@ -448,14 +383,10 @@ public class InsetsState implements Parcelable {
     private void processSource(@NonNull InsetsSource source, @NonNull Rect relativeFrame,
             @Nullable Rect hostBounds, boolean ignoreVisibility, @NonNull Insets[] typeInsetsMap,
             @Nullable @InternalInsetsSide SparseIntArray idSideMap,
-            @Nullable boolean[] typeVisibilityMap, Rect[][] typeBoundingRectsMap,
-            boolean hideInsetsFromApps) {
-        final Insets insets = hideInsetsFromApps
-                ? Insets.NONE
-                : source.calculateInsets(relativeFrame, hostBounds, ignoreVisibility);
-        final Rect[] boundingRects = hideInsetsFromApps
-                ? EMPTY_RECTS
-                : source.calculateBoundingRects(relativeFrame, hostBounds, ignoreVisibility);
+            @Nullable boolean[] typeVisibilityMap, Rect[][] typeBoundingRectsMap) {
+        final Insets insets = source.calculateInsets(relativeFrame, hostBounds, ignoreVisibility);
+        final Rect[] boundingRects = source.calculateBoundingRects(relativeFrame, hostBounds,
+                ignoreVisibility);
 
         final int type = source.getType();
         processSourceAsPublicType(source, typeInsetsMap, idSideMap, typeVisibilityMap,

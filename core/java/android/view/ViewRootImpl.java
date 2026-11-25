@@ -180,6 +180,7 @@ import android.graphics.FrameInfo;
 import android.graphics.HardwareRenderer;
 import android.graphics.HardwareRenderer.FrameDrawingCallback;
 import android.graphics.HardwareRendererObserver;
+import android.graphics.Insets;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
@@ -340,6 +341,26 @@ public final class ViewRootImpl implements ViewParent,
         View.AttachInfo.Callbacks, ThreadedRenderer.DrawCallbacks,
         AttachedSurfaceControl {
     private static final String TAG = "ViewRootImpl";
+
+    /**
+     * Whether the desktop window decoration caption inset is kept for the framework only: it is
+     * applied as padding of the window content by DecorView, so the app is given an empty caption
+     * inset instead.
+     *
+     * <pre>
+     * adb shell setprop persist.wm.debug.desktop_caption_inset_framework_only false
+     * </pre>
+     */
+    private static final String PROP_CAPTION_INSET_FRAMEWORK_ONLY =
+            "persist.wm.debug.desktop_caption_inset_framework_only";
+    private static final String TAG_CAPTION_HIDE = "CaptionHide";
+
+    /**
+     * Caption bar height of a desktop window that the framework applies as window content padding.
+     * See {@link DecorView#updateColorViews}.
+     */
+    private int mDesktopCaptionInsetTop;
+
     private static final boolean DBG = false;
     private static final boolean LOCAL_LOGV = false;
     /** @noinspection PointlessBooleanExpression*/
@@ -3758,6 +3779,24 @@ public final class ViewRootImpl implements ViewParent,
         m.postTranslate(-mAttachInfo.mWindowLeft, -mAttachInfo.mWindowTop);
     }
 
+
+    /**
+     * Whether the desktop caption inset should be hidden from the app. App processes only: system
+     * components need the real insets for their own layout.
+     */
+    private static boolean isDesktopCaptionInsetHiddenFromApps() {
+        return Process.myUid() >= Process.FIRST_APPLICATION_UID
+                && SystemProperties.getBoolean(PROP_CAPTION_INSET_FRAMEWORK_ONLY, true);
+    }
+
+    /**
+     * Returns the caption bar height that the framework applies as window content padding for a
+     * desktop window, or 0 if this window has no window decoration caption.
+     */
+    int getDesktopCaptionInsetTop() {
+        return mDesktopCaptionInsetTop;
+    }
+
     /* package */ WindowInsets getWindowInsets(boolean forceConstruct) {
         if (mLastWindowInsets != null && !forceConstruct) {
             return mLastWindowInsets;
@@ -3777,6 +3816,30 @@ public final class ViewRootImpl implements ViewParent,
                     Log.d(mTag, "WindowInsets changed: " + diffString);
                 }
             }
+
+            // Desktop window decoration caption: the framework applies the caption height as
+            // padding of the window content (see DecorView#updateColorViews). Reporting the same
+            // inset to the app makes apps that handle insets themselves - including through
+            // getInsetsIgnoringVisibility() - reserve the space twice, so keep it for the
+            // decoration only and hand the app an empty caption inset.
+            final int desktopCaptionTop =
+                    insets.getInsetsIgnoringVisibility(WindowInsets.Type.captionBar()).top;
+            final boolean frameworkConsumesCaption =
+                    (insets.getForceConsumingTypes() & WindowInsets.Type.captionBar()) != 0
+                            || insets.isForceConsumingOpaqueCaptionBar();
+            mDesktopCaptionInsetTop = frameworkConsumesCaption ? desktopCaptionTop : 0;
+            if (frameworkConsumesCaption && desktopCaptionTop > 0
+                    && isDesktopCaptionInsetHiddenFromApps()) {
+                if (Log.isLoggable(TAG_CAPTION_HIDE, Log.DEBUG)) {
+                    Log.d(TAG_CAPTION_HIDE, mTag + " hiding caption inset (" + desktopCaptionTop
+                            + "px) from the app");
+                }
+                insets = new WindowInsets.Builder(insets)
+                        .setInsets(WindowInsets.Type.captionBar(), Insets.NONE)
+                        .setInsetsIgnoringVisibility(WindowInsets.Type.captionBar(), Insets.NONE)
+                        .build();
+            }
+
             mAttachInfo.mContentInsets.set(insets.getSystemWindowInsets().toRect());
             mAttachInfo.mStableInsets.set(insets.getStableInsets().toRect());
             mAttachInfo.mVisibleInsets.set(mInsetsController.calculateVisibleInsets(
