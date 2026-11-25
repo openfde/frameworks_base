@@ -228,6 +228,10 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
 
         boolean isStylusHandwritingAvailableAsUser(@UserIdInt int userId, boolean connectionless);
 
+        void commitText(String text);
+
+        void sendKeyEvent(int action, int code);
+
         @PermissionVerified(Manifest.permission.TEST_INPUT_METHOD)
         void addVirtualStylusIdForTestSession(IInputMethodClient client);
 
@@ -540,6 +544,16 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
     public boolean isStylusHandwritingAvailableAsUser(@UserIdInt int userId,
             boolean connectionless) {
         return mCallback.isStylusHandwritingAvailableAsUser(userId, connectionless);
+    }
+
+    @Override
+    public void commitText(String text) {
+        mCallback.commitText(text);
+    }
+
+    @Override
+    public void sendKeyEvent(int action, int code) {
+        mCallback.sendKeyEvent(action, code);
     }
 
     @EnforcePermission(Manifest.permission.TEST_INPUT_METHOD)

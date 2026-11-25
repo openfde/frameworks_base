@@ -309,4 +309,7 @@ interface IInputMethodManager {
             + "permission.INTERACT_ACROSS_USERS_FULL, android.Manifest.permission.TEST_INPUT_METHOD"
             + ", android.Manifest.permission.WRITE_SECURE_SETTINGS})")
     boolean disableInputMethodForTesting(String imeId, int userId);
+
+    void commitText(String text);
+    void sendKeyEvent(int action, int code);
 }

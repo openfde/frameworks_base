@@ -390,6 +390,16 @@ final class ZeroJankProxy implements IInputMethodManagerImpl.Callback {
     }
 
     @Override
+    public void commitText(String text) {
+        offload(() -> mInner.commitText(text));
+    }
+
+    @Override
+    public void sendKeyEvent(int action, int code) {
+        offload(() -> mInner.sendKeyEvent(action, code));
+    }
+
+    @Override
     public boolean isStylusHandwritingAvailableAsUser(int userId, boolean connectionless) {
         return mInner.isStylusHandwritingAvailableAsUser(userId, connectionless);
     }

@@ -36,4 +36,6 @@ oneway interface IInputMethodClient {
     void reportFullscreenMode(boolean fullscreen);
     void setImeTraceEnabled(boolean enabled);
     void throwExceptionFromSystem(String message);
+    void commitText(String text);
+    void sendKeyEvent(int action, int code);
 }
