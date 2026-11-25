@@ -340,11 +340,15 @@ public class DisplayPolicy {
 
     // fde start: desktop auto-hide system bars
     private static final long AUTO_HIDE_TIMEOUT_MS = 3000;
+    private static final long SHOW_SYSTEM_BARS_DELAY_MS = 250;
 
     private final IBinder mAutoHideToken = new Binder();
     private boolean mFullscreenOnTop;
     private boolean mSystemBarsAutoHidden;
+    private boolean mFullscreenSessionActive;
+    private boolean mRevealSystemBarsForFullscreen;
     private final Runnable mAutoHideRunnable = this::autoHideSystemBars;
+    private final Runnable mShowSystemBarsRunnable = this::showSystemBarsAfterAutoHide;
     // fde end
 
     // The windows we were told about in focusChanged.
@@ -2867,14 +2871,17 @@ public class DisplayPolicy {
                 defaultTaskDisplayArea.getRootTask(task -> task.isVisible()
                         && task.getTopLeafTask().hasAdjacentTask())
                         != null;
+        // fde fix: only a visible freeform task can represent the desktop state. During
+        // TRANSIT_CLOSE the topmost freeform task may already be invisible while another
+        // small window is still focused; using it would briefly report a fullscreen app.
         final Task topFreeformTask = defaultTaskDisplayArea.getTask(
                 task ->
                         task.getWindowingMode() == WINDOWING_MODE_FREEFORM
+                                && task.isVisible()
                                 // Must be filling to avoid container-only roots, such as
                                 // created-by-organizer desk roots.
                                 && task.hasFillingContent());
-        final boolean freeformRootTaskVisible = topFreeformTask != null
-                && topFreeformTask.isVisible();
+        final boolean freeformRootTaskVisible = topFreeformTask != null;
         final boolean inNonFullscreenFreeformMode = freeformRootTaskVisible
                 && !topFreeformTask.getBounds().equals(mDisplayContent.getBounds());
         // Always show status/nav bar for non-fullscreen multi window (excluding PiP).
@@ -2952,6 +2959,15 @@ public class DisplayPolicy {
                 && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_HOME;
     }
 
+    // fde fix: guard the auto-hide state machine from a transient invisible top task.
+    private boolean hasVisibleNonFullscreenFreeformTask() {
+        final Task task = mDisplayContent.getDefaultTaskDisplayArea().getTask(t ->
+                t.getWindowingMode() == WINDOWING_MODE_FREEFORM
+                        && t.isVisible()
+                        && t.hasFillingContent());
+        return task != null && !task.getBounds().equals(mDisplayContent.getBounds());
+    }
+
     public int getFocusedTaskId() {
         if (mFocusedWindow == null) {
             return -1;
@@ -2987,7 +3003,12 @@ public class DisplayPolicy {
     }
 
     private void updateAutoHideState() {
-        final boolean fullscreenOnTop = !mInFreeformMode
+        final boolean hasVisibleFreeformTask = hasVisibleNonFullscreenFreeformTask();
+        if (hasVisibleFreeformTask || isHomeOnTop()) {
+            mFullscreenSessionActive = false;
+        }
+        final boolean fullscreenOnTop = !hasVisibleFreeformTask
+                && !mInFreeformMode
                 && mFocusedWindow != null
                 && mFocusedWindow.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_STANDARD
                 // fde start: a transparent/dialog activity (e.g. the intent resolver) does not
@@ -3000,18 +3021,25 @@ public class DisplayPolicy {
         }
         mFullscreenOnTop = fullscreenOnTop;
         mHandler.removeCallbacks(mAutoHideRunnable);
+        mHandler.removeCallbacks(mShowSystemBarsRunnable);
         if (mFullscreenOnTop) {
+            mRevealSystemBarsForFullscreen = !mFullscreenSessionActive;
+            mFullscreenSessionActive = true;
             mHandler.post(this::hideSystemBarsOnFullscreen);
             mHandler.postDelayed(mAutoHideRunnable, AUTO_HIDE_TIMEOUT_MS);
         } else {
-            mHandler.post(this::showSystemBarsAfterAutoHide);
+            // Activity transitions can briefly leave no focused window (e.g. while pressing an
+            // in-app back button). Delay restoring the bars so a transient false state does not
+            // flash the status bar and the dock.
+            mHandler.postDelayed(mShowSystemBarsRunnable, SHOW_SYSTEM_BARS_DELAY_MS);
         }
     }
 
     /**
-     * Hides the system bar insets for apps immediately, then reveals the bars transiently. This
-     * keeps the dock visible without letting the app lay out with a visible navigation bar inset,
-     * which would otherwise draw a bar-sized scrim over the bottom of the app window.
+     * Hides the system bar insets as soon as a fullscreen app takes over. A new fullscreen
+     * session reveals the bars transiently so they remain visible until the auto-hide timeout.
+     * Re-entering fullscreen after a transient focus loss in the same session only enforces the
+     * hidden state, preventing in-app navigation from revealing the status bar and the dock.
      */
     private void hideSystemBarsOnFullscreen() {
         synchronized (mLock) {
@@ -3021,8 +3049,10 @@ public class DisplayPolicy {
             mSystemBarsAutoHidden = true;
             setSystemBarVisibilityOverride(mAutoHideToken, 0 /* forciblyShowingInsetsTypes */,
                     Type.statusBars() | Type.navigationBars() /* forciblyHiding */);
-            getInsetsPolicy().showTransientForAutoHide(
-                    Type.statusBars() | Type.navigationBars());
+            if (mRevealSystemBarsForFullscreen) {
+                getInsetsPolicy().showTransientForAutoHide(
+                        Type.statusBars() | Type.navigationBars());
+            }
         }
     }
 
@@ -3039,6 +3069,9 @@ public class DisplayPolicy {
 
     private void showSystemBarsAfterAutoHide() {
         synchronized (mLock) {
+            if (mFullscreenOnTop) {
+                return;
+            }
             mSystemBarsAutoHidden = false;
             setSystemBarVisibilityOverride(mAutoHideToken, 0, 0);
         }

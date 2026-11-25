@@ -90,6 +90,9 @@ import kotlinx.coroutines.launch
  * to close the menu. Windowing Options(Proto 2 only): Buttons to change windowing modes. Additional
  * Options: Miscellaneous functions including screenshot and closing task.
  */
+//fde add
+/* Only show exit from fullscreen */
+//fde end
 class HandleMenu
 private constructor(
     @ShellMainThread private val mainDispatcher: CoroutineDispatcher,
@@ -904,7 +907,7 @@ private constructor(
 
         /** Update the split screen button (horizontal vs. vertical split) orientation. */
         fun updateSplitScreenButtonOrientation(configuration: Configuration) {
-            if (shouldShowWindowingPill) {
+            if (!showOnlyExitFullscreen && shouldShowWindowingPill) {
                 windowingPillView.updateSplitScreenButtonOrientation(configuration)
             }
         }
