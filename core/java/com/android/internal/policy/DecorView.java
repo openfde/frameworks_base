@@ -233,6 +233,14 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
     @UnsupportedAppUsage
     private int mLastLeftInset = 0;
     private WindowInsets mLastInsets = null;
+    /**
+     * Whether {@link #onApplyWindowInsets} ran for the current
+     * {@link View#dispatchApplyWindowInsets} call. When an app installs an
+     * {@code OnApplyWindowInsetsListener} on the decor view, {@link View#dispatchApplyWindowInsets}
+     * invokes the listener instead of {@link #onApplyWindowInsets}, which would silently skip the
+     * system bar color handling and the consumption of the window decoration caption bar inset.
+     */
+    private boolean mOnApplyWindowInsetsDispatched;
     private boolean mLastHasTopStableInset = false;
     private boolean mLastHasBottomStableInset = false;
     private boolean mLastHasRightStableInset = false;
@@ -957,7 +965,36 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
     }
 
     @Override
+    public WindowInsets dispatchApplyWindowInsets(WindowInsets insets) {
+        mOnApplyWindowInsetsDispatched = false;
+        final WindowInsets result = super.dispatchApplyWindowInsets(insets);
+        if (mOnApplyWindowInsetsDispatched) {
+            return result;
+        }
+        // The app installed an OnApplyWindowInsetsListener on the decor view, so
+        // View#dispatchApplyWindowInsets called the listener instead of
+        // DecorView#onApplyWindowInsets: neither the system bar color handling nor the
+        // consumption of the window decoration caption bar inset ran. Apps doing this usually
+        // handle statusBars()/navigationBars() themselves but know nothing about the caption bar,
+        // which only exists for desktop (freeform) windows, so their content ends up underneath
+        // the caption. Run the regular handling here for those windows; it is limited to the case
+        // where the caption bar is force-consuming, i.e. where the shell explicitly asks for the
+        // inset to be consumed.
+        if (insets != null
+                && (((insets.getForceConsumingTypes() & WindowInsets.Type.captionBar()) != 0)
+                        || insets.isForceConsumingOpaqueCaptionBar())) {
+            if (Log.isLoggable(TAG_INSETS, Log.DEBUG)) {
+                Slog.d(TAG_INSETS, "caption insets bypassed by an app listener, applying them"
+                        + " through updateColorViews: " + insets);
+            }
+            updateColorViews(insets, false);
+        }
+        return result;
+    }
+
+    @Override
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+        mOnApplyWindowInsetsDispatched = true;
         final WindowManager.LayoutParams attrs = mWindow.getAttributes();
         mFloatingInsets.setEmpty();
         if ((attrs.flags & FLAG_LAYOUT_IN_SCREEN) == 0) {
