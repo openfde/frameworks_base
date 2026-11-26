@@ -156,12 +156,16 @@ public final class DesktopModeCompatUtils {
      * Value, in px, that the status bar height resources resolve to in freeform windows when
      * {@link #PROP_ZERO_STATUS_BAR_HEIGHT} is enabled.
      *
-     * <p>0 removes the placeholder completely, which is what most apps written for the phone full
-     * screen model need. A few apps treat a zero status bar height as "there is no status bar at
-     * all" and switch to a different layout, so a small non-zero value can be configured instead.
+     * <p>1px by default: the placeholder that apps written for the phone full screen model reserve
+     * inside their own content is effectively gone, but a handful of apps treat a height of exactly
+     * 0 as "there is no status bar at all" and switch to a completely different layout, so the
+     * height is not reported as 0. Apps that need the plain zero can set the property to 0.
      */
     public static final String PROP_STATUS_BAR_HEIGHT_REPLACEMENT =
             "persist.wm.debug.desktop_status_bar_height_replacement";
+
+    /** Default value of {@link #PROP_STATUS_BAR_HEIGHT_REPLACEMENT}. */
+    private static final int DEFAULT_STATUS_BAR_HEIGHT_REPLACEMENT = 1;
 
     /** Report the caption bar inset to the framework only, not to apps. */
     public static final String PROP_CAPTION_INSET_FRAMEWORK_ONLY =
@@ -243,7 +247,8 @@ public final class DesktopModeCompatUtils {
      * Value, in px, that the status bar height resources should resolve to for the given window.
      */
     public static int getStatusBarHeightReplacement() {
-        return SystemProperties.getInt(PROP_STATUS_BAR_HEIGHT_REPLACEMENT, 0);
+        return SystemProperties.getInt(PROP_STATUS_BAR_HEIGHT_REPLACEMENT,
+                DEFAULT_STATUS_BAR_HEIGHT_REPLACEMENT);
     }
 
     public static boolean shouldZeroStatusBarHeight(int resId, @NonNull Configuration config) {
