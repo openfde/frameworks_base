@@ -167,6 +167,24 @@ public final class DesktopModeCompatUtils {
     /** Default value of {@link #PROP_STATUS_BAR_HEIGHT_REPLACEMENT}. */
     private static final int DEFAULT_STATUS_BAR_HEIGHT_REPLACEMENT = 1;
 
+    /**
+     * Also replace the status bar height when the window configuration is not a desktop (freeform)
+     * one, which is enabled by default.
+     *
+     * <p>An app can read the status bar height before its own window exists - while its process
+     * starts during boot, or when the desktop restores the previous session - and cache the value.
+     * At that point its configuration is still the display configuration, so the window based
+     * checks below cannot be used and the app would keep the real status bar height, which then
+     * shows up as a gap between the window decoration caption bar and the app's own header once the
+     * window appears.
+     *
+     * <p>The replacement is skipped for windows that stay at the top of the display while being in
+     * the desktop windowing mode, e.g. the desktop itself. Windows that are genuinely fullscreen
+     * can be excluded by turning this off.
+     */
+    public static final String PROP_STATUS_BAR_HEIGHT_UNCONDITIONAL =
+            "persist.wm.debug.desktop_status_bar_height_unconditional";
+
     /** Report the caption bar inset to the framework only, not to apps. */
     public static final String PROP_CAPTION_INSET_FRAMEWORK_ONLY =
             "persist.wm.debug.desktop_caption_inset_framework_only";
@@ -276,12 +294,17 @@ public final class DesktopModeCompatUtils {
             return false;
         }
         final WindowConfiguration winConfig = config.windowConfiguration;
-        if (winConfig.getWindowingMode() != WINDOWING_MODE_FREEFORM) {
-            return false;
+        if (winConfig.getWindowingMode() == WINDOWING_MODE_FREEFORM) {
+            // Desktop window: only when it does not reach the top of the display, so the real status
+            // bar cannot overlap it. Desktop windows are laid out below the status bar, while the
+            // desktop itself reports a freeform window at the display bounds and keeps the real
+            // value.
+            return winConfig.getBounds().top > 0;
         }
-        // Only when the window does not reach the top of the display, so the real status bar cannot
-        // overlap it. Desktop windows are laid out below the status bar.
-        return winConfig.getBounds().top > 0;
+        // Not a desktop window: either the app is still starting - it reads the status bar height
+        // before its window exists and caches it, with the display configuration - or the window is
+        // genuinely fullscreen. Replace the value in both cases unless that is turned off.
+        return SystemProperties.getBoolean(PROP_STATUS_BAR_HEIGHT_UNCONDITIONAL, true);
     }
 
     /**
