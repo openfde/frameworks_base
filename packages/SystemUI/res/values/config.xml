@@ -555,6 +555,7 @@
     <string-array name="config_pluginAllowlist" translatable="false">
         <item>com.android.systemui</item>
         <item>com.boringdroid.systemui</item>
+        <item>com.fde.taskplugin</item>
     </string-array>
 
     <!-- Launcher package name for overlaying icons. -->
