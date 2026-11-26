@@ -152,6 +152,17 @@ public final class DesktopModeCompatUtils {
     public static final String PROP_ZERO_STATUS_BAR_HEIGHT =
             "persist.wm.debug.desktop_zero_status_bar_height";
 
+    /**
+     * Value, in px, that the status bar height resources resolve to in freeform windows when
+     * {@link #PROP_ZERO_STATUS_BAR_HEIGHT} is enabled.
+     *
+     * <p>0 removes the placeholder completely, which is what most apps written for the phone full
+     * screen model need. A few apps treat a zero status bar height as "there is no status bar at
+     * all" and switch to a different layout, so a small non-zero value can be configured instead.
+     */
+    public static final String PROP_STATUS_BAR_HEIGHT_REPLACEMENT =
+            "persist.wm.debug.desktop_status_bar_height_replacement";
+
     /** Report the caption bar inset to the framework only, not to apps. */
     public static final String PROP_CAPTION_INSET_FRAMEWORK_ONLY =
             "persist.wm.debug.desktop_caption_inset_framework_only";
@@ -228,6 +239,13 @@ public final class DesktopModeCompatUtils {
      * <p>Windows that still reach the top of the display (maximized or immersive windows that are
      * covered by the real status bar) keep the real value.
      */
+    /**
+     * Value, in px, that the status bar height resources should resolve to for the given window.
+     */
+    public static int getStatusBarHeightReplacement() {
+        return SystemProperties.getInt(PROP_STATUS_BAR_HEIGHT_REPLACEMENT, 0);
+    }
+
     public static boolean shouldZeroStatusBarHeight(int resId, @NonNull Configuration config) {
         // Cheap id check first: this runs for every resource lookup that resolves a value.
         if (resId != R.dimen.status_bar_height
@@ -290,6 +308,7 @@ public final class DesktopModeCompatUtils {
                 + " res=0x" + Integer.toHexString(resId)
                 + " mode=" + windowingMode
                 + " bounds=" + winConfig.getBounds().toShortString()
+                + " value=" + getStatusBarHeightReplacement()
                 + " zero=" + result
                 + (sStatusBarHeightLookupLogCount >= MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS
                         ? " (no further lookups will be logged)" : ""));

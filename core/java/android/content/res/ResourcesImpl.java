@@ -298,12 +298,14 @@ public class ResourcesImpl {
         if (found) {
             if (DesktopModeCompatUtils.shouldZeroStatusBarHeight(id, mConfiguration)) {
                 // Desktop (freeform) windows are covered by the window decoration caption bar, not
-                // by the system status bar: make the status bar height resources resolve to 0 so
-                // that apps which reserve that height inside their own content don't leave a gap
-                // between the caption bar and their header. See
-                // DesktopModeCompatUtils#shouldZeroStatusBarHeight.
+                // by the system status bar: replace the status bar height resources so that apps
+                // which reserve that height inside their own content don't leave a gap between the
+                // caption bar and their header. The replacement is 0 by default and configurable
+                // through DesktopModeCompatUtils#PROP_STATUS_BAR_HEIGHT_REPLACEMENT.
+                final int replacement = DesktopModeCompatUtils.getStatusBarHeightReplacement();
                 outValue.type = TypedValue.TYPE_DIMENSION;
-                outValue.data = 0;
+                outValue.data = (Math.max(0, replacement) << TypedValue.COMPLEX_MANTISSA_SHIFT)
+                        | TypedValue.COMPLEX_UNIT_PX;
             }
             return;
         }
