@@ -27,6 +27,7 @@ import android.app.WindowConfiguration;
 import android.content.Context;
 import android.content.res.CompatibilityInfo;
 import android.content.res.Configuration;
+import android.graphics.Insets;
 import android.graphics.Rect;
 import android.os.IBinder;
 import android.os.RemoteException;
@@ -39,6 +40,8 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowManagerGlobal;
 import android.view.WindowMetrics;
+
+import com.android.internal.policy.DesktopModeCompatUtils;
 
 import java.util.HashSet;
 import java.util.List;
@@ -120,10 +123,29 @@ public final class WindowMetricsController {
             if (overrideInvScale != 1f) {
                 insetsState.scale(overrideInvScale);
             }
-            return insetsState.calculateInsets(bounds, bounds, null /* ignoringVisibilityState */,
-                    isScreenRound, SOFT_INPUT_ADJUST_NOTHING, 0 /* flags */, SYSTEM_UI_FLAG_VISIBLE,
+            WindowInsets insets = insetsState.calculateInsets(bounds, bounds,
+                    null /* ignoringVisibilityState */, isScreenRound, SOFT_INPUT_ADJUST_NOTHING,
+                    0 /* flags */, SYSTEM_UI_FLAG_VISIBLE,
                     WindowManager.LayoutParams.INVALID_WINDOW_TYPE, activityType,
                     null /* idSideMap */);
+            // The window decoration caption bar is applied by the framework as padding of the
+            // window content (see DecorView#updateColorViews), so keep it out of what apps can
+            // read here as well; otherwise an app that reserves the caption height itself pads
+            // twice.
+            if (DesktopModeCompatUtils.isCaptionInsetFrameworkOnly()) {
+                final int captionTop = insets.getInsetsIgnoringVisibility(
+                        WindowInsets.Type.captionBar()).top;
+                if (captionTop > 0
+                        && (((insets.getForceConsumingTypes() & WindowInsets.Type.captionBar()) != 0)
+                                || insets.isForceConsumingOpaqueCaptionBar())) {
+                    insets = new WindowInsets.Builder(insets)
+                            .setInsets(WindowInsets.Type.captionBar(), Insets.NONE)
+                            .setInsetsIgnoringVisibility(
+                                    WindowInsets.Type.captionBar(), Insets.NONE)
+                            .build();
+                }
+            }
+            return insets;
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

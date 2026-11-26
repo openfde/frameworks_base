@@ -1237,9 +1237,15 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
             consumedInsets = mLastInsets != null
                     ? mLastInsets.getInsets(consumingTypes & ~WindowInsets.Type.captionBar())
                     : Insets.NONE;
-            final int captionTop = viewRoot != null ? viewRoot.getDesktopCaptionInsetTop() : 0;
-            if (captionTop > 0) {
-                consumedInsets = Insets.max(consumedInsets, Insets.of(0, captionTop, 0, 0));
+            // Only the decor view of the window takes the caption height from the view root. A
+            // DecorView that the app nested in its own hierarchy (e.g. inside a TabHost) receives
+            // insets that the outer decor already consumed, so it must not reserve the caption
+            // height a second time.
+            if (viewRoot != null && getParent() == viewRoot) {
+                final int captionTop = viewRoot.getDesktopCaptionInsetTop();
+                if (captionTop > 0) {
+                    consumedInsets = Insets.max(consumedInsets, Insets.of(0, captionTop, 0, 0));
+                }
             }
         } else {
             consumedInsets = mLastInsets != null
