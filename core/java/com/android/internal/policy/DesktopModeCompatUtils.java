@@ -55,6 +55,9 @@ public final class DesktopModeCompatUtils {
      * </pre>
      */
     private static final String TAG_STATUS_BAR_HEIGHT = "ZeroSbh";
+    /** Debug aid: prints the desktop inset switch values once per process. */
+    private static final String TAG_SWITCHES = "DesktopInsetSwitch";
+    private static boolean sLoggedSwitches;
 
     /** Keeps a chatty app from flooding logcat with lookups. */
     private static final int MAX_STATUS_BAR_HEIGHT_LOOKUP_LOGS = 40;
@@ -153,14 +156,11 @@ public final class DesktopModeCompatUtils {
     public static final String PROP_CAPTION_INSET_FRAMEWORK_ONLY =
             "persist.wm.debug.desktop_caption_inset_framework_only";
 
-    private static final boolean CAPTION_INSET_TARGET_ENABLED =
-            SystemProperties.getBoolean(PROP_CAPTION_INSET_TARGET, true);
-    private static final boolean CAPTION_INSET_LISTENER_ENABLED =
-            SystemProperties.getBoolean(PROP_CAPTION_INSET_LISTENER, true);
-    private static final boolean ZERO_STATUS_BAR_HEIGHT_ENABLED =
-            SystemProperties.getBoolean(PROP_ZERO_STATUS_BAR_HEIGHT, true);
-    private static final boolean CAPTION_INSET_FRAMEWORK_ONLY_ENABLED =
-            SystemProperties.getBoolean(PROP_CAPTION_INSET_FRAMEWORK_ONLY, true);
+    // The switches are read on every use instead of being cached in a static field: framework
+    // classes like this one can be initialized before an app process even starts, in which case a
+    // cached value would be baked in for the lifetime of the system. All call sites are low
+    // frequency (an insets dispatch, a window metrics request, or a lookup of one of the status
+    // bar height resources), so the property read is cheap.
 
     /**
      * Whether the consumed insets should be applied to the outermost view hosting the content root
@@ -168,7 +168,7 @@ public final class DesktopModeCompatUtils {
      * container which ignores {@link android.view.ViewGroup.MarginLayoutParams} on layout.
      */
     public static boolean isCaptionInsetTargetEnabled() {
-        return CAPTION_INSET_TARGET_ENABLED;
+        return SystemProperties.getBoolean(PROP_CAPTION_INSET_TARGET, true);
     }
 
     /**
@@ -177,7 +177,7 @@ public final class DesktopModeCompatUtils {
      * {@code DecorView#onApplyWindowInsets} completely.
      */
     public static boolean isCaptionInsetListenerEnabled() {
-        return CAPTION_INSET_LISTENER_ENABLED;
+        return SystemProperties.getBoolean(PROP_CAPTION_INSET_LISTENER, true);
     }
 
     /**
@@ -186,8 +186,32 @@ public final class DesktopModeCompatUtils {
      * reserve the same space a second time.
      */
     public static boolean isCaptionInsetFrameworkOnly() {
-        return CAPTION_INSET_FRAMEWORK_ONLY_ENABLED
-                && Process.myUid() >= Process.FIRST_APPLICATION_UID;
+        final boolean appProcess = Process.myUid() >= Process.FIRST_APPLICATION_UID;
+        if (appProcess) {
+            logSwitches();
+        }
+        return appProcess
+                && SystemProperties.getBoolean(PROP_CAPTION_INSET_FRAMEWORK_ONLY, true);
+    }
+
+    /**
+     * Logs the desktop inset switches once per process, to tell whether an app process really sees
+     * the property values the device was configured with. Enable with {@code log.tag.DebugTool
+     * DEBUG}.
+     */
+    private static void logSwitches() {
+        if (sLoggedSwitches || !Log.isLoggable(TAG_SWITCHES, Log.DEBUG)) {
+            return;
+        }
+        sLoggedSwitches = true;
+        Slog.d(TAG_SWITCHES, "process=" + ActivityThread.currentProcessName()
+                + " uid=" + Process.myUid()
+                + " target=" + isCaptionInsetTargetEnabled()
+                + " listener=" + isCaptionInsetListenerEnabled()
+                + " zeroStatusBarHeight=" + SystemProperties.getBoolean(
+                        PROP_ZERO_STATUS_BAR_HEIGHT, true)
+                + " captionInsetFrameworkOnly=" + SystemProperties.getBoolean(
+                        PROP_CAPTION_INSET_FRAMEWORK_ONLY, true));
     }
 
     /**
@@ -225,7 +249,7 @@ public final class DesktopModeCompatUtils {
         if (Process.myUid() < Process.FIRST_APPLICATION_UID) {
             return false;
         }
-        if (!ZERO_STATUS_BAR_HEIGHT_ENABLED) {
+        if (!SystemProperties.getBoolean(PROP_ZERO_STATUS_BAR_HEIGHT, true)) {
             return false;
         }
         final WindowConfiguration winConfig = config.windowConfiguration;
