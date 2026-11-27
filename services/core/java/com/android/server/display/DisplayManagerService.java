@@ -103,6 +103,7 @@ import android.content.res.TypedArray;
 import android.database.ContentObserver;
 import android.graphics.ColorSpace;
 import android.graphics.Point;
+import android.graphics.PointF;
 import android.hardware.OverlayProperties;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
@@ -299,6 +300,14 @@ public final class DisplayManagerService extends SystemService {
     // This value needs to be in sync with the threshold
     // in RefreshRateConfigs::getFrameRateDivisor.
     private static final float THRESHOLD_FOR_REFRESH_RATES_DIVISORS = 0.0009f;
+
+    // OpenFDE: physical monitors can differ on every boot, so a resolution
+    // remembered from a previous boot (or from a different monitor) is wrong.
+    // The active display mode must always come from what the HWC reports for
+    // the currently attached monitor. Settings' resolution page is still
+    // usable for a one-shot, in-session switch, but the choice is never
+    // persisted nor restored on the next boot.
+    private static final boolean OPENFDE_NO_SAVED_DISPLAY_MODE = true;
 
     private static final int MSG_REGISTER_DEFAULT_DISPLAY_ADAPTERS = 1;
     private static final int MSG_REGISTER_ADDITIONAL_DISPLAY_ADAPTERS = 2;
@@ -794,7 +803,77 @@ public final class DisplayManagerService extends SystemService {
 
         publishBinderService(Context.DISPLAY_SERVICE, new BinderService(),
                 true /*allowIsolated*/, DUMP_FLAG_PRIORITY_CRITICAL);
-        publishLocalService(DisplayManagerInternal.class, new LocalService());
+        final LocalService localService = new LocalService();
+        publishLocalService(DisplayManagerInternal.class, localService);
+
+
+        mHandler.post(mExternalPositionPollRunnable);
+    }
+
+    private final Runnable mExternalPositionPollRunnable = new Runnable() {
+        @Override
+        public void run() {
+            final String current = SystemProperties.get("openfde.external_position", "");
+            if (!current.equals(mLastExternalPosition)) {
+                mLastExternalPosition = current;
+                if (!current.isEmpty()) {
+                    Slog.i(TAG, "OpenFDE: external_position changed to " + current
+                            + ", re-applying display topology");
+                    applyOpenfdeExternalPosition();
+                }
+            }
+            mHandler.postDelayed(this, EXTERNAL_POSITION_POLL_MS);
+        }
+    };
+    private String mLastExternalPosition =
+            SystemProperties.get("openfde.external_position", "");
+    private static final long EXTERNAL_POSITION_POLL_MS = 1000;
+
+
+    private void applyOpenfdeExternalPosition() {
+        final String position = SystemProperties.get("openfde.external_position", "");
+        if (!"left".equals(position) && !"right".equals(position)) {
+            return;
+        }
+        final DisplayTopology topology = mDisplayTopologyCoordinator.getTopology();
+        final DisplayTopology.TreeNode root = topology != null ? topology.getRoot() : null;
+        if (root == null || !topology.hasMultipleDisplays()) {
+            return;
+        }
+
+        final Map<Integer, DisplayTopology.TreeNode> nodes = new HashMap<>();
+        final List<DisplayTopology.TreeNode> queue = new ArrayList<>();
+        queue.add(root);
+        for (int i = 0; i < queue.size(); i++) {
+            final DisplayTopology.TreeNode node = queue.get(i);
+            nodes.put(node.getDisplayId(), node);
+            queue.addAll(node.getChildren());
+        }
+
+        final Map<Integer, PointF> newPos = new HashMap<>();
+        final int primaryId = topology.getPrimaryDisplayId();
+        final float rootWidth = root.getWidth();
+        final float rootHeight = root.getHeight();
+        final boolean externalOnRight = "right".equals(position);
+        for (Map.Entry<Integer, DisplayTopology.TreeNode> entry : nodes.entrySet()) {
+            final int displayId = entry.getKey();
+            if (displayId == primaryId) {
+                newPos.put(displayId, new PointF(0f, 0f));
+                continue;
+            }
+            final DisplayTopology.TreeNode node = entry.getValue();
+            final float x = externalOnRight ? rootWidth : -node.getWidth();
+            final float y = (rootHeight - node.getHeight()) / 2f;
+            newPos.put(displayId, new PointF(x, y));
+        }
+
+        try {
+            topology.rearrange(newPos);
+            mDisplayTopologyCoordinator.setTopology(topology);
+            Slog.i(TAG, "OpenFDE: external display topology set to " + position);
+        } catch (IllegalArgumentException e) {
+            Slog.w(TAG, "OpenFDE: failed to rearrange topology for " + position, e);
+        }
     }
 
     @Override
@@ -953,7 +1032,9 @@ public final class DisplayManagerService extends SystemService {
 
             updateMinimalPostProcessingAllowedSettingLocked();
             updateUserDisabledHdrTypesFromSettingsLocked();
-            updateUserPreferredDisplayModeSettingsLocked();
+            if (!OPENFDE_NO_SAVED_DISPLAY_MODE) {
+                updateUserPreferredDisplayModeSettingsLocked();
+            }
             if (mIsHdrOutputControlEnabled) {
                 updateHdrConversionModeSettingsLocked();
             }
@@ -991,8 +1072,11 @@ public final class DisplayManagerService extends SystemService {
 
         mContext.registerReceiver(mIdleModeReceiver, filter);
 
-        final IntentFilter restoreFilter = new IntentFilter(Intent.ACTION_SETTING_RESTORED);
-        mContext.registerReceiver(mResolutionRestoreReceiver, restoreFilter);
+        // OpenFDE: never restore a saved resolution from backup on boot.
+        if (!OPENFDE_NO_SAVED_DISPLAY_MODE) {
+            final IntentFilter restoreFilter = new IntentFilter(Intent.ACTION_SETTING_RESTORED);
+            mContext.registerReceiver(mResolutionRestoreReceiver, restoreFilter);
+        }
 
         mSmallAreaDetectionController = SmallAreaDetectionController.create(mContext);
 
@@ -2924,6 +3008,12 @@ public final class DisplayManagerService extends SystemService {
     }
 
     private void configurePreferredDisplayModeLocked(LogicalDisplay display) {
+        // OpenFDE: never reapply a resolution stored from a previous boot.
+        // Display add / hotplug calls this too, so the HWC's reported mode is
+        // always left as the active one.
+        if (OPENFDE_NO_SAVED_DISPLAY_MODE) {
+            return;
+        }
         DisplayDevice device = display.getPrimaryDisplayDeviceLocked();
         Display.Mode mode = getStoredUserPreferredModeLocked(device);
         if (mode != null) {
@@ -3083,6 +3173,15 @@ public final class DisplayManagerService extends SystemService {
     }
 
     void  storeModeLocked(int displayId, @Nullable Display.Mode mode) {
+        // OpenFDE: do not persist the user's resolution choice. This is the
+        // single choke point for all writes: the display PersistentDataStore,
+        // the Settings.Global USER_PREFERRED_* keys and the Secure
+        // SCREEN_RESOLUTION_MODE key all originate here. Skipping persistence
+        // leaves the in-session switch (setUserPreferredModeForDisplayLocked)
+        // intact, so Settings can still change resolution temporarily.
+        if (OPENFDE_NO_SAVED_DISPLAY_MODE) {
+            return;
+        }
         int resolutionHeight = mode == null ? Display.INVALID_DISPLAY_HEIGHT
                 : mode.getPhysicalHeight();
         int resolutionWidth = mode == null ? Display.INVALID_DISPLAY_WIDTH
@@ -7122,6 +7221,7 @@ public final class DisplayManagerService extends SystemService {
                     return;
                 }
                 mDisplayTopologyCoordinator.onDisplayAdded(info);
+                applyOpenfdeExternalPosition();
             } else {
                 mDisplayTopologyCoordinator.onDisplayRemoved(displayId);
             }
