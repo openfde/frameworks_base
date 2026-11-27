@@ -600,7 +600,7 @@ final class LogicalDisplay {
                 } else if (externalWidth <= 2560) {
                     externalDensity = 256;
                 } else {
-                    externalDensity = 340;
+                    externalDensity = externalWidth / 11;
                 }
                 mBaseDisplayInfo.logicalDensityDpi = externalDensity;
                 Slog.i(TAG, "OpenFDE: external display logical density " + externalDensity

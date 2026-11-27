@@ -601,7 +601,7 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                 } else if (width <= 2560) {
                     density = 256;
                 } else {
-                    density = 340;
+                    density = width / 11;
                 }
                 Slog.i(TAG, "OpenFDE: logical density " + density + " for width " + width);
                 return density;
