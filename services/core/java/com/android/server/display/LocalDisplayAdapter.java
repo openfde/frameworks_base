@@ -585,16 +585,40 @@ final class LocalDisplayAdapter extends DisplayAdapter {
         }
 
         private int getLogicalDensity() {
-            DensityMapping densityMapping = getDisplayDeviceConfig().getDensityMapping();
-            if (densityMapping == null) {
-                if (!mStaticDisplayInfo.isInternal) {
-                    // Return 0 for external displays as the base density will be calculated in
-                    // the LogicalDisplay.
-                    return 0;
+            // OpenFDE: the physical monitor can have a different resolution on every
+            // boot, so derive the logical density from the width HWC just reported
+            // instead of the build-time ro.sf.lcd_density (which is write-once and
+            // already consumed by SurfaceFlinger before HWC is loaded).
+            // Only applies to the internal (primary) display; external displays keep
+            // the default behavior of inheriting the primary's density in
+            // LogicalDisplay. Toggle persist.openfde.density_by_width=false to disable.
+            if (SystemProperties.getBoolean("persist.openfde.density_by_width", true)
+                    && mStaticDisplayInfo.isInternal && mInfo != null && mInfo.width > 0) {
+                final int width = mInfo.width;
+                final int density;
+                if (width <= 1920) {
+                    density = 160;
+                } else if (width <= 2560) {
+                    density = 256;
+                } else {
+                    density = width / 11;
                 }
-                return (int) (mStaticDisplayInfo.density * 160 + 0.5);
+                Slog.i(TAG, "OpenFDE: logical density " + density + " for width " + width);
+                return density;
             }
 
+            // OpenFDE: external displays must return 0 so that LogicalDisplay
+            // applies the width-based density tier (or AOSP's calculateBaseDensity
+            // when the feature is off), regardless of whether a DensityMapping
+            // is configured.
+            if (!mStaticDisplayInfo.isInternal) {
+                return 0;
+            }
+
+            DensityMapping densityMapping = getDisplayDeviceConfig().getDensityMapping();
+            if (densityMapping == null) {
+                return (int) (mStaticDisplayInfo.density * 160 + 0.5);
+            }
             return densityMapping.getDensityForResolution(mInfo.width, mInfo.height);
         }
 

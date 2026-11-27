@@ -31,6 +31,9 @@ import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.WindowConfiguration;
+import android.content.ContentResolver;
+import android.os.SystemProperties;
+import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.Slog;
 import android.view.Display;
@@ -110,6 +113,45 @@ class DisplayWindowSettings {
                 mSettingsProvider.getOverrideSettings(info);
         overrideSettings.mForcedDensityRatio = ratio;
         mSettingsProvider.updateOverrideSettings(info, overrideSettings);
+    }
+
+    // OpenFDE: clear a stale density override once when the display is created
+    // (boot or external display attach). Runtime Settings changes after this
+    // point continue to work normally.
+    void clearDensityOverrideOnDisplayAttachLocked(@NonNull DisplayContent dc) {
+        if (!SystemProperties.getBoolean("persist.openfde.density_by_width", true)) {
+            return;
+        }
+        final DisplayInfo info = dc.getDisplayInfo();
+        final SettingsProvider.SettingsEntry overrideSettings =
+                mSettingsProvider.getOverrideSettings(info);
+
+        final int oldDensity = overrideSettings.mForcedDensity;
+        final float oldRatio = overrideSettings.mForcedDensityRatio;
+        final boolean hadDensity = oldDensity != 0;
+        final boolean hadRatio = oldRatio != 0.0f;
+
+        if (hadDensity || hadRatio) {
+            overrideSettings.mForcedDensity = 0;
+            overrideSettings.mForcedDensityRatio = 0.0f;
+            mSettingsProvider.updateOverrideSettings(info, overrideSettings);
+        }
+        dc.mForcedDisplayDensityRatio = 0.0f;
+
+        // The default display also has a per-user secure density override. This
+        // must be cleared even when the display_settings.xml entry is empty,
+        // because WMS loads DISPLAY_DENSITY_FORCED directly at boot/user switch.
+        if (dc.isDefaultDisplay) {
+            final ContentResolver resolver = mService.mContext.getContentResolver();
+            Settings.Secure.putStringForUser(resolver,
+                    Settings.Secure.DISPLAY_DENSITY_FORCED, "", UserHandle.USER_SYSTEM);
+            Settings.Secure.putStringForUser(resolver,
+                    Settings.Secure.DISPLAY_DENSITY_FORCED, "", mService.mCurrentUserId);
+        }
+
+        Slog.i(TAG_WM, "OpenFDE: clear density override on display attach: display="
+                + dc.getDisplayId() + " density=" + oldDensity + " ratio=" + oldRatio
+                + " secureCleared=" + dc.isDefaultDisplay);
     }
 
     void setForcedScalingMode(@NonNull DisplayContent displayContent, @ForceScalingMode int mode) {
