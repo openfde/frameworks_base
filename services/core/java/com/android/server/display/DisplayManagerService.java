@@ -301,7 +301,13 @@ public final class DisplayManagerService extends SystemService {
     // in RefreshRateConfigs::getFrameRateDivisor.
     private static final float THRESHOLD_FOR_REFRESH_RATES_DIVISORS = 0.0009f;
 
-
+    // OpenFDE: physical monitors can differ on every boot, so a resolution
+    // remembered from a previous boot (or from a different monitor) is wrong.
+    // The active display mode must always come from what the HWC reports for
+    // the currently attached monitor. Settings' resolution page is still
+    // usable for a one-shot, in-session switch, but the choice is never
+    // persisted nor restored on the next boot.
+    private static final boolean OPENFDE_NO_SAVED_DISPLAY_MODE = true;
 
     private static final int MSG_REGISTER_DEFAULT_DISPLAY_ADAPTERS = 1;
     private static final int MSG_REGISTER_ADDITIONAL_DISPLAY_ADAPTERS = 2;
@@ -1026,9 +1032,9 @@ public final class DisplayManagerService extends SystemService {
 
             updateMinimalPostProcessingAllowedSettingLocked();
             updateUserDisabledHdrTypesFromSettingsLocked();
-
-            updateUserPreferredDisplayModeSettingsLocked();
-
+            if (!OPENFDE_NO_SAVED_DISPLAY_MODE) {
+                updateUserPreferredDisplayModeSettingsLocked();
+            }
             if (mIsHdrOutputControlEnabled) {
                 updateHdrConversionModeSettingsLocked();
             }
@@ -1066,8 +1072,11 @@ public final class DisplayManagerService extends SystemService {
 
         mContext.registerReceiver(mIdleModeReceiver, filter);
 
-        final IntentFilter restoreFilter = new IntentFilter(Intent.ACTION_SETTING_RESTORED);
-        mContext.registerReceiver(mResolutionRestoreReceiver, restoreFilter);
+        // OpenFDE: never restore a saved resolution from backup on boot.
+        if (!OPENFDE_NO_SAVED_DISPLAY_MODE) {
+            final IntentFilter restoreFilter = new IntentFilter(Intent.ACTION_SETTING_RESTORED);
+            mContext.registerReceiver(mResolutionRestoreReceiver, restoreFilter);
+        }
 
         mSmallAreaDetectionController = SmallAreaDetectionController.create(mContext);
 
@@ -2999,6 +3008,12 @@ public final class DisplayManagerService extends SystemService {
     }
 
     private void configurePreferredDisplayModeLocked(LogicalDisplay display) {
+        // OpenFDE: never reapply a resolution stored from a previous boot.
+        // Display add / hotplug calls this too, so the HWC's reported mode is
+        // always left as the active one.
+        if (OPENFDE_NO_SAVED_DISPLAY_MODE) {
+            return;
+        }
         DisplayDevice device = display.getPrimaryDisplayDeviceLocked();
         Display.Mode mode = getStoredUserPreferredModeLocked(device);
         if (mode != null) {
@@ -3158,7 +3173,15 @@ public final class DisplayManagerService extends SystemService {
     }
 
     void  storeModeLocked(int displayId, @Nullable Display.Mode mode) {
-
+        // OpenFDE: do not persist the user's resolution choice. This is the
+        // single choke point for all writes: the display PersistentDataStore,
+        // the Settings.Global USER_PREFERRED_* keys and the Secure
+        // SCREEN_RESOLUTION_MODE key all originate here. Skipping persistence
+        // leaves the in-session switch (setUserPreferredModeForDisplayLocked)
+        // intact, so Settings can still change resolution temporarily.
+        if (OPENFDE_NO_SAVED_DISPLAY_MODE) {
+            return;
+        }
         int resolutionHeight = mode == null ? Display.INVALID_DISPLAY_HEIGHT
                 : mode.getPhysicalHeight();
         int resolutionWidth = mode == null ? Display.INVALID_DISPLAY_WIDTH
