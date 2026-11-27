@@ -33,6 +33,7 @@ import android.annotation.Nullable;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManagerInternal;
+import android.os.SystemProperties;
 import android.util.ArraySet;
 import android.util.CopyOnWriteSparseArray;
 import android.util.IndentingPrintWriter;
@@ -584,10 +585,32 @@ final class LogicalDisplay {
             mBaseDisplayInfo.userDisabledHdrTypes = mUserDisabledHdrTypes;
             mBaseDisplayInfo.minimalPostProcessingSupported =
                     deviceInfo.allmSupported || deviceInfo.gameContentTypeSupported;
-            mBaseDisplayInfo.logicalDensityDpi = deviceInfo.densityDpi > 0
-                    ? deviceInfo.densityDpi
-                    : DisplayDensityConfiguration.calculateBaseDensity(currentXDpi, currentYDpi,
-                            maskedWidth, maskedHeight);
+            // OpenFDE: external displays report densityDpi=0 (see
+            // LocalDisplayAdapter.getLogicalDensity()), which would otherwise be
+            // derived from ro.sf.lcd_density via calculateBaseDensity() and ignore
+            // the actual monitor width. Apply the same width-based tiers used for
+            // the internal display when the feature is enabled.
+            if (deviceInfo.densityDpi <= 0
+                    && SystemProperties.getBoolean("persist.openfde.density_by_width", true)
+                    && deviceInfo.type == Display.TYPE_EXTERNAL && deviceInfo.width > 0) {
+                final int externalWidth = deviceInfo.width;
+                final int externalDensity;
+                if (externalWidth <= 1920) {
+                    externalDensity = 160;
+                } else if (externalWidth <= 2560) {
+                    externalDensity = 256;
+                } else {
+                    externalDensity = 340;
+                }
+                mBaseDisplayInfo.logicalDensityDpi = externalDensity;
+                Slog.i(TAG, "OpenFDE: external display logical density " + externalDensity
+                        + " for width " + externalWidth);
+            } else {
+                mBaseDisplayInfo.logicalDensityDpi = deviceInfo.densityDpi > 0
+                        ? deviceInfo.densityDpi
+                        : DisplayDensityConfiguration.calculateBaseDensity(currentXDpi, currentYDpi,
+                                maskedWidth, maskedHeight);
+            }
             mBaseDisplayInfo.physicalXDpi = currentXDpi;
             mBaseDisplayInfo.physicalYDpi = currentYDpi;
             mBaseDisplayInfo.appVsyncOffsetNanos = deviceInfo.appVsyncOffsetNanos;

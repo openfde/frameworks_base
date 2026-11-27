@@ -203,6 +203,7 @@ import android.os.Message;
 import android.os.PowerManager;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
+import android.os.SystemProperties;
 import android.os.Trace;
 import android.os.UserHandle;
 import android.os.UserManager;
@@ -1368,6 +1369,7 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
         if (DEBUG_DISPLAY) Slog.v(TAG_WM, "Creating display=" + display);
 
         setWindowingMode(WINDOWING_MODE_FULLSCREEN);
+        mWmService.mDisplayWindowSettings.clearDensityOverrideOnDisplayAttachLocked(this);
         mWmService.mDisplayWindowSettings.applySettingsToDisplayLocked(this);
         mIgnoreActivitySizeRestrictions =
                 mWmService.mDisplayWindowSettings.isIgnoreActivitySizeRestrictionsLocked(this);
