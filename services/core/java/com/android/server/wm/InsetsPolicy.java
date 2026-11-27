@@ -455,8 +455,12 @@ class InsetsPolicy {
         final @WindowConfiguration.WindowingMode int windowingMode = target.getWindowingMode();
         if (WindowConfiguration.isFloating(windowingMode)
                 || (windowingMode == WINDOWING_MODE_MULTI_WINDOW && target.isAlwaysOnTop())) {
-            // Keep frames, caption, and IME.
-            int types = WindowInsets.Type.captionBar();
+            // Always keep the statusBars local inset source (height == status bar height).
+            // Edge-to-edge apps consume it and lay out content right below the caption bar.
+            // Do not key off isRequestedVisible(statusBars): an app can transiently report it
+            // false on first layout, which would select a captionBar source and push content
+            // down an extra status-bar height.
+            int types = WindowInsets.Type.statusBars();
             if (windowingMode != WINDOWING_MODE_PINNED
                     && mDisplayContent.getImeInputTarget() instanceof WindowState imeTarget
                     && (target == imeTarget

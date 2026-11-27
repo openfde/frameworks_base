@@ -48,6 +48,7 @@
         android:layout_marginStart="1dp">
         <ImageView
             android:id="@+id/application_icon"
+            android:visibility="gone"
             android:layout_width="@dimen/desktop_mode_caption_icon_radius"
             android:layout_height="@dimen/desktop_mode_caption_icon_radius"
             android:layout_gravity="center_vertical"
@@ -61,9 +62,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:maxWidth="130dp"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:fontFamily="@*android:string/config_headlineFontFamilyMedium"
-            android:lineHeight="20sp"
+            android:lineHeight="16sp"
             android:layout_gravity="center_vertical"
             android:layout_weight="1"
             android:layout_marginStart="8dp"
