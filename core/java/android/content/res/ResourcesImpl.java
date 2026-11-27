@@ -58,6 +58,7 @@ import android.util.Xml;
 import android.view.DisplayAdjustments;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.policy.DesktopModeCompatUtils;
 import com.android.internal.util.GrowingArrayUtils;
 
 import libcore.util.NativeAllocationRegistry;
@@ -295,6 +296,17 @@ public class ResourcesImpl {
             throws NotFoundException {
         boolean found = mAssets.getResourceValue(id, 0, outValue, resolveRefs);
         if (found) {
+            if (DesktopModeCompatUtils.shouldZeroStatusBarHeight(id, mConfiguration)) {
+                // Desktop (freeform) windows are covered by the window decoration caption bar, not
+                // by the system status bar: replace the status bar height resources so that apps
+                // which reserve that height inside their own content don't leave a gap between the
+                // caption bar and their header. The replacement is 0 by default and configurable
+                // through DesktopModeCompatUtils#PROP_STATUS_BAR_HEIGHT_REPLACEMENT.
+                final int replacement = DesktopModeCompatUtils.getStatusBarHeightReplacement();
+                outValue.type = TypedValue.TYPE_DIMENSION;
+                outValue.data = (Math.max(0, replacement) << TypedValue.COMPLEX_MANTISSA_SHIFT)
+                        | TypedValue.COMPLEX_UNIT_PX;
+            }
             return;
         }
         throw new NotFoundException("Resource ID #0x" + Integer.toHexString(id));

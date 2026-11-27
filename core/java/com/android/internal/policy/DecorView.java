@@ -76,6 +76,7 @@ import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Pair;
+import android.util.Slog;
 import android.util.TypedValue;
 import android.view.ActionMode;
 import android.view.ContextThemeWrapper;
@@ -91,6 +92,7 @@ import android.view.PendingInsetsController;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.ViewParent;
 import android.view.ViewRootImpl;
 import android.view.ViewStub;
 import android.view.ViewTreeObserver;
@@ -129,6 +131,15 @@ import java.util.function.Consumer;
 /** @hide */
 public class DecorView extends FrameLayout implements RootViewSurfaceTaker, WindowCallbacks {
     private static final String TAG = "DecorView";
+
+    /**
+     * Log tag for the insets/caption consumption decision in {@link #updateColorViews}.
+     *
+     * <p>Debug aid for windows whose content ends up under the window decoration caption bar:
+     * enable with {@code adb shell setprop log.tag.DecorInsets DEBUG} and restart the app, then
+     * {@code adb logcat -s DecorInsets}. It prints why the captionBar inset was (not) consumed.
+     */
+    private static final String TAG_INSETS = "DecorInsets";
 
     private static final boolean DEBUG_MEASURE = false;
 
@@ -222,6 +233,14 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
     @UnsupportedAppUsage
     private int mLastLeftInset = 0;
     private WindowInsets mLastInsets = null;
+    /**
+     * Whether {@link #onApplyWindowInsets} ran for the current
+     * {@link View#dispatchApplyWindowInsets} call. When an app installs an
+     * {@code OnApplyWindowInsetsListener} on the decor view, {@link View#dispatchApplyWindowInsets}
+     * invokes the listener instead of {@link #onApplyWindowInsets}, which would silently skip the
+     * system bar color handling and the consumption of the window decoration caption bar inset.
+     */
+    private boolean mOnApplyWindowInsetsDispatched;
     private boolean mLastHasTopStableInset = false;
     private boolean mLastHasBottomStableInset = false;
     private boolean mLastHasRightStableInset = false;
@@ -946,7 +965,37 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
     }
 
     @Override
+    public WindowInsets dispatchApplyWindowInsets(WindowInsets insets) {
+        mOnApplyWindowInsetsDispatched = false;
+        final WindowInsets result = super.dispatchApplyWindowInsets(insets);
+        if (mOnApplyWindowInsetsDispatched) {
+            return result;
+        }
+        // The app installed an OnApplyWindowInsetsListener on the decor view, so
+        // View#dispatchApplyWindowInsets called the listener instead of
+        // DecorView#onApplyWindowInsets: neither the system bar color handling nor the
+        // consumption of the window decoration caption bar inset ran. Apps doing this usually
+        // handle statusBars()/navigationBars() themselves but know nothing about the caption bar,
+        // which only exists for desktop (freeform) windows, so their content ends up underneath
+        // the caption. Run the regular handling here for those windows; it is limited to the case
+        // where the caption bar is force-consuming, i.e. where the shell explicitly asks for the
+        // inset to be consumed.
+        if (DesktopModeCompatUtils.isCaptionInsetListenerEnabled()
+                && insets != null
+                && (((insets.getForceConsumingTypes() & WindowInsets.Type.captionBar()) != 0)
+                        || insets.isForceConsumingOpaqueCaptionBar())) {
+            if (Log.isLoggable(TAG_INSETS, Log.DEBUG)) {
+                Slog.d(TAG_INSETS, "caption inset dispatch bypassed by an app listener, applying it"
+                        + " through updateColorViews");
+            }
+            updateColorViews(insets, false);
+        }
+        return result;
+    }
+
+    @Override
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+        mOnApplyWindowInsetsDispatched = true;
         final WindowManager.LayoutParams attrs = mWindow.getAttributes();
         mFloatingInsets.setEmpty();
         if ((attrs.flags & FLAG_LAYOUT_IN_SCREEN) == 0) {
@@ -1175,30 +1224,63 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
         final boolean consumingOpaqueCaptionBar = mLastForceConsumingOpaqueCaptionBar
                 && isOpaqueCaptionBar;
 
-        if (consumingCaptionBar || consumingOpaqueCaptionBar) {
+        final boolean consumingCaption = consumingCaptionBar || consumingOpaqueCaptionBar;
+        if (consumingCaption) {
             consumingTypes |= WindowInsets.Type.captionBar();
         }
 
-        final Insets consumedInsets = mLastInsets != null
-                ? mLastInsets.getInsets(consumingTypes) : Insets.NONE;
-
-        if (mContentRoot != null
-                && mContentRoot.getLayoutParams() instanceof MarginLayoutParams) {
-            MarginLayoutParams lp = (MarginLayoutParams) mContentRoot.getLayoutParams();
-            if (lp.topMargin != consumedInsets.top || lp.rightMargin != consumedInsets.right
-                    || lp.bottomMargin != consumedInsets.bottom || lp.leftMargin !=
-                    consumedInsets.left) {
-                lp.topMargin = consumedInsets.top;
-                lp.rightMargin = consumedInsets.right;
-                lp.bottomMargin = consumedInsets.bottom;
-                lp.leftMargin = consumedInsets.left;
-                mContentRoot.setLayoutParams(lp);
-
-                if (insets == null) {
-                    // The insets have changed, but we're not currently in the process
-                    // of dispatching them.
-                    requestApplyInsets();
+        Insets consumedInsets;
+        if (consumingCaption && DesktopModeCompatUtils.isCaptionInsetFrameworkOnly()) {
+            // The caption inset is reported to the framework only (see
+            // ViewRootImpl#getWindowInsets), so it cannot be read back from the insets the app sees.
+            // The view root keeps its height for the window decoration itself.
+            consumedInsets = mLastInsets != null
+                    ? mLastInsets.getInsets(consumingTypes & ~WindowInsets.Type.captionBar())
+                    : Insets.NONE;
+            // Only the decor view of the window takes the caption height from the view root. A
+            // DecorView that the app nested in its own hierarchy (e.g. inside a TabHost) receives
+            // insets that the outer decor already consumed, so it must not reserve the caption
+            // height a second time.
+            if (viewRoot != null && getParent() == viewRoot) {
+                final int captionTop = viewRoot.getDesktopCaptionInsetTop();
+                if (captionTop > 0) {
+                    consumedInsets = Insets.max(consumedInsets, Insets.of(0, captionTop, 0, 0));
                 }
+            }
+        } else {
+            consumedInsets = mLastInsets != null
+                    ? mLastInsets.getInsets(consumingTypes)
+                    : Insets.NONE;
+        }
+
+        if (Log.isLoggable(TAG_INSETS, Log.DEBUG)) {
+            Slog.d(TAG_INSETS, attrs.getTitle() + ": fullscreen=" + fullscreen
+                    + " hideCaptionBar=" + hideCaptionBar
+                    + " requested=[" + insetsTypesToString(requestedVisibleTypes) + "]"
+                    + " forceConsuming=[" + insetsTypesToString(mLastForceConsumingTypes) + "]"
+                    + " forceOpaqueCaption=" + mLastForceConsumingOpaqueCaptionBar
+                    + " opaqueCaption=" + isOpaqueCaptionBar
+                    + " appearance=0x" + Integer.toHexString(appearance)
+                    + " consuming=[" + insetsTypesToString(consumingTypes) + "]"
+                    + " consumed=" + consumedInsets
+                    + " dispatch=" + (insets != null)
+                    + " captionInset=" + (mLastInsets == null ? "null"
+                            : mLastInsets.getInsets(WindowInsets.Type.captionBar())));
+        }
+
+        if (mContentRoot != null) {
+            // Some apps (e.g. those using a swipe-back wrapper) re-parent the content root into a
+            // container of their own. Such containers frequently lay their children out without
+            // honoring LayoutParams margins, which would silently drop the insets consumed here
+            // and let the content slide under the system bars / the window decoration caption bar.
+            // In that case the consumed insets are applied to the outermost view hosting the
+            // content root instead.
+            final View insetTarget = DesktopModeCompatUtils.isCaptionInsetTargetEnabled()
+                    ? findInsetTargetView() : mContentRoot;
+            applyConsumedInsets(insetTarget, consumedInsets, insets);
+            if (insetTarget != null && insetTarget != mContentRoot) {
+                // The content root is now laid out by its new parent; don't apply the margins twice.
+                applyConsumedInsets(mContentRoot, Insets.NONE, insets);
             }
             if (insets != null && !Insets.NONE.equals(consumedInsets)) {
                 insets = insets.inset(consumedInsets);
@@ -1213,6 +1295,87 @@ public class DecorView extends FrameLayout implements RootViewSurfaceTaker, Wind
         updateBackgroundDrawable();
 
         return insets;
+    }
+
+    /**
+     * Returns the view that the consumed insets should be applied to as margins.
+     *
+     * <p>Normally that is {@link #mContentRoot}. However, an app is free to move the content root
+     * into a container of its own (a common pattern for swipe-back wrappers); when that happens the
+     * outermost view of that container that is a direct child of this DecorView is used instead, so
+     * that containers which ignore {@link MarginLayoutParams} on layout cannot swallow the insets.
+     */
+    @Nullable
+    private View findInsetTargetView() {
+        View target = mContentRoot;
+        while (target != null) {
+            final ViewParent parent = target.getParent();
+            if (parent == this) {
+                return target;
+            }
+            if (!(parent instanceof View)) {
+                // The content root is not part of this DecorView (yet/anymore); keep legacy behavior.
+                return mContentRoot;
+            }
+            target = (View) parent;
+        }
+        return mContentRoot;
+    }
+
+    /**
+     * Applies {@code consumedInsets} as margins of {@code view}, when it supports margins.
+     */
+    private void applyConsumedInsets(@Nullable View view, @NonNull Insets consumedInsets,
+            @Nullable WindowInsets insets) {
+        if (view == null || !(view.getLayoutParams() instanceof MarginLayoutParams)) {
+            return;
+        }
+        final MarginLayoutParams lp = (MarginLayoutParams) view.getLayoutParams();
+        if (lp.topMargin != consumedInsets.top || lp.rightMargin != consumedInsets.right
+                || lp.bottomMargin != consumedInsets.bottom
+                || lp.leftMargin != consumedInsets.left) {
+            lp.topMargin = consumedInsets.top;
+            lp.rightMargin = consumedInsets.right;
+            lp.bottomMargin = consumedInsets.bottom;
+            lp.leftMargin = consumedInsets.left;
+            view.setLayoutParams(lp);
+
+            if (insets == null) {
+                // The insets have changed, but we're not currently in the process
+                // of dispatching them.
+                requestApplyInsets();
+            }
+        }
+    }
+
+    /** Debug helper for {@link #TAG_INSETS}: names the inset types we care about. */
+    private static String insetsTypesToString(int types) {
+        if (types == 0) {
+            return "none";
+        }
+        final StringBuilder sb = new StringBuilder();
+        if ((types & WindowInsets.Type.statusBars()) != 0) {
+            sb.append("statusBars ");
+        }
+        if ((types & WindowInsets.Type.navigationBars()) != 0) {
+            sb.append("navigationBars ");
+        }
+        if ((types & WindowInsets.Type.captionBar()) != 0) {
+            sb.append("captionBar ");
+        }
+        if ((types & WindowInsets.Type.ime()) != 0) {
+            sb.append("ime ");
+        }
+        if ((types & WindowInsets.Type.systemGestures()) != 0) {
+            sb.append("systemGestures ");
+        }
+        if ((types & WindowInsets.Type.mandatorySystemGestures()) != 0) {
+            sb.append("mandatorySystemGestures ");
+        }
+        if ((types & WindowInsets.Type.tappableElement()) != 0) {
+            sb.append("tappableElement ");
+        }
+        return sb.toString().trim();
     }
 
     /**
