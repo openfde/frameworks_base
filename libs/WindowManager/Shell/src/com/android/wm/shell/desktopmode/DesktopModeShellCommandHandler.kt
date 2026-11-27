@@ -58,6 +58,7 @@ class DesktopModeShellCommandHandler(
         }
         return when (args[0]) {
             "moveTaskToDesk" -> runMoveTaskToDesk(args, pw)
+            "moveTaskToDeskWithoutActivation" -> runMoveTaskToDesk(args, pw, activate = false)
             "moveToNextDisplay" -> runMoveToNextDisplay(args, pw)
             "createDesk" -> runCreateDesk(args, pw)
             "activateDesk" -> runActivateDesk(args, pw)
@@ -74,7 +75,11 @@ class DesktopModeShellCommandHandler(
         }
     }
 
-    private fun runMoveTaskToDesk(args: Array<String>, pw: PrintWriter): Boolean {
+    private fun runMoveTaskToDesk(
+        args: Array<String>,
+        pw: PrintWriter,
+        activate: Boolean = true,
+    ): Boolean {
         if (args.size < 2) {
             // First argument is the action name.
             pw.println("Error: task id should be provided as arguments")
@@ -108,9 +113,13 @@ class DesktopModeShellCommandHandler(
                 pw.println("Error: desk id should be an integer")
                 return false
             }
-        controller
-            .get()
-            .moveTaskToDesk(taskId = taskId, deskId = deskId, transitionSource = ADB_COMMAND)
+        if (activate) {
+            controller
+                .get()
+                .moveTaskToDesk(taskId = taskId, deskId = deskId, transitionSource = ADB_COMMAND)
+        } else {
+            controller.get().moveTaskToDeskWithoutActivation(taskId = taskId, deskId = deskId)
+        }
         return true
     }
 
@@ -332,6 +341,12 @@ class DesktopModeShellCommandHandler(
         pw.println("$prefix moveTaskToDesk <taskId|0> <deskId>")
         pw.println(
             "$prefix  Move a task with given id to the given desk and activate it. " +
+                "TaskId 0 means focused task on the default display."
+        )
+        pw.println("$prefix moveTaskToDeskWithoutActivation <taskId|0> <deskId>")
+        pw.println(
+            "$prefix  Move a task with given id to the given desk without activating it, so " +
+                "whatever is in front (e.g. overview) stays in front. " +
                 "TaskId 0 means focused task on the default display."
         )
         pw.println("$prefix moveToNextDisplay <taskId>")

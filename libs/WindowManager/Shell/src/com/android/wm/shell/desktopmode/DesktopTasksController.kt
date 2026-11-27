@@ -1720,6 +1720,51 @@ class DesktopTasksController(
         return false
     }
 
+    /**
+     * Moves the task [taskId] to the desk [deskId] without activating that desk and without
+     * bringing the task to the front.
+     *
+     * Overview uses this when the user drops a window on another desk's thumbnail: the window
+     * changes desk, but the active desk (and whatever the caller is showing on top of it) stays as
+     * it is. Compared to [moveTaskToDesk] there is no desk activation, no reorder and no bounds
+     * recalculation, which is what makes the move invisible to the caller.
+     *
+     * @return true when the task was handed over to the target desk.
+     */
+    fun moveTaskToDeskWithoutActivation(taskId: Int, deskId: Int): Boolean {
+        if (lockTaskChangeListener.isTaskLocked) {
+            logW("moveTaskToDeskWithoutActivation: task change is locked")
+            return false
+        }
+        val task = shellTaskOrganizer.getRunningTaskInfo(taskId)
+        if (task == null) {
+            logW("moveTaskToDeskWithoutActivation taskId=%d not found", taskId)
+            return false
+        }
+        val repository = userRepositories.getProfile(task.userId)
+        if (repository.getDisplayForDesk(deskId) == INVALID_DISPLAY) {
+            logW("moveTaskToDeskWithoutActivation deskId=%d not found", deskId)
+            return false
+        }
+        val sourceDeskId = repository.getDeskIdForTask(taskId)
+        if (sourceDeskId == deskId) {
+            logV("moveTaskToDeskWithoutActivation taskId=%d already in desk=%d", taskId, deskId)
+            return false
+        }
+        logV(
+            "moveTaskToDeskWithoutActivation taskId=%d from desk=%s to desk=%d",
+            taskId,
+            sourceDeskId,
+            deskId,
+        )
+        val wct = WindowContainerTransaction()
+        // Reparenting the task into the target desk's root task is all that is needed: no
+        // activation changes, no reorder to front, and the existing bounds are kept.
+        desksOrganizer.moveTaskToDesk(wct = wct, deskId = deskId, task = task)
+        transitions.startTransition(TRANSIT_CHANGE, wct, /* handler= */ null)
+        return true
+    }
+
     private fun moveBackgroundTaskToDesktop(
         taskId: Int,
         deskId: Int,
@@ -7615,6 +7660,12 @@ class DesktopTasksController(
         override fun moveTaskToDesk(taskId: Int, deskId: Int) {
             executeRemoteCallWithTaskPermission(controller, "moveTaskToDesk") { c ->
                 c.moveTaskToDesk(taskId,deskId,transitionSource = ADB_COMMAND)
+            }
+        }
+
+        override fun moveTaskToDeskWithoutActivation(taskId: Int, deskId: Int) {
+            executeRemoteCallWithTaskPermission(controller, "moveTaskToDeskWithoutActivation") { c ->
+                c.moveTaskToDeskWithoutActivation(taskId, deskId)
             }
         }
 

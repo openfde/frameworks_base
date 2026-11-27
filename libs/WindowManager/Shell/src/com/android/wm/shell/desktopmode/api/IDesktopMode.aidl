@@ -116,4 +116,17 @@ interface IDesktopMode {
 
     /** Start a transition when launching an intent in desktop mode */
     void startLaunchIntentTransition(in PendingIntent pendingIntent, in Bundle options, in int displayId);
+
+    /**
+     * Moves the task with the given `taskId` to the desk `deskId` without activating that desk and
+     * without bringing the task to the front.
+     *
+     * <p> Unlike {@link #moveTaskToDesk} this keeps the currently active desk (and its windows) in
+     * front, so a caller presenting its own UI on top of the desktop - overview, for example - can
+     * reorganize windows between desks without the move taking over the foreground.
+     *
+     * <p> New methods must be added at the end: the transaction codes of the existing ones are
+     * positional.
+     */
+    oneway void moveTaskToDeskWithoutActivation(int taskId, int deskId);
 }
